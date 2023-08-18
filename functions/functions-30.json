@@ -1,0 +1,1 @@
+{"id":30,"name":"jmespath  home page example","description":"https://jmespath.org/","code":"input.cities = utils.$jmespath(input, `locations[?state == 'WA'].name | sort(@) | {WashingtonCities: join(', ', @)}`)","inputs":[],"outputs":[],"archived":false,"render":false,"dependency":false,"execOnServer":false}

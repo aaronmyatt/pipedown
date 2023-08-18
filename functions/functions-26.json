@@ -1,0 +1,1 @@
+{"id":26,"name":"pd fetch functions","description":"","code":"const response = await fetch('http://localhost:8000/api/functions');\ninput.functions = await response.json();","inputs":[],"outputs":[],"archived":false,"render":false,"dependency":false,"execOnServer":false}

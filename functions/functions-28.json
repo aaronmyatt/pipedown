@@ -1,0 +1,1 @@
+{"id":28,"name":"esbuild call","description":"","code":"const output = await pipedeps.build(input.buildConfig)\ninput.buildOutput = output.outputFiles[0].text","inputs":[],"outputs":[],"archived":false,"render":false,"dependency":false,"execOnServer":false}

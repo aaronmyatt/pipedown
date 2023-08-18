@@ -1,0 +1,1 @@
+{"id":21,"name":"deno js minifier minify","description":"","code":"\n        input.dependencies = input.dependencies || [];\n        input.dependencies.push({\"path\":\"https://deno.land/x/minifier/mod.ts\",\"export\":\"minify\",\"alias\":\"\"})\n        ","inputs":[],"outputs":[],"archived":false,"render":false,"dependency":true,"execOnServer":false}
