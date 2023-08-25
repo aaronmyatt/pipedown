@@ -1,1 +1,0 @@
-{"id":25,"name":"New Function","description":"","code":"input.firstFunction = input.functions[0]\ninput.functions = input.functions.length\ninput.code = input.firstFunction.code","inputs":[],"outputs":[],"archived":true,"render":false,"dependency":false,"execOnServer":false}

@@ -1,1 +1,0 @@
-{"id":20,"name":"use dayOfYear dependency","description":"","code":"input.dayOfYear = pipedeps.dayOfYear(new Date())","inputs":[],"outputs":[],"archived":false,"render":false,"dependency":false,"execOnServer":false}

@@ -1,1 +1,0 @@
-{"id":23,"name":"deno esbuild 0.18.17 (dynamic import)","description":"","code":"const esbuild = await import('https://deno.land/x/esbuild@v0.18.17/mod.js');\n\nwindow.pipedeps = window.pipedeps || {}\nwindow.pipedeps.build = esbuild.build","inputs":[],"outputs":[],"archived":false,"render":false,"dependency":false,"execOnServer":false}

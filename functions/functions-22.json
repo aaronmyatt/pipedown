@@ -1,1 +1,0 @@
-{"id":22,"name":"minify html","description":"expects a dependency that exports a 'minify' function","code":"input.minHtml = pipedeps.minify('html', input.html)","inputs":[],"outputs":[],"archived":false,"render":false,"dependency":false,"execOnServer":false}
