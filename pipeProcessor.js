@@ -4,6 +4,13 @@ export function pipeProcessor(funcSequence, callbacks = {
     always: () => {
     },
 }) {
+    const pdglobalDependency = {
+        path: '/scripts/pdglobal.js',
+        export: 'PD',
+        alias: '',
+        deptype: 'javascript',
+        dependency: true
+    }
     const codeToFunctions = funcSequence
         // .filter(func => func.code)
         .map((func) => wrapCode(func, callbacks))
@@ -13,10 +20,11 @@ export function pipeProcessor(funcSequence, callbacks = {
 function wrapCode(func, callbacks) {
     const AsyncFunction = Object.getPrototypeOf(async function () {
     }).constructor;
-    return async function (input) {
+    return async function (input = {}) {
+        input = input || {}
         const state = {name: func.name, func}
         state.start = Date.now()
-        state.input = input
+        state.input = Object.assign({}, input)
 
         try {
             await resolveDependencies(input)
@@ -27,74 +35,65 @@ function wrapCode(func, callbacks) {
         } finally {
             state.end = Date.now()
             state.duration = state.end - state.start;
-            state.output = input
+            state.output = Object.assign({}, input)
             callbacks && callbacks.always && callbacks.always(state, input)
         }
         return input
     }
 }
 
-async function resolveDependencies(input) {
-    const checks = [input !== undefined, 'dependencies' in input]
-    if (checks.every(Boolean)) {
-        // input.dependencies.forEach(dependency => {
-        //     const [path, exportName] = dependency.split('#');
-        //     const func = Alpine.store('functions').allFunctions.find(f => f.path === path);
-        //     if(func){
-        //         func.export = exportName;
-        //         func.alias = exportName;
-        //     }
-        // })
+function resolveDependencies(input) {
+    if (!input || !input.dependencies || input.dependencies.length === 0) return input;
 
-        return await Promise.all(input.dependencies
-            .map(async dependencyConfig => {
-                if(dependencyConfig.deptype === 'css'){
-                    if(input.nocss) return dependencyConfig;
-                    addLinkToHeadIfMissing(addCssLink(dependencyConfig))
-                    return dependencyConfig;
-                }
+    return input.dependencies
+        .map(async dependencyConfig => {
+            if (dependencyConfig.deptype === 'css') {
+                addLinkToHeadIfMissing(addCssLink(dependencyConfig))
+                return dependencyConfig;
+            }
 
-                if(dependencyConfig.deptype === 'js'){
-                    addScriptToHeadIfMissing(makeScript(dependencyConfig))
-                    return dependencyConfig;
-                }
+            if (dependencyConfig.deptype === 'javascript') {
+                addScriptToHeadIfMissing(makeScript(dependencyConfig))
+                return dependencyConfig;
+            }
 
-                if (dependencyConfig.export in window) {
-                } else {
-                    const module = await import(/* @vite-ignore */ dependencyConfig.path)
+            if (dependencyConfig.export in window) {
+            } else {
+                import(/* @vite-ignore */ dependencyConfig.path).then(module => {
                     if (dependencyConfig.export in window) {
                     } else {
                         window.pipedeps = window.pipedeps || {}
                         window.pipedeps[dependencyConfig.export] = module[dependencyConfig.export]
                     }
-                }
-                return dependencyConfig
-            }))
-    }
+                })
+            }
+            return dependencyConfig
+        })
 }
 
-function addCssLink(dep){
+function addCssLink(dep) {
     const link = document.createElement('link')
     link.rel = 'stylesheet'
     link.href = dep.path
     return link
 }
 
-function addLinkToHeadIfMissing(link){
+function addLinkToHeadIfMissing(link) {
     let found = false
     document.querySelectorAll('link').forEach(headLink => {
+        if(found) return;
         found = headLink.href === link.href
     })
     !found && document.head.appendChild(link)
 }
 
-function makeScript(dep){
+function makeScript(dep) {
     const script = document.createElement('script')
     script.src = dep.src
     return script
 }
 
-function addScriptToHeadIfMissing(script){
+function addScriptToHeadIfMissing(script) {
     let found = false
     document.querySelectorAll('script').forEach(headScript => {
         found = headScript.src === script.path

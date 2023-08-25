@@ -96,10 +96,16 @@
         </pd-pipe-functions>
     </template>
 </template>
-<template x-component="pd-process-current" c-data="{
+<template x-component="pd-process-current">
+    <div class="d-flex flex-column gap-3" x-data="{
+        init(){
+            window.addEventListener('message', (e) => {
+              const data = JSON.parse(e.data)
+              this.output = data;
+            })
+        },
         output: '',
     }">
-    <div class="d-flex flex-column gap-3">
         <button class="btn btn-lg btn-success w-100"
                 @click.prevent="async () => {
             output = await $store.pipes.process(current, $store.pdPipe.initialInput)
@@ -125,6 +131,16 @@
         addTransformFunction(after){
             const newFunction = $store.functions.newTransformFunction()
             $store.pipes.addFunctionToCurrentPipe(newFunction.id, { after })
+        },
+        addPipeFunction(after){
+            $refs.pipeselectordialog.showModal()
+            const listener = document.addEventListener('pipe-selected', (e) => {
+                PD[e.detail]({json: true}).then(pipe => {
+                    const newFunction = $store.functions.newPipeFunction({ pipe })
+                    $store.pipes.addFunctionToCurrentPipe(newFunction.id, { after })
+                })
+                document.removeEventListener('pipe-selected', listener)
+            })
         },
         removeFunction(id){
             $store.pipes.removeFunctionFromCurrentPipe(id);
@@ -174,9 +190,17 @@
                             <button @click="insertFunctionAfter(func)" class="btn btn-success">
                                 <i class="bi bi-plus"></i>
                             </button>
+                            <button @click="() => {
+                                const funcPosition = current.functions.findIndex(f => f === func.id)
+                                const untilThisFunc = current.functions.slice(0, funcPosition+1)
+                                $store.pipes.process({name: 'temp'}, { temp: true, funcs: untilThisFunc })
+                            }" class="btn btn-success mt-5">
+                                <i class="bi bi-play"></i>
+                            </button>
                         </div>
                         <div class="w-100">
-                            <pd-function :tab="(func.transform && func.transform.prop && 'transform') || 'code'"></pd-function>
+                            <pd-function
+                                    :tab="(func.transform && func.transform.prop && 'transform') || (func.pipeid && 'pipe') || 'code'"></pd-function>
                             <json-viewer :data="$tojson(getFirstOutput(), { pretty: true })"></json-viewer>
                         </div>
                     </div>
@@ -202,14 +226,15 @@
                         <button class="btn btn-success" @click="addRenderFunction(index)">Render / Preview</button>
                         <button class="btn btn-primary" @click="addFunction(index)">New Function</button>
                         <button class="btn btn-primary" @click="addExistingFunction">Existing Function</button>
+                        <button class="btn btn-secondary" @click="addPipeFunction(index)">Inline Pipe</button>
                     </div>
                 </dialog>
             </div>
         </template>
         <dialog x-ref="sortdialog">
             <div
-                x-intersect:enter="initSortable"
-                x-data="{
+                    x-intersect:enter="initSortable"
+                    x-data="{
                     initSortable(){
                         const sort = Sortable.create($el, {
                             items: '.item',
@@ -221,18 +246,21 @@
                         })
                     }
                 }"
-                class="btn-group-vertical justify-content-center gap-2">
+                    class="btn-group-vertical justify-content-center gap-2">
                 <template x-for="F in current.functions">
                     <button
-                        :data-id="F"
-                        x-data="{ func: null, init(){ this.func = $store.functions.getFunction(F); } }"
-                        class="item handle btn btn-primary d-flex gap-3">
+                            :data-id="F"
+                            x-data="{ func: null, init(){ this.func = $store.functions.getFunction(F); } }"
+                            class="item handle btn btn-primary d-flex gap-3">
                         <i class="bi bi-arrows-move"></i>
                         <span x-text="func.id"></span>
                         <span class="ms-auto" x-text="func.name"> </span>
                     </button>
                 </template>
             </div>
+        </dialog>
+        <dialog x-ref="pipeselectordialog">
+            <pd-pipe-selector></pd-pipe-selector>
         </dialog>
     </div>
 </template>
@@ -253,5 +281,22 @@
         </select>
     </div>
     <template x-component="pd-function-form"></template>
+</template>
+<template x-component="pd-pipe-selector">
+    <div x-data="pipeActions">
+        <div class="list-group">
+            <template x-for="pipe in pipes()">
+                <button class="list-group-item list-group-item-action" @click="() => {
+                        $dispatch('pipe-selected', pipe.id)
+                        $store.pdPipeSelector.selected = pipe.id
+                    }">
+                    <div class="ms-2 me-auto">
+                        <div class="fw-bold" x-text="pipe.name"></div>
+                        <span x-text="pipe.description"></span>
+                    </div>
+                </button>
+            </template>
+        </div>
+    </div>
 </template>
 

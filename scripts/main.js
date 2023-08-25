@@ -183,27 +183,32 @@ Alpine.store('pipes', {
     },
     async processOnClient(pipe, input = {}) {
         const inputClone = Object.assign({}, input)
-        const pipeClone = Object.assign({}, pipe || this.current)
+        const W = window.open('/testwindow.html')
+        W.addEventListener('load', () => {
+            W.postMessage(JSON.stringify({pipe: pipe.name, inputs: inputClone}), '*')
+        })
+
+        // const pipeClone = Object.assign({}, pipe || this.current)
         // since we're executing this within the pipedown client app context
         // we should skip css dependencies to avoid screwing the apps layout/presentation
-        const skipCss = Object.assign({}, DEFAULT_FUNCTION, {code: `input.nocss = true;`, skip: true})
-        const funcSequence = [skipCss].concat(this.getFunctions(pipeClone))
-        return pipeProcessor(funcSequence, {
-            always: (state, args) => {
-                const func = state.func;
-                if (func.skip) return;
-                state.input && func.inputs.push(state.input)
-                state.output && func.outputs.push(state.output)
-                Alpine.store('functions').save(func)
-            }
-        })
-            .process(inputClone)
-            .then(output => {
-                pipeClone.inputs.push(input);
-                pipeClone.outputs.push(output);
-                this.save(pipeClone);
-                return output;
-            })
+        // const skipCss = Object.assign({}, DEFAULT_FUNCTION, {code: `input.nocss = true;`, skip: true})
+        // const funcSequence = [skipCss].concat(this.getFunctions(pipeClone))
+        // return pipeProcessor(funcSequence, {
+        //     always: (state, args) => {
+        //         const func = state.func;
+        //         if (func.skip) return;
+        //         state.input && func.inputs.push(state.input)
+        //         state.output && func.outputs.push(state.output)
+        //         Alpine.store('functions').save(func)
+        //     }
+        // })
+        //     .process(inputClone)
+        //     .then(output => {
+        //         pipeClone.inputs.push(input);
+        //         pipeClone.outputs.push(output);
+        //         this.save(pipeClone);
+        //         return output;
+        //     })
     },
     newPipe(config = {}) {
         this.current = Object.assign({}, DEFAULT_PIPE, config);
@@ -280,6 +285,17 @@ Alpine.store('functions', {
         this.save(newFunction)
         return newFunction;
     },
+    newPipeFunction(config = {pipe: null, }){
+        const funcConfig = Object.assign({}, {
+            name: 'Pipe Function: ' + config.pipe.name,
+            pipeid: config.pipe.id,
+            code: `
+const pipe = await PD['${config.pipe.name}']()
+input['${config.pipe.name}'] = await pipe.process()
+`})
+        const newFunction = this.newFunction(funcConfig);
+        return newFunction;
+    },
     newRenderFunction(config = {}) {
         Object.assign(config, {
             render: true
@@ -327,51 +343,8 @@ input.dependencies.push(${JSON.stringify(dependencyConfig)})`
         this.allFunctions = this.allFunctions.filter(f => f !== func);
         func.archived = true;
         this.save(func);
-    },
-    processFunction(func, input = {}) {
-        const funcSequence = [func]
-        return pipeProcessor(funcSequence).process(input)
-    },
-    processServerFunction(func, input = {}) {
-        return Alpine.store('api').processFunction(func.id, input)
     }
 })
 
 window.Alpine = Alpine;
 Alpine.start();
-
-const PD = {}
-window.PD = new Proxy(PD, {
-    get(target, prop, receiver) {
-        debugger;
-        if (prop in target) {
-            return target[prop];
-        } else {
-            return (opts = {browser: false, server: false, worker: false, text: false, url: false}) => {
-                API.processScript({name: prop}).then(res => {
-                    const domScript = document.createElement('script')
-                    domScript.addEventListener('load', () => {
-                        console.log(`${prop} loaded`)
-                        PD['pipe5'] = window.pipe5
-                    })
-                    domScript.innerHTML = res.script;
-                    document.body.appendChild(domScript);
-                })
-            }
-            // if (!potentialPipe) {
-            //     Alpine.store('toaster').push({
-            //         message: `Pipe "${prop}" doesn't exist.`,
-            //         type: 'error',
-            //         actions: [
-            //             {
-            //                 label: 'Create Pipe',
-            //                 callback: () => {
-            //                     Alpine.store('pipes').newPipe({name: prop});
-            //                 }
-            //             }]
-            //     })
-            //     throw new Error(`Pipe "${prop}" doesn't exist.`);
-            // }
-        }
-    }
-});

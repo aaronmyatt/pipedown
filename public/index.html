@@ -153,6 +153,7 @@
         tab: '',
         render: '',
         propertyeditor: '',
+        pipefunc: '',
     }">
         <div x-data="{
             editFunction(content) {
@@ -175,19 +176,7 @@
                 return func.outputs.slice(-1)[0];
             },
             processFunction(func){
-<!--                if(current && current.execOnServer){-->
-<!--                    $store.functions.processServerFunction(func, this.testInput || {})-->
-<!--                    .then((output) => {-->
-<!--                        this.testOutput = output-->
-<!--                    })-->
-<!--                } else -->
-<!--                {-->
-<!--                }-->
-                    $store.functions.processFunction(func, this.testInput || {})
-                    .then((output) => {
-                        this.testOutput = output
-                    })
-
+                $store.pipes.process({name: 'temp'}, { temp: true, funcs: [func.id] })
             },
             editCode() {
                 $refs.functioncodeeditor.showModal()
@@ -204,7 +193,6 @@
             },
         }">
             <ul class="nav nav-tabs" style="--bs-nav-link-padding-y: 0px;">
-<!--                style="&#45;&#45;bs-nav-link-font-size: 12px;"-->
                 <li class="nav-item" @click="changeTab('detail')">
                     <button :class="(active || tab) === 'detail' && 'active'" class="nav-link">Detail</button>
                 </li>
@@ -222,6 +210,9 @@
                 </li>
                 <li class="nav-item" @click="changeTab('transform')">
                     <button :class="(active || tab) === 'transform' && 'active'" class="nav-link">Transform</button>
+                </li>
+                <li class="nav-item" @click="changeTab('pipe')">
+                    <button :class="(active || tab) === 'pipe' && 'active'" class="nav-link">Pipe</button>
                 </li>
             </ul>
             <div class="border rounded">
@@ -266,12 +257,21 @@
                             <pd-function-input-property-selector
                                     x-init="$nextTick(() => { $el.selected = funcProp })"
                                     @selected="(e) => {
+                                        func.transform = func.transform || { prop: '' }
                                         funcProp = e.detail
-                                        func.transform = func.transform || {}
                                         func.transform.prop = funcProp
                                         $store.functions.save(func)
                             }"></pd-function-input-property-selector>
-                            <input type="text" :value="funcProp || ''">
+                            <input type="text" x-model="funcProp" :value="func.transform && func.transform.prop">
+                            <button
+                                    @click="() => {
+                                        func.transform = func.transform || { prop: '' }
+                                        func.transform.prop = funcProp
+                                        $store.functions.save(func)
+                                    }"
+                                    x-show="funcProp !== func.transform.prop">
+                                Save Change
+                            </button>
                         </div>
                         <template x-if="funcProp">
                             <pd-function-property-editor
@@ -285,6 +285,9 @@ input.${funcProp} = \`${e.detail}\``
                                     :prop="() => funcProp"></pd-function-property-editor>
                         </template>
                     </div>
+                </template>
+                <template x-if="(active || tab) === 'pipe'">
+                    <h4><span x-text="func.name"></span></h4>
                 </template>
             </div>
 
@@ -355,41 +358,27 @@ input.${funcProp} = \`${e.detail}\``
 
     <template x-component="pd-render-function">
         <div
-                x-effect="() => {
-                    const lastInput = func.inputs.at(-1)
-                    if(lastInput){
-                        renderPreview(lastInput)
-                    }
-                }"
-                x-data="{
-        iframe: null,
-        async renderPreview(input){
-                this.iframe = await this.renderHTMLPreview()
-                    .then((html) => {
-                        this.html = decodeURIComponent(html)
-                        return html
-                    })
-             $refs.putIframe.innerHTML = this.iframe
-             $refs.putIframe.firstChild.addEventListener('load', (e) => {
-                const target = e.target;
-                fetch('http://localhost:8000/api/script/'+current.id)
-                    .then((res) => res.text())
-                    .then((script) => {
-                        target.contentWindow.postMessage(JSON.stringify({script}), '*')
-                    })
-             })
-        },
-        async renderHTMLPreview(){
-            // clone this.func
-            return await PD.pdCoreRenderHtmlPreview({function: this.func})
-                .then((output) => {
-                    return output.iframe
-                })
-                .catch((e) => {
-                    console.warn(e)
-                })
-        }
-    }">
+            x-init="() => {
+                renderPreview()
+            }"
+            x-data="{
+                async renderPreview(input){
+                    PD.pdCoreRenderHtmlPreview()
+                        .then(pipe => pipe.process())
+                        .then((output) => {
+                             $refs.putIframe.innerHTML = output.iframe
+                             $refs.putIframe.firstChild.addEventListener('load', (e) => {
+                                const target = e.target;
+                                target.contentWindow.postMessage(JSON.stringify({pipe: current.name}), '*')
+                             })
+                        })
+                        .catch((e) => {
+                            console.warn(e)
+                        })
+
+                }
+            }"
+        >
             <div class="w-100" x-ref="putIframe"></div>
         </div>
     </template>
@@ -429,9 +418,8 @@ input.${funcProp} = \`${e.detail}\``
             }">
             <select
                     class="form-control"
-                    @input.stop="() => $dispatch('selected', uniqueFuncPropertyKeys[$el.value])">
+                    @input.stop="() => $dispatch('selected', uniqueFuncPropertyKeys[$el.value] || $el.value)">
                 <option> --- Select a property ---</option>
-                <option value="_pd_new"> --- Add New ---</option>
                 <template x-for="(key, index) in uniqueFuncPropertyKeys">
                     <option :selected="key === selected" x-text="key" :value="index"></option>
                 </template>
@@ -441,6 +429,7 @@ input.${funcProp} = \`${e.detail}\``
 
     <template x-component="pd-function-form"></template>
 </div>
+<script type="module" src="/scripts/pdglobal.js"></script>
 <script type="module" src="/scripts/main.js"></script>
 </body>
 </html>
