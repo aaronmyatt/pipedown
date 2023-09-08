@@ -15,7 +15,7 @@
 <!--    <script src="/prism.js"></script>-->
 <!--    <link rel="stylesheet" href="/prism.css"/>-->
 </head>
-<body class="container">
+<body class="container-md">
 <div x-data="{
     burnToast(toast, timeout = 5000) {
         setTimeout(() => {
@@ -155,7 +155,8 @@
         propertyeditor: '',
         pipefunc: '',
     }">
-        <div x-data="{
+        <div tabindex="1"
+                x-data="{
             editFunction(content) {
                 $refs.functionform.showModal()
             },
@@ -168,12 +169,6 @@
                 if(archive)
                     $store.functions.delete(func)
                 $refs.deletefunctiondialog.close()
-            },
-            getFirstInput(func){
-                return func.inputs.slice(-1)[0];
-            },
-            getFirstOutput(func){
-                return func.outputs.slice(-1)[0];
             },
             processFunction(func){
                 $store.pipes.process({name: 'temp'}, { temp: true, funcs: [func.id] })
@@ -198,9 +193,6 @@
                 </li>
                 <li class="nav-item" @click="changeTab('code')">
                     <button :class="(active || tab) === 'code' && 'active'" class="nav-link">Code</button>
-                </li>
-                <li class="nav-item" @click="changeTab('inputs')">
-                    <button :class="(active || tab) === 'inputs' && 'active'" class="nav-link">Inputs</button>
                 </li>
                 <li class="nav-item" @click="changeTab('raw')">
                     <button :class="(active || tab) === 'raw' && 'active'" class="nav-link">Raw</button>
@@ -234,9 +226,6 @@
                 <div x-show="(active  || tab) === 'code'">
                     <pd-function-code-editor></pd-function-code-editor>
                 </div>
-                <div x-show="(active  || tab) === 'inputs'">
-                    <json-viewer :data="$tojson(getFirstInput(func))"></json-viewer>
-                </div>
                 <div x-show="(active  || tab) === 'raw'">
                     <json-viewer :data="$tojson(func)"></json-viewer>
                 </div>
@@ -254,14 +243,14 @@
                                 <option value="property">Edit One Property</option>
                                 <option value="jmespath">jmespath</option>
                             </select>
-                            <pd-function-input-property-selector
-                                    x-init="$nextTick(() => { $el.selected = funcProp })"
-                                    @selected="(e) => {
-                                        func.transform = func.transform || { prop: '' }
-                                        funcProp = e.detail
-                                        func.transform.prop = funcProp
-                                        $store.functions.save(func)
-                            }"></pd-function-input-property-selector>
+<!--                            <pd-function-input-property-selector-->
+<!--                                    x-init="$nextTick(() => { $el.selected = funcProp })"-->
+<!--                                    @selected="(e) => {-->
+<!--                                        func.transform = func.transform || { prop: '' }-->
+<!--                                        funcProp = e.detail-->
+<!--                                        func.transform.prop = funcProp-->
+<!--                                        $store.functions.save(func)-->
+<!--                            }"></pd-function-input-property-selector>-->
                             <input type="text" x-model="funcProp" :value="func.transform && func.transform.prop">
                             <button
                                     @click="() => {
@@ -417,7 +406,7 @@ input.${funcProp} = \`${e.detail}\``
                 }
             }">
             <select
-                    class="form-control"
+                    class="form-control">
                     @input.stop="() => $dispatch('selected', uniqueFuncPropertyKeys[$el.value] || $el.value)">
                 <option> --- Select a property ---</option>
                 <template x-for="(key, index) in uniqueFuncPropertyKeys">
@@ -426,10 +415,9 @@ input.${funcProp} = \`${e.detail}\``
             </select>
         </div>
     </template>
-
     <template x-component="pd-function-form"></template>
 </div>
-<script type="module" src="/scripts/pdglobal.js"></script>
+<script type="module" src="/scripts/pdglobal.client.js"></script>
 <script type="module" src="/scripts/main.js"></script>
 </body>
 </html>

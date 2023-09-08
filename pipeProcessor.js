@@ -1,37 +1,37 @@
 import Pipeline from "./pipeline.js";
-
 export function pipeProcessor(funcSequence, callbacks = {
     always: () => {
     },
-}) {
-    const pdglobalDependency = {
-        path: '/scripts/pdglobal.js',
-        export: 'PD',
-        alias: '',
-        deptype: 'javascript',
-        dependency: true
-    }
+}, globals = {}) {
     const codeToFunctions = funcSequence
         // .filter(func => func.code)
-        .map((func) => wrapCode(func, callbacks))
-    return new Pipeline(codeToFunctions);
+        .map((func) => wrapCode.call(this, func, callbacks, globals))
+    const pipe = new Pipeline(codeToFunctions);
+    return pipe;
 }
 
-function wrapCode(func, callbacks) {
+function wrapCode(func, callbacks, globals) {
     const AsyncFunction = Object.getPrototypeOf(async function () {
     }).constructor;
     return async function (input = {}) {
         input = input || {}
+        if(input.error) return input;
         const state = {name: func.name, func}
         state.start = Date.now()
         state.input = Object.assign({}, input)
 
         try {
             await resolveDependencies(input)
-            await new AsyncFunction('input', func.code).call(this, input)
+            await new AsyncFunction('input', 'globals', func.code).call(this, input, globals)
         } catch (e) {
             console.error(e)
             console.log(JSON.stringify(e))
+            input.error = {
+                funcid: func.id,
+                name: func.name,
+                message: e.message,
+                stack: e.stack,
+            }
         } finally {
             state.end = Date.now()
             state.duration = state.end - state.start;
@@ -42,10 +42,10 @@ function wrapCode(func, callbacks) {
     }
 }
 
-function resolveDependencies(input) {
+async function resolveDependencies(input) {
     if (!input || !input.dependencies || input.dependencies.length === 0) return input;
 
-    return input.dependencies
+    return await Promise.all(input.dependencies
         .map(async dependencyConfig => {
             if (dependencyConfig.deptype === 'css') {
                 addLinkToHeadIfMissing(addCssLink(dependencyConfig))
@@ -56,19 +56,11 @@ function resolveDependencies(input) {
                 addScriptToHeadIfMissing(makeScript(dependencyConfig))
                 return dependencyConfig;
             }
-
-            if (dependencyConfig.export in window) {
-            } else {
-                import(/* @vite-ignore */ dependencyConfig.path).then(module => {
-                    if (dependencyConfig.export in window) {
-                    } else {
-                        window.pipedeps = window.pipedeps || {}
-                        window.pipedeps[dependencyConfig.export] = module[dependencyConfig.export]
-                    }
-                })
-            }
+            await import(/* @vite-ignore */ dependencyConfig.path).then(module => {
+                pipedeps[dependencyConfig.export] = module[dependencyConfig.export] ? module[dependencyConfig.export] : module.default
+            })
             return dependencyConfig
-        })
+        }))
 }
 
 function addCssLink(dep) {

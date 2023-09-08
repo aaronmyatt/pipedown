@@ -9,7 +9,6 @@
     <template x-if="current">
         <div>
             <pd-pipe></pd-pipe>
-            <pd-process-current></pd-process-current>
         </div>
     </template>
 </div>
@@ -30,11 +29,18 @@
         </div>
         <div class="form-check form-switch" :class="{'text-primary': current.execOnServer}">
             <input class="form-check-input" type="checkbox" role="switch" id="flexSwitchCheckDefault"
-                   x-model="current.execOnServer">
+                   :checked="current.execOnServer" @click="() => {
+                        current.execOnServer = !current.execOnServer
+                        $store.pipes.save(current)
+                    }">
             <label class="form-check-label"
                    for="flexSwitchCheckDefault">Execute on backend</label>
             <i x-transition x-show="current.execOnServer" class="bi bi-cloud-arrow-up"></i>
         </div>
+        <div class="pdtoolbar" x-init="() => {
+            PD.pdCoreUIToolbar({ el: $el, pipe: current}).then(results => console.log(results))
+        }"></div>
+        <pd-pipe-output></pd-pipe-output>
         <p x-text="current.description"></p>
         <dialog x-ref="pipeform" class="w-75 h-75">
             <h4>Pipe Form</h4>
@@ -89,6 +95,13 @@
             <pd-pipe-input-selector
                     @selected="e => { $store.pdPipe.initialInput = current.inputs[e.detail] }"></pd-pipe-input-selector>
         </div>
+
+<!--        <div class="border"-->
+<!--             :style="lastOutput.error && { backgroundColor: 'red'}"-->
+<!--        >-->
+<!--            <p> Last Ouput </p>-->
+<!--            <json-viewer :data="$tojson(lastOutput)"></json-viewer>-->
+<!--        </div>-->
     </div>
 
     <template x-if="$store.functions.loaded">
@@ -96,43 +109,45 @@
         </pd-pipe-functions>
     </template>
 </template>
-<template x-component="pd-process-current">
-    <div class="d-flex flex-column gap-3" x-data="{
-        init(){
-            window.addEventListener('message', (e) => {
-              const data = JSON.parse(e.data)
-              this.output = data;
-            })
-        },
-        output: '',
-    }">
-        <button class="btn btn-lg btn-success w-100"
-                @click.prevent="async () => {
-            output = await $store.pipes.process(current, $store.pdPipe.initialInput)
-        }">Process
-        </button>
+<template x-component="pd-pipe-output">
+    <div class="d-flex flex-column gap-3"
+         x-data="{
+            init(){
+                window.addEventListener('message', (e) => {
+                  const data = JSON.parse(e.data)
+                  this.output = data;
+                })
+            },
+            output: {},
+        }">
         <h3>Pipe Input</h3>
         <json-viewer :data="$tojson($store.pdPipe.initialInput)"></json-viewer>
-        <h3>Pipe Output</h3>
-        <json-viewer :data="$tojson(output)"></json-viewer>
+
+        <div :style="output.error && { backgroundColor: 'red'}">
+            <h3>Pipe Output</h3>
+            <json-viewer :data="$tojson(output)"></json-viewer>
+            <template x-if="output.error">
+                <json-viewer :data="$tojson(output.error)"></json-viewer>
+            </template>
+        </div>
     </div>
 </template>
 
 <template x-component="pd-pipe-functions">
     <div class="d-flex flex-column gap-1 py-4" x-data="{
-        addFunction(after){
-            const newFunction = $store.functions.newFunction()
+        async addFunction(after){
+            const newFunction = await $store.functions.newFunction()
             $store.pipes.addFunctionToCurrentPipe(newFunction.id, { after })
         },
-        addRenderFunction(after){
-            const newFunction = $store.functions.newRenderFunction()
+        async addRenderFunction(after){
+            const newFunction = await $store.functions.newRenderFunction()
             $store.pipes.addFunctionToCurrentPipe(newFunction.id, { after })
         },
-        addTransformFunction(after){
-            const newFunction = $store.functions.newTransformFunction()
+        async addTransformFunction(after){
+            const newFunction = await $store.functions.newTransformFunction()
             $store.pipes.addFunctionToCurrentPipe(newFunction.id, { after })
         },
-        addPipeFunction(after){
+        async addPipeFunction(after){
             $refs.pipeselectordialog.showModal()
             const listener = document.addEventListener('pipe-selected', (e) => {
                 PD[e.detail]({json: true}).then(pipe => {
@@ -171,9 +186,6 @@
                         getFirstInput(F){
                             return this.func.inputs.slice(-1)[0];
                         },
-                        getFirstOutput(F){
-                            return this.func.outputs.slice(-1)[0];
-                        },
                         insertFunctionAfter(func){
                             $refs.insertfuncdialog.showModal()
                         },
@@ -193,7 +205,9 @@
                             <button @click="() => {
                                 const funcPosition = current.functions.findIndex(f => f === func.id)
                                 const untilThisFunc = current.functions.slice(0, funcPosition+1)
-                                $store.pipes.process({name: 'temp'}, { temp: true, funcs: untilThisFunc })
+                                PD.temp({ funcs: untilThisFunc, server: current.execOnServer })
+                                    .then(data => $root.querySelector('json-viewer').data = data)
+
                             }" class="btn btn-success mt-5">
                                 <i class="bi bi-play"></i>
                             </button>
@@ -201,7 +215,8 @@
                         <div class="w-100">
                             <pd-function
                                     :tab="(func.transform && func.transform.prop && 'transform') || (func.pipeid && 'pipe') || 'code'"></pd-function>
-                            <json-viewer :data="$tojson(getFirstOutput(), { pretty: true })"></json-viewer>
+                            <json-viewer
+                                    :data="await $store.api.getFuncOutput(func.id).then(data => $tojson(data))"></json-viewer>
                         </div>
                     </div>
                 </template>

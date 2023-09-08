@@ -1,3 +1,4 @@
+import {DEFAULT_PIPE, DEFAULT_FUNCTION} from "../default_schemas.js";
 import registerWebComponents from "../alpine-router/plugins/component.js";
 import router from "../alpine-router/plugins/router.js";
 import intersect from '@alpinejs/intersect'
@@ -78,7 +79,11 @@ Alpine.data('pipeActions', () => ({
         if (please === 'open') {
             this.$refs.pipeform.showModal()
         }
+    },
+    get lastOutput(){
+        return this.current.outputs.at(-1)
     }
+
 }))
 Alpine.magic('tojson', (el, {}) => (expression, opts) => {
     // example usage: <div x-text="$json({foo: 'bar'})"></div>
@@ -102,32 +107,6 @@ Alpine.magic('fromjson', (el, {}) => (expression) => {
         return expression;
     }
 })
-
-const DEFAULT_FUNCTION = {
-    id: 0,
-    name: 'New Function',
-    description: '',
-    code: '',
-    inputs: [],
-    outputs: [],
-    archived: false,
-    render: false,
-    transform: {
-        prop: '',
-    },
-    dependency: false,
-    execOnServer: false,
-}
-
-const DEFAULT_PIPE = {
-    id: 0,
-    name: 'New Pipe',
-    description: '',
-    functions: [],
-    archived: false,
-    inputs: [],
-    outputs: [],
-}
 
 Alpine.store('pipes', {
     current: null,
@@ -175,17 +154,18 @@ Alpine.store('pipes', {
     async process(pipe, input = {}) {
         if (pipe.execOnServer) {
             return await this.processOnServer(pipe, input)
+        } else {
+            return await this.processOnClient(pipe, input)
         }
-        return await this.processOnClient(pipe, input)
     },
-    async processOnServer(pipe, input = {}) {
-        return Alpine.store('api').process(pipe.id, input)
+    async processOnServer(pipe, inputs = {}) {
+        return Alpine.store('api').process({ id: pipe.id, inputs })
     },
-    async processOnClient(pipe, input = {}) {
-        const inputClone = Object.assign({}, input)
+    async processOnClient(pipe, inputs = {}) {
+        const inputsClone = Object.assign({}, inputs)
         const W = window.open('/testwindow.html')
         W.addEventListener('load', () => {
-            W.postMessage(JSON.stringify({pipe: pipe.name, inputs: inputClone}), '*')
+            W.postMessage(JSON.stringify({pipe: pipe.name, inputs: inputsClone}), '*')
         })
 
         // const pipeClone = Object.assign({}, pipe || this.current)
@@ -275,47 +255,44 @@ Alpine.store('functions', {
         this.fetch();
     },
     allFunctions: [],
-    newFunction(config = {}) {
-        const newFunction = Object.assign({}, DEFAULT_FUNCTION, config);
-        const maxId = this.allFunctions.reduce((acc, p) => {
-            return Math.max(acc, p.id)
-        }, 0);
-        newFunction.id = maxId + 1;
-        this.allFunctions.push(newFunction);
-        this.save(newFunction)
-        return newFunction;
+    async newFunction(config = {}) {
+        const pipe = await PD.pdNewFunction({server: true})
+        const result = await pipe.process()
+        const func = result.output.newFunction;
+        this.allFunctions.push(func);
+        return func;
     },
-    newPipeFunction(config = {pipe: null, }){
+    async newPipeFunction(config = {pipe: null, }){
         const funcConfig = Object.assign({}, {
             name: 'Pipe Function: ' + config.pipe.name,
             pipeid: config.pipe.id,
             code: `
-const pipe = await PD['${config.pipe.name}']()
-input['${config.pipe.name}'] = await pipe.process()
+const pipe = await PD['${config.pipe.name}'](input)
+input['${config.pipe.name}'] = await pipe.process(input)
 `})
-        const newFunction = this.newFunction(funcConfig);
+        const newFunction = await this.newFunction(funcConfig);
         return newFunction;
     },
-    newRenderFunction(config = {}) {
+    async newRenderFunction(config = {}) {
         Object.assign(config, {
             render: true
         })
-        const newFunction = this.newFunction(config);
+        const newFunction = await this.newFunction(config);
         return newFunction;
     },
-    newTransformFunction(config = {}) {
+    async newTransformFunction(config = {}) {
         Object.assign(config, {
             transform: {prop: 'html'}
         })
-        const newFunction = this.newFunction(config);
+        const newFunction = await this.newFunction(config);
         return newFunction;
     },
-    newDependencyFunction(dependencyConfig = {path: '', export: '', alias: '', deptype: 'javascript'}, config = {}) {
+    async newDependencyFunction(dependencyConfig = {path: '', export: '', alias: '', deptype: 'javascript'}, config = {}) {
         config.code = `input.dependencies = input.dependencies || [];
 input.dependencies.push(${JSON.stringify(dependencyConfig)})`
         config.name = `Dependency: ${dependencyConfig.deptype} ${dependencyConfig.alias || dependencyConfig.export || new URL(dependencyConfig.path).pathname || ''}`
         if (!config.code) throw new Error('Dependency functions must have code');
-        const newFunction = this.newFunction(config);
+        const newFunction = await this.newFunction(config);
         newFunction.dependency = true;
         return newFunction;
     },

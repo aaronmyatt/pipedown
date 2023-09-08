@@ -6,42 +6,44 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Test Window</title>
     <script>
-        function appendDataToBody(data){
+        function appendDataToBody(data) {
             const script = document.createElement('script')
             script.type = 'application/json'
             script.textContent = data;
             document.body.appendChild(script)
         }
-
     </script>
+    <script src="/scripts/pdglobal.client.js"></script>
     <script>
-        window.addEventListener('message', function(e){
+        window.addEventListener('message', function (e) {
             let data = JSON.parse(e.data)
+            localStorage.setItem('pdglobal', JSON.stringify(data))
+            location.reload();
+        })
 
+        if (localStorage.getItem('pdglobal')) {
+            let data = JSON.parse(localStorage.getItem('pdglobal'))
             PD[data.pipe](data.inputs)
-                    .then(pipe => {
-                        return pipe.process(data.inputs)
-                    })
                     .then(result => {
                         window.opener && window.opener.postMessage(JSON.stringify({
                             pipe: data.pipe,
                             result: result
                         }), '*')
-                        appendDataToBody(JSON.stringify(result))
-            })
-
-            appendDataToBody(e.data)
-        })
+                        appendDataToBody(JSON.stringify(result, null, 2))
+                    })
+        }
     </script>
     <style>
         body {
             min-height: 100vh; /* Ensures the container takes up the full viewport height */
             width: 100%; /* Ensures the container takes up the full viewport height */
         }
+
         body > div {
             min-height: 100vh; /* Ensures the container takes up the full viewport height */
             width: 100%; /* Ensures the container takes up the full viewport height */
         }
     </style>
-    <script src="/scripts/pdglobal.js"></script>
-</head><body>Nada</body></html>
+</head>
+<body><strong>Proving Ground</strong></body>
+</html>
