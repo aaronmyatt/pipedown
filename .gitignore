@@ -22,8 +22,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
-data/
-functions/
 /out/
 pipe-*
 /pipes-*
+outputs/
+inputs/
