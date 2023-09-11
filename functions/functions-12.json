@@ -1,0 +1,1 @@
+{"id":12,"name":"Determine next func id","description":"","code":"const funcs = await pipedeps.pdUtils.allFuncs()\nconst maxId = funcs.reduce((acc, p) => {\n            return Math.max(acc, p.id)\n        }, 0);\ninput.nextId = maxId + 1;","archived":false,"render":false,"transform":{"prop":null},"dependency":false,"execOnServer":false}

@@ -23,17 +23,18 @@ self.onmessage = async (event) => {
         }).process(data.inputs);
     } catch (e) {
         errors[data.scriptName] = e.message
-        errors['output?'] = self.output
         console.error(e.message);
     }
 
     try {
-        self.postMessage(JSON.stringify({output: self.output, errors}));
+        self.output.errors = errors;
+        self.postMessage(JSON.stringify(self.output));
     } catch (e) {
         // don't let it kill the server
         console.error(e.message);
         errors['postMessage'] = e.message
-        self.postMessage(JSON.stringify({output: self.output, errors}));
+        self.output.errors = errors
+        self.postMessage(JSON.stringify(self.output));
         if (self.output.hasOwnProperty('then')) {
             console.warn('output is a promise; please check your code for async errors')
         }

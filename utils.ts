@@ -130,12 +130,18 @@ export async function readRawJsonFile(fileName: string) {
 }
 
 export async function getPipeFunctions(pipe) {
-    return await readWholeJSONDir('functions').then(funcs => {
+    return await allFuncs().then(funcs => {
         return funcs
             .filter(f => pipe.functions.includes(f.id))
             .sort((a, b) => pipe.functions.indexOf(a.id) - pipe.functions.indexOf(b.id))
     })
+}
 
+export async function manyFuncs(funcIds: Array<Number>) {
+    const funcs = await allFuncs();
+    return funcs
+            .filter(f => funcIds.includes(f.id))
+            .toSorted((a, b) => funcIds.indexOf(a.id) - funcIds.indexOf(b.id))
 }
 
 export const gotwindow = typeof window !== 'undefined'
@@ -174,5 +180,6 @@ export default {
     readLastPipeInput,
     readLastFunctionInput,
     readLastFunctionOutput,
-    readLastPipeOutput
+    readLastPipeOutput,
+    manyFuncs,
 }

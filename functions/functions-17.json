@@ -1,0 +1,1 @@
+{"id":17,"name":"New Function","description":"","code":"input.updatedPipe = Object.assign(input.foundPipe, input.pipe)\ninput.pipeFunctions = input.updatedPipe.functions","archived":false,"render":false,"transform":{"prop":null},"dependency":false,"execOnServer":false}

@@ -1,6 +1,7 @@
 import {API} from "../fe/api.js";
 
 const PD = {}
+window.pipedeps = window.pipedeps || {}
 
 function addScriptToWindow(res) {
     const domScript = document.createElement('script')
@@ -35,6 +36,11 @@ function logPipe(pipe, inputs = {}) {
 
 const DEFAULT_OPTS = {browser: false, server: false, worker: false, text: false, url: false, json: false, temp: false}
 window.PD = new Proxy(PD, {
+    set(target, prop, newValue, receiver) {
+        target[prop] = newValue;
+        console.log(target);
+        return target[prop]
+    },
     get(target, prop, receiver) {
         return (pipeopts = DEFAULT_OPTS) => {
             const inputs = Object.fromEntries(Object.entries(pipeopts).filter(([key, value]) => !Object.keys(DEFAULT_OPTS).includes(key)));
@@ -50,7 +56,12 @@ window.PD = new Proxy(PD, {
                 return Promise.any([API.pipe(prop), API.pipeByName(prop)])
             }
             if (prop in target) {
-                return logPipe(target[prop], pipeopts).process(inputs);
+                try {
+                    return logPipe(target[prop], pipeopts).process(inputs);
+                } catch(e) {
+                    console.error(e)
+                    return target[prop];
+                }
             }
             // default to assuming browser
             return API.processScript({name: prop})

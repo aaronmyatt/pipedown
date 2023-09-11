@@ -1,0 +1,13 @@
+{
+  "id": 14,
+  "name": "New Function",
+  "description": "",
+  "code": "input.newFunc = Object.assign({}, pipedeps.pdUtils.DEFAULT_FUNCTION, {id: input.nextId})",
+  "archived": false,
+  "render": false,
+  "transform": {
+    "prop": null
+  },
+  "dependency": false,
+  "execOnServer": false
+}

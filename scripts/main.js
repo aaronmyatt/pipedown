@@ -11,7 +11,7 @@ import '@alenaksu/json-viewer';
 import Sortable from "sortablejs";
 import {EditorView, basicSetup, javascript} from "./cmirror.bundle.js"
 
-window.Sortable = Sortable;
+// window.Sortable = Sortable;
 window.Pipeline = pipeline;
 window.chopQuotes = (codeValue) => {
     let chopStart = 0
@@ -115,7 +115,7 @@ Alpine.store('pipes', {
         this.fetch();
     },
     load(pipe) {
-        this.current = pipe;
+        this.current = this.allPipes.find(p => p.id === pipe.id);
     },
     async save(pipe) {
         const pipePayload = JSON.stringify(pipe)
@@ -256,11 +256,17 @@ Alpine.store('functions', {
     },
     allFunctions: [],
     async newFunction(config = {}) {
-        const pipe = await PD.pdNewFunction({server: true})
-        const result = await pipe.process()
-        const func = result.output.newFunction;
-        this.allFunctions.push(func);
-        return func;
+        const maxId = this.allFunctions.reduce((acc, f) => {
+            return Math.max(acc, f.id)
+        }, 0) + 1 || 1;
+        const newFunc = Object.assign({}, DEFAULT_FUNCTION, config, {id: maxId});
+        this.allFunctions.push(newFunc);
+        this.save(newFunc);
+        // const pipe = await PD.pdNewFunction({server: true})
+        // const result = await pipe.process()
+        // const func = result.output.newFunction;
+        // this.allFunctions.push(func);
+        return newFunc;
     },
     async newPipeFunction(config = {pipe: null, }){
         const funcConfig = Object.assign({}, {

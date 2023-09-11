@@ -22,9 +22,7 @@
                 <button class="btn btn-primary" type="button" @click="() => { deletePipe(); this.$router.push('/') }">
                     Delete
                 </button>
-                <button class="btn btn-primary" type="button" @click="() => $refs.dependencyform.showModal()">Add
-                    Dependency
-                </button>
+                <button class="btn btn-primary" type="button" @click="() => $refs.dependencyform.showModal()">Add Dependency</button>
             </div>
         </div>
         <div class="form-check form-switch" :class="{'text-primary': current.execOnServer}">
@@ -37,9 +35,6 @@
                    for="flexSwitchCheckDefault">Execute on backend</label>
             <i x-transition x-show="current.execOnServer" class="bi bi-cloud-arrow-up"></i>
         </div>
-        <div class="pdtoolbar" x-init="() => {
-            PD.pdCoreUIToolbar({ el: $el, pipe: current}).then(results => console.log(results))
-        }"></div>
         <pd-pipe-output></pd-pipe-output>
         <p x-text="current.description"></p>
         <dialog x-ref="pipeform" class="w-75 h-75">
@@ -55,9 +50,9 @@
         </dialog>
         <dialog x-ref="dependencyform" class="w-75 h-75">
             <h4>Pipe Form</h4>
-            <form class="d-flex flex-column gap-4" @submit.prevent="(e) => {
+            <form class="d-flex flex-column gap-4" @submit.prevent="async (e) => {
                 const data = Object.fromEntries(new FormData(e.target).entries())
-                const newFunction = $store.functions.newDependencyFunction(data)
+                const newFunction = await $store.functions.newDependencyFunction(data)
                 $store.pipes.addFunctionToCurrentPipe(newFunction.id, { start: true })
             }">
                 <label for="path" class="form-label"> Path </label>
@@ -95,15 +90,13 @@
             <pd-pipe-input-selector
                     @selected="e => { $store.pdPipe.initialInput = current.inputs[e.detail] }"></pd-pipe-input-selector>
         </div>
-
-<!--        <div class="border"-->
-<!--             :style="lastOutput.error && { backgroundColor: 'red'}"-->
-<!--        >-->
-<!--            <p> Last Ouput </p>-->
-<!--            <json-viewer :data="$tojson(lastOutput)"></json-viewer>-->
-<!--        </div>-->
     </div>
-
+    <div class="pdtoolbar sticky-top" x-html="() => {
+        return PD.pdPipeToolbar()
+          .then(outputs => {
+            return outputs.html
+          })
+    }"></div>
     <template x-if="$store.functions.loaded">
         <pd-pipe-functions>
         </pd-pipe-functions>
@@ -135,83 +128,22 @@
 
 <template x-component="pd-pipe-functions">
     <div class="d-flex flex-column gap-1 py-4" x-data="{
-        async addFunction(after){
-            const newFunction = await $store.functions.newFunction()
-            $store.pipes.addFunctionToCurrentPipe(newFunction.id, { after })
-        },
-        async addRenderFunction(after){
-            const newFunction = await $store.functions.newRenderFunction()
-            $store.pipes.addFunctionToCurrentPipe(newFunction.id, { after })
-        },
-        async addTransformFunction(after){
-            const newFunction = await $store.functions.newTransformFunction()
-            $store.pipes.addFunctionToCurrentPipe(newFunction.id, { after })
-        },
-        async addPipeFunction(after){
-            $refs.pipeselectordialog.showModal()
-            const listener = document.addEventListener('pipe-selected', (e) => {
-                PD[e.detail]({json: true}).then(pipe => {
-                    const newFunction = $store.functions.newPipeFunction({ pipe })
-                    $store.pipes.addFunctionToCurrentPipe(newFunction.id, { after })
-                })
-                document.removeEventListener('pipe-selected', listener)
-            })
-        },
         removeFunction(id){
             $store.pipes.removeFunctionFromCurrentPipe(id);
-        },
-        getFunction(id){
-            return $store.pipes.getFunctions().find(F => F.id === id)
-        },
-        getFunctions(){
-            return this.current.functions.map(F => this.getFunction(F)).filter(F => F) || []
-        },
-        addExistingFunction(){
-            $router.push('/functions/add-to-current-pipe')
-        },
-        sortDialog(){
-            $refs.sortdialog.showModal()
         },
     }">
         <h3>Functions</h3>
         <template x-for="(F, index) in current.functions" :key="F">
             <div x-data="{
-                        init(){
-                            this.func = $store.functions.getFunction(F);
+                        get func (){
+                            return $store.functions.getFunction(F);
                         },
-                        func: {},
                         showInput: false,
                         showCode: true,
-                        showOutput: true,
-                        getFirstInput(F){
-                            return this.func.inputs.slice(-1)[0];
-                        },
-                        insertFunctionAfter(func){
-                            $refs.insertfuncdialog.showModal()
-                        },
+                        showOutput: true
                     }">
-                <template x-if="func && !func.render">
+                <template x-if="func && func.id">
                     <div class="d-flex">
-                        <div class="d-flex flex-column">
-                            <button class="btn" x-text="func.id">
-
-                            </button>
-                            <button @click="sortDialog" class="btn btn-info">
-                                <i class="bi bi-arrow-down-up"></i>
-                            </button>
-                            <button @click="insertFunctionAfter(func)" class="btn btn-success">
-                                <i class="bi bi-plus"></i>
-                            </button>
-                            <button @click="() => {
-                                const funcPosition = current.functions.findIndex(f => f === func.id)
-                                const untilThisFunc = current.functions.slice(0, funcPosition+1)
-                                PD.temp({ funcs: untilThisFunc, server: current.execOnServer })
-                                    .then(data => $root.querySelector('json-viewer').data = data)
-
-                            }" class="btn btn-success mt-5">
-                                <i class="bi bi-play"></i>
-                            </button>
-                        </div>
                         <div class="w-100">
                             <pd-function
                                     :tab="(func.transform && func.transform.prop && 'transform') || (func.pipeid && 'pipe') || 'code'"></pd-function>
@@ -220,63 +152,8 @@
                         </div>
                     </div>
                 </template>
-                <template x-if="func && func.render">
-                    <div class="d-flex ignore-elements">
-                        <div class="d-flex flex-column">
-                            <button class="btn">
-                                <i class="bi bi-eye"></i>
-                            </button>
-                            <button @click="insertFunctionAfter(func)" class="btn btn-success">
-                                <i class="bi bi-plus"></i>
-                            </button>
-                        </div>
-                        <div class="w-100">
-                            <pd-function :tab="'render'"></pd-function>
-                        </div>
-                    </div>
-                </template>
-                <dialog x-ref="insertfuncdialog">
-                    <div class="btn-group-vertical justify-content-center gap-2">
-                        <button class="btn btn-success" @click="addTransformFunction(index)">Transform</button>
-                        <button class="btn btn-success" @click="addRenderFunction(index)">Render / Preview</button>
-                        <button class="btn btn-primary" @click="addFunction(index)">New Function</button>
-                        <button class="btn btn-primary" @click="addExistingFunction">Existing Function</button>
-                        <button class="btn btn-secondary" @click="addPipeFunction(index)">Inline Pipe</button>
-                    </div>
-                </dialog>
             </div>
         </template>
-        <dialog x-ref="sortdialog">
-            <div
-                    x-intersect:enter="initSortable"
-                    x-data="{
-                    initSortable(){
-                        const sort = Sortable.create($el, {
-                            items: '.item',
-                            handle: '.handle',
-                            ghostClass: 'placeholder',
-                            onEnd: (_evt) => {
-                                $store.pipes.reorderFunctions(sort.toArray());
-                            }
-                        })
-                    }
-                }"
-                    class="btn-group-vertical justify-content-center gap-2">
-                <template x-for="F in current.functions">
-                    <button
-                            :data-id="F"
-                            x-data="{ func: null, init(){ this.func = $store.functions.getFunction(F); } }"
-                            class="item handle btn btn-primary d-flex gap-3">
-                        <i class="bi bi-arrows-move"></i>
-                        <span x-text="func.id"></span>
-                        <span class="ms-auto" x-text="func.name"> </span>
-                    </button>
-                </template>
-            </div>
-        </dialog>
-        <dialog x-ref="pipeselectordialog">
-            <pd-pipe-selector></pd-pipe-selector>
-        </dialog>
     </div>
 </template>
 

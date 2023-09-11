@@ -5,15 +5,16 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg"/>
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>Vite App</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-4bw+/aepP/YC94hEpVNVgiZdgIC5+VKNBQNGCHeKRQN+PtmoHDEXuppvnDJzQIu9" crossorigin="anonymous">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-4bw+/aepP/YC94hEpVNVgiZdgIC5+VKNBQNGCHeKRQN+PtmoHDEXuppvnDJzQIu9" crossorigin="anonymous">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
     <!--    <link rel="stylesheet" href="/styles/style.scss"/>-->
-<!--    <script type="application/javascript" src="https://unpkg.com/prettier@3.0.0/standalone.js"></script>-->
-<!--    <script type="application/javascript" src="https://cdn.jsdelivr.net/npm/prettier@3.0.0/plugins/babel.js"></script>-->
-<!--    <script type="application/javascript" src="https://cdn.jsdelivr.net/npm/prettier@3.0.0/plugins/estree.js"></script>-->
-<!--    import prism script and css-->
-<!--    <script src="/prism.js"></script>-->
-<!--    <link rel="stylesheet" href="/prism.css"/>-->
+    <!--    <script type="application/javascript" src="https://unpkg.com/prettier@3.0.0/standalone.js"></script>-->
+    <!--    <script type="application/javascript" src="https://cdn.jsdelivr.net/npm/prettier@3.0.0/plugins/babel.js"></script>-->
+    <!--    <script type="application/javascript" src="https://cdn.jsdelivr.net/npm/prettier@3.0.0/plugins/estree.js"></script>-->
+    <!--    import prism script and css-->
+    <!--    <script src="/prism.js"></script>-->
+    <!--    <link rel="stylesheet" href="/prism.css"/>-->
 </head>
 <body class="container-md">
 <div x-data="{
@@ -96,7 +97,8 @@
             <div x-data="pipeActions">
                 <ul class="list-group">
                     <template x-for="pipe in pipes()">
-                        <li class="list-group-item list-group-item-action" @click="() => $router.push('/pipe/' + pipe.id)">
+                        <li class="list-group-item list-group-item-action"
+                            @click="() => $router.push('/pipe/' + pipe.id)">
                             <a href="#" class="d-flex justify-content-between align-items-start ">
                                 <div class="ms-2 me-auto">
                                     <div class="fw-bold" x-text="pipe.name"></div>
@@ -125,13 +127,22 @@
             <ul
                     class="list-group"
                     x-data="{
+                    query: '',
             functions(){
-                return $store.functions.allFunctions.filter(func => !func.archived)
+                return $store.functions.allFunctions
+                    .filter(func => !func.archived)
+                    .filter(func => {
+                        return func.name.toLowerCase().includes(this.query.toLowerCase()) || func.description.toLowerCase().includes(this.query.toLowerCase())
+                    })
             }
-        }" x-intersect:enter="$store.functions.fetch()">
+        }">
+                <div class="input-group mb-3">
+                    <input type="text" class="form-control" placeholder="Search" aria-label="Search"
+                           aria-describedby="button-addon2" x-model="query">
+                </div>
                 <template x-for="func in functions()" :key="func.id">
-                    <li     class="list-group-item list-group-item-action"
-                            x-data="{
+                    <li class="list-group-item list-group-item-action"
+                        x-data="{
                     output: null,
                     testInput: null,
                 }">
@@ -140,7 +151,9 @@
                             <pd-function tab="detail"></pd-function>
                         </div>
                         <template x-if="addtocurrent">
-                            <button class="btn btn-primary" @click="$store.pipes.addFunctionToCurrentPipe(func.id)">Add to current pipe</button>
+                            <button class="btn btn-primary" @click="$store.pipes.addFunctionToCurrentPipe(func.id)">Add
+                                to current pipe
+                            </button>
                         </template>
                     </li>
                 </template>
@@ -156,7 +169,7 @@
         pipefunc: '',
     }">
         <div tabindex="1"
-                x-data="{
+             x-data="{
             editFunction(content) {
                 $refs.functionform.showModal()
             },
@@ -215,7 +228,8 @@
                             <button class="btn btn-primary" type="button" @click="editFunction(func)">Edit</button>
                             <button class="btn btn-primary" type="button" @click="() => {
                                 $refs.deletefunctiondialog.showModal()
-                            }">Delete</button>
+                            }">Delete
+                            </button>
                             <button
                                     class="btn btn-primary" type="button" @click="testFunction">Test
                             </button>
@@ -243,14 +257,14 @@
                                 <option value="property">Edit One Property</option>
                                 <option value="jmespath">jmespath</option>
                             </select>
-<!--                            <pd-function-input-property-selector-->
-<!--                                    x-init="$nextTick(() => { $el.selected = funcProp })"-->
-<!--                                    @selected="(e) => {-->
-<!--                                        func.transform = func.transform || { prop: '' }-->
-<!--                                        funcProp = e.detail-->
-<!--                                        func.transform.prop = funcProp-->
-<!--                                        $store.functions.save(func)-->
-<!--                            }"></pd-function-input-property-selector>-->
+                            <!--                            <pd-function-input-property-selector-->
+                            <!--                                    x-init="$nextTick(() => { $el.selected = funcProp })"-->
+                            <!--                                    @selected="(e) => {-->
+                            <!--                                        func.transform = func.transform || { prop: '' }-->
+                            <!--                                        funcProp = e.detail-->
+                            <!--                                        func.transform.prop = funcProp-->
+                            <!--                                        $store.functions.save(func)-->
+                            <!--                            }"></pd-function-input-property-selector>-->
                             <input type="text" x-model="funcProp" :value="func.transform && func.transform.prop">
                             <button
                                     @click="() => {
@@ -305,9 +319,9 @@ input.${funcProp} = \`${e.detail}\``
 
     <template x-component="pd-function-code-editor">
         <div
-            class="w-100"
-            style="min-height: 200px;"
-            x-data="{
+                class="w-100"
+                style="min-height: 200px;"
+                x-data="{
             init(){
                 const code = !this.blank && func.code || ''
                 editor = CodeMirror({el: $el, code: code, onChange: (change) => {
@@ -347,10 +361,10 @@ input.${funcProp} = \`${e.detail}\``
 
     <template x-component="pd-render-function">
         <div
-            x-init="() => {
+                x-init="() => {
                 renderPreview()
             }"
-            x-data="{
+                x-data="{
                 async renderPreview(input){
                     PD.pdCoreRenderHtmlPreview()
                         .then(pipe => pipe.process())
@@ -407,7 +421,7 @@ input.${funcProp} = \`${e.detail}\``
             }">
             <select
                     class="form-control">
-                    @input.stop="() => $dispatch('selected', uniqueFuncPropertyKeys[$el.value] || $el.value)">
+                @input.stop="() => $dispatch('selected', uniqueFuncPropertyKeys[$el.value] || $el.value)">
                 <option> --- Select a property ---</option>
                 <template x-for="(key, index) in uniqueFuncPropertyKeys">
                     <option :selected="key === selected" x-text="key" :value="index"></option>
@@ -417,7 +431,12 @@ input.${funcProp} = \`${e.detail}\``
     </template>
     <template x-component="pd-function-form"></template>
 </div>
-<script type="module" src="/scripts/pdglobal.client.js"></script>
+<script src="/scripts/pdglobal.client.js"></script>
+<script src="/scripts/pipes-3.json.js"></script>
+<script src="/scripts/pipes-1.json.js"></script>
+<script>
+    pipe1.pipe().process({action: 'NULL'})
+</script>
 <script type="module" src="/scripts/main.js"></script>
 </body>
 </html>

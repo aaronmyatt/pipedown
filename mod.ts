@@ -26,12 +26,13 @@ import {
     readLastFunctionOutput, readLastPipeOutput
 } from './utils.ts';
 import * as esbuild from "https://deno.land/x/esbuild@v0.18.17/mod.js";
-import {DEFAULT_PIPE} from "./default_schemas.js";
 
 createDirIfItDoesntExist(pipeDirName);
 createDirIfItDoesntExist(funcDirName);
 createDirIfItDoesntExist(inputsDirName);
 createDirIfItDoesntExist(outputsDirName);
+
+
 
 const app = new Application();
 const router = new Router();
@@ -253,18 +254,29 @@ app.use(async (ctx, next) => {
     await next();
     const pathname = ctx.request.url.pathname
 
+    const pipes = await allPipes()
+    for(const pipe of pipes) {
+        await generateClientPipeScript(pipe);
+    }
+
     if (pathname.startsWith('/scripts')) {
-        await esbuild.build({
-            bundle: true,
-            entryPoints: [`${Deno.cwd()}${pathname}`],
-            platform: 'browser',
-            write: true,
-            format: 'iife',
-            outdir: 'out/scripts',
-        })
-        await ctx.send({
-            root: `${Deno.cwd()}/out`,
-        })
+        const entryPoint = `${Deno.cwd()}${pathname}`
+        try {
+            await esbuild.build({
+                bundle: true,
+                entryPoints: [entryPoint],
+                platform: 'browser',
+                write: true,
+                format: 'iife',
+                outdir: 'out/scripts',
+            })
+        } catch(e){
+            console.warn(`Nothing to build at: ${entryPoint}`)
+        } finally {
+            await ctx.send({
+                root: `${Deno.cwd()}/out`,
+            })
+        }
     } else {
         console.log(pathname)
         try {
