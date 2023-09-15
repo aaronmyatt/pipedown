@@ -10,6 +10,7 @@ export const DEFAULT_FUNCTION = {
     },
     dependency: false,
     execOnServer: false,
+    defaultInput: {},
 }
 
 export const DEFAULT_PIPE = {

@@ -1,13 +1,1 @@
-{
-  "id": 15,
-  "name": "New Function",
-  "description": "",
-  "code": "await pipedeps.pdUtils.writeFuncDataToFile(input.newFunc)",
-  "archived": false,
-  "render": false,
-  "transform": {
-    "prop": null
-  },
-  "dependency": false,
-  "execOnServer": false
-}
+{"id":15,"name":"writeFunc","description":"","code":"await pipedeps.pdUtils.writeFuncDataToFile(input.newFunc)","archived":false,"render":false,"transform":{"prop":null},"dependency":false,"execOnServer":false}

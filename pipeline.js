@@ -7,6 +7,7 @@
  * @constructor
  */
 function Pipeline(presetStages) {
+    this.defaultArgs = {};
     // Stages for the pipeline, either received through
     // the constructor or the pipe method in prototype
     this.stages = presetStages || [];
@@ -33,6 +34,7 @@ Pipeline.prototype.pipe = function (stage) {
  * @returns {*}
  */
 Pipeline.prototype.process = function (args) {
+    args = Object.assign({}, this.defaultArgs, args);
 
     // Output is same as the passed args, if
     // there are no stages in the pipeline

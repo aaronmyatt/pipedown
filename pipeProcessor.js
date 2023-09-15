@@ -1,18 +1,19 @@
 import Pipeline from "./pipeline.js";
-export function pipeProcessor(funcSequence, callbacks = {
-    always: () => {
-    },
-}, globals = {}) {
+
+const defaultOpts = { _pipe: {}, defaultInput: {}, callbacks: {always: () => {}} };
+export function pipeProcessor(funcSequence, opts) {
+    opts = Object.assign({}, defaultOpts, opts)
     const codeToFunctions = funcSequence
         // .filter(func => func.code)
-        .map((func) => wrapCode.call(this, func, callbacks, globals))
+        .map((func) => wrapCode.call(this, func, opts))
     const pipe = new Pipeline(codeToFunctions);
+    pipe.defaultArgs = Object.assign({}, this.defaultInput,  opts.defaultInput);
     return pipe;
 }
 
-function wrapCode(func, callbacks, globals) {
-    const AsyncFunction = Object.getPrototypeOf(async function () {
-    }).constructor;
+function wrapCode(func, opts) {
+    const that = this;
+    const AsyncFunction = Object.getPrototypeOf(async function (){}).constructor;
     return async function (input = {}) {
         input = input || {}
         if(input.error) return input;
@@ -22,7 +23,7 @@ function wrapCode(func, callbacks, globals) {
 
         try {
             await resolveDependencies(input)
-            await new AsyncFunction('input', 'globals', func.code).call(this, input, globals)
+            await new AsyncFunction('input', func.code).call(that, input)
         } catch (e) {
             console.error(e)
             console.log(JSON.stringify(e))
@@ -36,7 +37,7 @@ function wrapCode(func, callbacks, globals) {
             state.end = Date.now()
             state.duration = state.end - state.start;
             state.output = Object.assign({}, input)
-            callbacks && callbacks.always && callbacks.always(state, input)
+            opts && opts.always && opts.always(state, input)
         }
         return input
     }

@@ -92,6 +92,13 @@
         <!--        <pre x-text="code"></pre>-->
         <!--        </div>-->
 
+        <div x-html="async () => {
+            return await PD.pdPipeList({server: true}).then(output => output.html);
+        }"></div>
+        <div x-html="async () => {
+            return fetch('http://localhost:8000/api/process/10/html')
+                .then(response => response.text())
+        }"></div>
         <pd-pipes-list></pd-pipes-list>
         <template x-component="pd-pipes-list">
             <div x-data="pipeActions">
@@ -151,9 +158,12 @@
                             <pd-function tab="detail"></pd-function>
                         </div>
                         <template x-if="addtocurrent">
-                            <button class="btn btn-primary" @click="$store.pipes.addFunctionToCurrentPipe(func.id)">Add
-                                to current pipe
-                            </button>
+                            <button class="btn btn-primary" @click.prevent="() => {
+                                PD.pdBrowserActions({action: 'ADD_EXISTING_FUNCTION', pipe: $store.pipes.current, func })
+                                    .then(async output => {
+                                        await $store.pipes.fetch()
+                                    })
+                            }"> Add to current pipe </button>
                         </template>
                     </li>
                 </template>

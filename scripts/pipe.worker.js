@@ -8,22 +8,23 @@ self.onmessage = async (event) => {
     const data = JSON.parse(event.data);
 
     try {
-        const {pipe} = await import(data.scriptName + `?t=${Date.now()}`)
-        self.output = await pipe({
+        const pipe = await import(data.scriptName + `?t=${Date.now()}`)
+        console.log('pipe', pipe.pipe)
+        self.output = await pipe.pipe({
             always: async (state, _input) => {
                 try {
                     await saveFunctionOutput(state.func.id, state.output)
                     await saveFunctionInput(state.func.id, state.input)
                 } catch (e) {
                     // don't let it kill the server; just log the error
-                    console.error(e.message);
+                    console.error('always', e.message);
                     errors['always'] = e.message;
                 }
             }
         }).process(data.inputs);
     } catch (e) {
         errors[data.scriptName] = e.message
-        console.error(e.message);
+        console.error('pipe catch', e.message);
     }
 
     try {
@@ -31,7 +32,7 @@ self.onmessage = async (event) => {
         self.postMessage(JSON.stringify(self.output));
     } catch (e) {
         // don't let it kill the server
-        console.error(e.message);
+        console.error('postMessage catch', e.message);
         errors['postMessage'] = e.message
         self.output.errors = errors
         self.postMessage(JSON.stringify(self.output));

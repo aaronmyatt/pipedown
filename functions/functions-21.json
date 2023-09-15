@@ -1,1 +1,1 @@
-{"id":21,"name":"New Function","description":"","code":"input.selectorText = 'pdAddFuncDialog'\ninput.selector = '.'+input.selectorText;","archived":false,"render":false,"transform":{"prop":null},"dependency":false,"execOnServer":false}
+{"id":21,"name":"pdAddFuncDialog selectors","description":"","code":"input.selectorText = 'pdAddFuncDialog'\ninput.selector = '.'+input.selectorText;","archived":false,"render":false,"transform":{"prop":null},"dependency":false,"execOnServer":false}

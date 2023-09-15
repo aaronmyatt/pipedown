@@ -46,11 +46,7 @@ window.PD = new Proxy(PD, {
             const inputs = Object.fromEntries(Object.entries(pipeopts).filter(([key, value]) => !Object.keys(DEFAULT_OPTS).includes(key)));
             if (pipeopts.server) {
                 if (prop === 'temp') return API.processTemp({funcs: inputs.funcs})
-                return Promise.any([
-                        API.process({id: prop, inputs}),
-                        API.process({name: prop, inputs})
-                    ]
-                )
+                return API.process({name: prop, inputs})
             }
             if (pipeopts.json) {
                 return Promise.any([API.pipe(prop), API.pipeByName(prop)])

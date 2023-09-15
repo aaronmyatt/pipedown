@@ -1,0 +1,1 @@
+{"id":45,"name":"Dependency: deno DOMParser","description":"","code":"input.dependencies = input.dependencies || [];\ninput.dependencies.push({\"path\":\"https://deno.land/x/deno_dom/deno-dom-wasm.ts\",\"export\":\"DOMParser\",\"alias\":\"\",\"deptype\":\"deno\"})","archived":false,"render":false,"transform":{"prop":""},"dependency":false,"execOnServer":false}

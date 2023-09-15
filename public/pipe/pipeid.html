@@ -113,6 +113,23 @@
             },
             output: {},
         }">
+
+        <h3>Default Input</h3>
+        <div>
+            <label for="pipedefaultinput" class="form-label"> Pipe Input </label>
+            <input class="form-control" type="text" id="pipedefaultinput"
+                   x-text="$el.value = $tojson($store.pipes.current.defaultInput || {})"
+                   @input="(event) => {
+                        try {
+                            $store.pipes.current.defaultInput = JSON.parse(event.target.value)
+                            event.target.classList.add('is-valid')
+                            event.target.classList.remove('is-invalid')
+                        } catch (e) {
+                            console.error(e)
+                            event.target.classList.add('is-invalid')
+                        }
+                    }">
+        </div>
         <h3>Pipe Input</h3>
         <json-viewer :data="$tojson($store.pdPipe.initialInput)"></json-viewer>
 

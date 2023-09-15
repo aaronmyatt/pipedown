@@ -169,16 +169,19 @@ router.all('/api/processbyname/:pipename/:prop?', async (context) => {
 })
 
 async function generateServerScript(pipe) {
-    const funcSequence = await getPipeFunctions(pipe)
-    const result = await generateScript(funcSequence)
+    const result = await generateScript(pipe, {
+        bundle: true,
+        format: 'esm',
+        write: false,
+        treeShaking: true,
+    })
     const scriptName = pipeScriptName(pipe)
     await Deno.writeTextFile(scriptName, result)
     return result;
 }
 
 async function generateClientPipeScript(pipe) {
-    const funcSequence = await getPipeFunctions(pipe)
-    const result = await generateScript(funcSequence, {format: 'iife', platform: 'browser', globalName: 'pipe' + pipe.id})
+    const result = await generateScript(pipe, {format: 'iife', platform: 'browser', globalName: 'pipe' + pipe.id})
     const scriptName = pipeScriptName(pipe)
     await Deno.writeTextFile(scriptName, result)
     return result;
@@ -186,14 +189,14 @@ async function generateClientPipeScript(pipe) {
 
 router.get('/api/script/:pipeid', async (context) => {
     const pipeid = context.params.pipeid
-    const pipe = await allPipes().find(p => p.id === Number(pipeid));
+    const pipe = await onePipe(pipeid);
     const pipeScript = await generateClientPipeScript(pipe);
     context.response.body = {script: pipeScript};
 })
 
 router.get('/api/scriptbyname/:pipename', async (context) => {
     const pipeName = context.params.pipename
-    let pipe = await allPipes().then(pipes => pipes.find(p => p.name === pipeName))
+    let pipe = await onePipeWithName(pipeName)
     if(!pipe) {
         const output = await PD.pdNewPipe({ name: pipeName })
         pipe = output.newPipe
@@ -210,8 +213,7 @@ router.get('/api/scriptbyname/:pipename', async (context) => {
 
 router.post('/api/processtemp', async (context) => {
     const requestData = await context.request.body({type: 'json'}).value;
-    const funcSequence = requestData.funcs.map(oneFunc)
-    const pipeScript = await generateScript(funcSequence)
+    const pipeScript = await generateScript({functions: requestData.funcs})
     await Deno.writeTextFile(pipeScriptName({id: 'temp'}), pipeScript)
     const output = await PD.temp(requestData)
     context.response.body = output;
@@ -226,16 +228,18 @@ router.post('/api/temporaryscript', async (context) => {
     context.response.body = {script: pipeScript, id: 'temp'};
 })
 
-const PIPE_TEMPLATE = (funcSequence) => `import {pipeProcessor} from './pipeProcessor.js';
+const PIPE_TEMPLATE = (pipe, funcSequence) => `import {pipeProcessor} from './pipeProcessor.js';
 const funcSequence = ${JSON.stringify(funcSequence)}
-export const pipe = pipeProcessor.bind(this, funcSequence)
+const _pipe = ${JSON.stringify(pipe)}
+export const pipe = pipeProcessor.bind({_pipe: _pipe, defaultInput: _pipe.defaultInput || {}}, funcSequence)
 `
 
-async function generateScript(funcSequence: Record<string, unknown>, buildConfig = {}) {
+async function generateScript(pipe: Record<string, unknown>, buildConfig = {}) {
+    const funcSequence = await getPipeFunctions(pipe)
     const config = Object.assign({
         bundle: true,
         stdin: {
-            contents: PIPE_TEMPLATE(funcSequence),
+            contents: PIPE_TEMPLATE(pipe, funcSequence),
             resolveDir: '.'
         },
         format: 'esm',
@@ -256,7 +260,11 @@ app.use(async (ctx, next) => {
 
     const pipes = await allPipes()
     for(const pipe of pipes) {
-        await generateClientPipeScript(pipe);
+        if(pipe.execOnServer) {
+            await generateServerScript(pipe);
+        } else {
+            await generateClientPipeScript(pipe);
+        }
     }
 
     if (pathname.startsWith('/scripts')) {

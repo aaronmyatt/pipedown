@@ -30,6 +30,9 @@
                             result: result
                         }), '*')
                         appendDataToBody(JSON.stringify(result, null, 2))
+                        if('html' in result){
+                            document.body.innerHTML = result.html
+                        }
                     })
         }
     </script>
