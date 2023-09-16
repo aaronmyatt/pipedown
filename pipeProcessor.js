@@ -22,7 +22,7 @@ function wrapCode(func, opts) {
         state.input = Object.assign({}, input)
 
         try {
-            await resolveDependencies(input)
+            await resolveDependencies.call(that, input)
             await new AsyncFunction('input', func.code).call(that, input)
         } catch (e) {
             console.error(e)
@@ -49,7 +49,14 @@ async function resolveDependencies(input) {
     return await Promise.all(input.dependencies
         .map(async dependencyConfig => {
             if (dependencyConfig.deptype === 'css') {
-                addLinkToHeadIfMissing(addCssLink(dependencyConfig))
+                try {
+                    // we may want to refer to a css dependency server side
+                    addLinkToHeadIfMissing(addCssLink(dependencyConfig))
+                } catch(e) {
+                    input.warn = {
+                        message: `Could not load css dependency ${dependencyConfig.path}`,
+                    }
+                }
                 return dependencyConfig;
             }
 
@@ -59,6 +66,7 @@ async function resolveDependencies(input) {
             }
             await import(/* @vite-ignore */ dependencyConfig.path).then(module => {
                 pipedeps[dependencyConfig.export] = module[dependencyConfig.export] ? module[dependencyConfig.export] : module.default
+                this[dependencyConfig.export] = module[dependencyConfig.export] ? module[dependencyConfig.export] : module.default
             })
             return dependencyConfig
         }))

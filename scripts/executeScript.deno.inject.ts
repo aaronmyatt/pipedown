@@ -1,4 +1,4 @@
-async function executeScript(opts = {name:  '', id: ''}, inputs) {
+async function executeScript(opts = {name: '', id: ''}, inputs) {
     const pipeWorkerThread = new Worker(new URL(`./pipe.worker.js`, import.meta.url).href, {
         type: "module"
     });

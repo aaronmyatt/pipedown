@@ -1,4 +1,5 @@
 import utils from "../utils.ts";
+import {generateServerScript} from '../scriptGenerator.ts'
 import {executeScript} from './executeScript.deno.inject.ts'
 
 const PD = {}
@@ -15,12 +16,11 @@ window.PD = new Proxy(PD, {
         } else {
             const DEFAULT_OPTS = {}
             return async (pipeopts = {}) => {
+                const pipe = await utils.onePipeWithName(prop) || await utils.onePipe(prop) || {id: 'temp'};
+                const name = utils.pipeScriptName(pipe);
                 const inputs = Object.fromEntries(Object.entries(pipeopts || {}).filter(([key, value]) => !Object.keys(DEFAULT_OPTS).includes(key)));
-                if(prop === 'temp'){
-                    return await executeScript({name: utils.pipeScriptName({id: 'temp'})}, inputs)
-                }
-                const pipe = await utils.onePipeWithName(prop)
-                return await executeScript({name: utils.pipeScriptName(pipe)}, inputs)
+                await generateServerScript(pipe || inputs)
+                return await executeScript({ name, id: '' }, inputs)
             }
         }
     }

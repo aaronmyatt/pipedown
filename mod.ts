@@ -7,7 +7,6 @@ import {
     pipeDirName,
     funcDirName,
     allPipes,
-    getPipeFunctions,
     onePipe,
     saveFunctionInput,
     saveFunctionOutput,
@@ -25,6 +24,7 @@ import {
     readLastFunctionInput,
     readLastFunctionOutput, readLastPipeOutput
 } from './utils.ts';
+import {generateClientPipeScript, generateServerScript} from './scriptGenerator.ts';
 import * as esbuild from "https://deno.land/x/esbuild@v0.18.17/mod.js";
 
 createDirIfItDoesntExist(pipeDirName);
@@ -168,25 +168,6 @@ router.all('/api/processbyname/:pipename/:prop?', async (context) => {
     }
 })
 
-async function generateServerScript(pipe) {
-    const result = await generateScript(pipe, {
-        bundle: true,
-        format: 'esm',
-        write: false,
-        treeShaking: true,
-    })
-    const scriptName = pipeScriptName(pipe)
-    await Deno.writeTextFile(scriptName, result)
-    return result;
-}
-
-async function generateClientPipeScript(pipe) {
-    const result = await generateScript(pipe, {format: 'iife', platform: 'browser', globalName: 'pipe' + pipe.id})
-    const scriptName = pipeScriptName(pipe)
-    await Deno.writeTextFile(scriptName, result)
-    return result;
-}
-
 router.get('/api/script/:pipeid', async (context) => {
     const pipeid = context.params.pipeid
     const pipe = await onePipe(pipeid);
@@ -213,9 +194,7 @@ router.get('/api/scriptbyname/:pipename', async (context) => {
 
 router.post('/api/processtemp', async (context) => {
     const requestData = await context.request.body({type: 'json'}).value;
-    const pipeScript = await generateScript({functions: requestData.funcs})
-    await Deno.writeTextFile(pipeScriptName({id: 'temp'}), pipeScript)
-    const output = await PD.temp(requestData)
+    const output = await PD.temp({id: 'temp', functions: requestData.funcs})
     context.response.body = output;
 })
 
@@ -224,31 +203,19 @@ router.post('/api/temporaryscript', async (context) => {
     const pipe = {
         functions: requestData.funcs,
     }
-    const pipeScript = await generateScript(pipe, {format: 'iife', platform: 'browser', globalName: 'pipetemp'})
+    const pipeScript = await generateClientPipeScript(pipe, {globalName: 'pipetemp'})
     context.response.body = {script: pipeScript, id: 'temp'};
 })
 
-const PIPE_TEMPLATE = (pipe, funcSequence) => `import {pipeProcessor} from './pipeProcessor.js';
-const funcSequence = ${JSON.stringify(funcSequence)}
-const _pipe = ${JSON.stringify(pipe)}
-export const pipe = pipeProcessor.bind({_pipe: _pipe, defaultInput: _pipe.defaultInput || {}}, funcSequence)
-`
-
-async function generateScript(pipe: Record<string, unknown>, buildConfig = {}) {
-    const funcSequence = await getPipeFunctions(pipe)
-    const config = Object.assign({
-        bundle: true,
-        stdin: {
-            contents: PIPE_TEMPLATE(pipe, funcSequence),
-            resolveDir: '.'
-        },
-        format: 'esm',
-        write: false,
-        treeShaking: true,
-    }, buildConfig)
-    const pipeBuild = await esbuild.build(config)
-    return pipeBuild.outputFiles[0].text
-}
+router.get('/testwindow', async (context) => {
+    context.response.headers.set('Content-Type', 'text/html')
+    try {
+        const output = await PD.pdTestWindow()
+        context.response.body = output.html;
+    } catch(e) {
+        context.response.body = await Deno.readTextFile('public/testwindow.html')
+    }
+})
 
 app.use(router.routes());
 app.use(router.allowedMethods());

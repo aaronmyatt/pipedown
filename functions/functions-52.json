@@ -1,0 +1,1 @@
+{"id":52,"name":"New Function","description":"","code":"const { document } = this.parseHTML(input.html)\ninput.dom = document; ","archived":false,"render":false,"transform":{"prop":null},"dependency":false,"execOnServer":false,"defaultInput":{}}

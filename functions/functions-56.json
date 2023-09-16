@@ -1,0 +1,1 @@
+{"id":56,"name":"Dependency: deno parseHTML","description":"","code":"input.dependencies = input.dependencies || [];\ninput.dependencies.push({\"path\":\"https://esm.sh/linkedom\",\"export\":\"parseHTML\",\"alias\":\"\",\"deptype\":\"deno\"})","archived":false,"render":false,"transform":{"prop":""},"dependency":false,"execOnServer":false,"defaultInput":{}}
