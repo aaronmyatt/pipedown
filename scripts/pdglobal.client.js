@@ -18,9 +18,9 @@ function addScriptToWindow(res) {
 
 function callPipe(pipe, inputs = {}) {
     return pipe(Object.assign({
-        always: (state, input) => {
-            API.saveFuncInput(state.func, state.input)
-            API.saveFuncOutput(state.func, state.output)
+        always: async (state, _input) => {
+            await API.saveFuncInput(state.func, state.input)
+            await API.saveFuncOutput(state.func, state.output)
         }
     }, inputs))
 }
@@ -36,12 +36,12 @@ function logPipe(pipe, inputs = {}) {
 
 const DEFAULT_OPTS = {browser: false, server: false, worker: false, text: false, url: false, json: false, temp: false}
 window.PD = new Proxy(PD, {
-    set(target, prop, newValue, receiver) {
+    set(target, prop, newValue, _receiver) {
         target[prop] = newValue;
         console.log(target);
         return target[prop]
     },
-    get(target, prop, receiver) {
+    get(target, prop, _receiver) {
         return (pipeopts = DEFAULT_OPTS) => {
             const inputs = Object.fromEntries(Object.entries(pipeopts).filter(([key, value]) => !Object.keys(DEFAULT_OPTS).includes(key)));
             if (pipeopts.server) {

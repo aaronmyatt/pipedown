@@ -15,7 +15,6 @@ import {
     outputsDirName,
     allFuncs,
     oneFunc,
-    pipeScriptName,
     savePipeInput,
     savePipeOutput,
     writePipeInputsDataToFile,
@@ -31,7 +30,6 @@ createDirIfItDoesntExist(pipeDirName);
 createDirIfItDoesntExist(funcDirName);
 createDirIfItDoesntExist(inputsDirName);
 createDirIfItDoesntExist(outputsDirName);
-
 
 
 const app = new Application();
@@ -143,8 +141,8 @@ router.all('/api/processbyname/:pipename/:prop?', async (context) => {
     const prop = context.params.prop;
     const pipename = context.params.pipename
     let pipe = await onePipeWithName(context.params.pipename);
-    if(!pipe) {
-        const output = await PD.pdNewPipe({ name: pipename })
+    if (!pipe) {
+        const output = await PD.pdNewPipe({name: pipename})
         pipe = output.newPipe
     }
 
@@ -178,8 +176,8 @@ router.get('/api/script/:pipeid', async (context) => {
 router.get('/api/scriptbyname/:pipename', async (context) => {
     const pipeName = context.params.pipename
     let pipe = await onePipeWithName(pipeName)
-    if(!pipe) {
-        const output = await PD.pdNewPipe({ name: pipeName })
+    if (!pipe) {
+        const output = await PD.pdNewPipe({name: pipeName})
         pipe = output.newPipe
     }
 
@@ -212,7 +210,7 @@ router.get('/testwindow', async (context) => {
     try {
         const output = await PD.pdTestWindow()
         context.response.body = output.html;
-    } catch(e) {
+    } catch (e) {
         context.response.body = await Deno.readTextFile('public/testwindow.html')
     }
 })
@@ -226,8 +224,8 @@ app.use(async (ctx, next) => {
     const pathname = ctx.request.url.pathname
 
     const pipes = await allPipes()
-    for(const pipe of pipes) {
-        if(pipe.execOnServer) {
+    for (const pipe of pipes) {
+        if (pipe.execOnServer) {
             await generateServerScript(pipe);
         } else {
             await generateClientPipeScript(pipe);
@@ -237,15 +235,19 @@ app.use(async (ctx, next) => {
     if (pathname.startsWith('/scripts')) {
         const entryPoint = `${Deno.cwd()}${pathname}`
         try {
-            await esbuild.build({
-                bundle: true,
-                entryPoints: [entryPoint],
-                platform: 'browser',
-                write: true,
-                format: 'iife',
-                outdir: 'out/scripts',
-            })
-        } catch(e){
+            if (pathname.includes('pipes-')) {
+                // if it's a pipe script, we can skip
+            } else {
+                await esbuild.build({
+                    bundle: true,
+                    entryPoints: [entryPoint],
+                    platform: 'browser',
+                    write: true,
+                    format: 'iife',
+                    outdir: 'out/scripts',
+                })
+            }
+        } catch (e) {
             console.warn(`Nothing to build at: ${entryPoint}`)
         } finally {
             await ctx.send({
@@ -253,7 +255,6 @@ app.use(async (ctx, next) => {
             })
         }
     } else {
-        console.log(pathname)
         try {
             await ctx.send({
                 root: `${Deno.cwd()}/public`,

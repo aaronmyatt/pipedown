@@ -92,13 +92,13 @@
         <!--        <pre x-text="code"></pre>-->
         <!--        </div>-->
 
-        <div x-html="async () => {
-            return await PD.pdPipeList({server: true}).then(output => output.html);
-        }"></div>
-        <div x-html="async () => {
-            return fetch('http://localhost:8000/api/process/10/html')
-                .then(response => response.text())
-        }"></div>
+<!--        <div x-html="async () => {-->
+<!--            return await PD.pdPipeList({server: true}).then(output => output.html);-->
+<!--        }"></div>-->
+<!--        <div x-html="async () => {-->
+<!--            return fetch('http://localhost:8000/api/process/10/html')-->
+<!--                .then(response => response.text())-->
+<!--        }"></div>-->
         <pd-pipes-list></pd-pipes-list>
         <template x-component="pd-pipes-list">
             <div x-data="pipeActions">

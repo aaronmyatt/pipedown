@@ -1,0 +1,1 @@
+{"id":58,"name":"New Function","description":"","code":"input.functions = await pipedeps.pdUtils.allFuncs();","archived":false,"render":false,"transform":{"prop":null},"dependency":false,"execOnServer":false,"defaultInput":{}}

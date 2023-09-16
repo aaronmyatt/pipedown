@@ -3,6 +3,8 @@
 
 <head>
     <meta charset="UTF-8">
+    <link rel="icon"
+          href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎯</text></svg>">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Test Window</title>
     <script>
@@ -13,15 +15,16 @@
             document.body.appendChild(script)
         }
 
-        function callPipe(data){
-            PD[data.pipe](data.inputs)
+        async function callPipe(data) {
+            await PD[data.pipe](data.inputs)
                     .then(result => {
                         window.opener && window.opener.postMessage(JSON.stringify({
                             pipe: data.pipe,
+                            server: data.inputs.server,
                             result: result
                         }), '*')
                         appendDataToBody(JSON.stringify(result, null, 2))
-                        if('html' in result){
+                        if ('html' in result) {
                             document.body.innerHTML = result.html
                         }
                     })
@@ -30,15 +33,15 @@
     <script src="/scripts/pdglobal.client.js"></script>
     <script>
         const PDGLOBAL_KEY = 'pdglobal'
-        window.addEventListener('message', function (e) {
+        window.addEventListener('message', async function (e) {
             const data = JSON.parse(e.data)
-            localStorage.setItem(PDGLOBAL_KEY, JSON.stringify(data))
-            callPipe(data)
+            localStorage.setItem(PDGLOBAL_KEY, e.data)
+            await callPipe(data)
         })
 
         if (localStorage.getItem(PDGLOBAL_KEY)) {
             const data = JSON.parse(localStorage.getItem(PDGLOBAL_KEY))
-            callPipe(data)
+            !data.inputs.server && callPipe(data)
         }
     </script>
     <style>

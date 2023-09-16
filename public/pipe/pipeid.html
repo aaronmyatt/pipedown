@@ -109,6 +109,7 @@
                 window.addEventListener('message', (e) => {
                   const data = JSON.parse(e.data)
                   this.output = data;
+                  if(data.server) e.source.close();
                 })
             },
             output: {},

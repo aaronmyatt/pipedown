@@ -9,7 +9,6 @@ self.onmessage = async (event) => {
 
     try {
         const pipe = await import(data.scriptName + `?t=${Date.now()}`)
-        console.log(data);
         self.output = await pipe.pipe({
             always: async (state, _input) => {
                 try {
