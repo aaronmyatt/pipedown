@@ -44,6 +44,21 @@
                 <input class="form-control" type="text" id="pipename" x-model="current.name">
                 <label for="pipedescription" class="form-label"> Description </label>
                 <input type="text" id="pipedescription" x-model="current.description" class="form-control">
+                <div>
+                    <label for="pipedefaultinput" class="form-label"> Default Input </label>
+                    <input class="form-control" type="text" id="pipedefaultinput"
+                           x-text="$el.value = $tojson($store.pipes.current.defaultInput || {})"
+                           @input="(event) => {
+                        try {
+                            $store.pipes.current.defaultInput = JSON.parse(event.target.value)
+                            event.target.classList.add('is-valid')
+                            event.target.classList.remove('is-invalid')
+                        } catch (e) {
+                            console.error(e)
+                            event.target.classList.add('is-invalid')
+                        }
+                    }">
+                </div>
                 <button class="btn btn-primary">Save</button>
             </form>
             <json-viewer :data="$tojson(current)"></json-viewer>
@@ -88,7 +103,8 @@
                         }
                     }">
             <pd-pipe-input-selector
-                    @selected="e => { $store.pdPipe.initialInput = current.inputs[e.detail] }"></pd-pipe-input-selector>
+                @selected="e => { $store.pdPipe.initialInput = $fromjson(e.detail) }"
+            ></pd-pipe-input-selector>
         </div>
     </div>
     <div class="pdtoolbar sticky-top" x-html="() => {
@@ -114,23 +130,6 @@
             },
             output: {},
         }">
-
-        <h3>Default Input</h3>
-        <div>
-            <label for="pipedefaultinput" class="form-label"> Pipe Input </label>
-            <input class="form-control" type="text" id="pipedefaultinput"
-                   x-text="$el.value = $tojson($store.pipes.current.defaultInput || {})"
-                   @input="(event) => {
-                        try {
-                            $store.pipes.current.defaultInput = JSON.parse(event.target.value)
-                            event.target.classList.add('is-valid')
-                            event.target.classList.remove('is-invalid')
-                        } catch (e) {
-                            console.error(e)
-                            event.target.classList.add('is-invalid')
-                        }
-                    }">
-        </div>
         <h3>Pipe Input</h3>
         <json-viewer :data="$tojson($store.pdPipe.initialInput)"></json-viewer>
 
@@ -177,8 +176,10 @@
 
 <template x-component="pd-pipe-input-selector">
     <div x-data="{
-            get pipeInputs(){
-                return Array.from(new Set(this.current.inputs)).map($tojson)
+            async pipeInputs(){
+                return await PD.pdGetPipeInputs({ server: true, pipe: $store.pipes.current }).then(outputs => {
+                    return outputs.pipeInputs
+                })
             }
         }">
         <select
@@ -186,7 +187,7 @@
                 @input.stop="() => $dispatch('selected', $el.value)">
             <option> --- Test with an input ---</option>
             <template x-for="(input, index) in pipeInputs">
-                <option x-text="input" :value="index"></option>
+                <option x-text="$tojson(input)"></option>
             </template>
         </select>
     </div>

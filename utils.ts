@@ -93,35 +93,57 @@ export async function writeLineToFile (fileName: string, data: Record<string, un
 }
 
 // get last line of file
-export async function readLastLine(fileName: string) {
-    await createFileIfItDoesntExist(fileName);
-    const fileData = Deno.readTextFileSync(fileName);
+export function readLastLine(fileData: string) {
     const lines = fileData.split('\n');
     return lines.at(-2);
 }
 
+export async function readFunctionInputs(funcid: string) {
+    const fileName = funcFileName(inputsDirName, funcid);
+    await createFileIfItDoesntExist(fileName);
+    return Deno.readTextFileSync(fileName);
+}
+
 // read last function input
 export async function readLastFunctionInput(funcid: string) {
-    const fileName = funcFileName(inputsDirName, funcid);
-    return await readLastLine(fileName);
+    const rawInputs = await readFunctionInputs(funcid)
+    return readLastLine(rawInputs);
+}
+
+export async function readFunctionOuputs(funcid: string) {
+    const fileName = funcFileName(outputsDirName, funcid);
+    await createFileIfItDoesntExist(fileName);
+    return Deno.readTextFileSync(fileName);
 }
 
 // read last function output
 export async function readLastFunctionOutput(funcid: string) {
-    const fileName = funcFileName(outputsDirName, funcid);
-    return await readLastLine(fileName);
+    const rawInputs = await readFunctionOuputs(funcid)
+    return readLastLine(rawInputs);
+}
+
+export async function readPipeInputs(pipeid: string) {
+    const fileName = pipeFileName(inputsDirName, pipeid);
+    await createFileIfItDoesntExist(fileName);
+    return Deno.readTextFileSync(fileName);
 }
 
 // read last pipe input
 export async function readLastPipeInput(pipeid: string) {
-    const fileName = pipeFileName(inputsDirName, pipeid);
-    return await readLastLine(fileName);
+    const rawInputs = await readPipeInputs(pipeid);
+    return readLastLine(rawInputs);
+}
+
+export async function readPipeOutputs(pipeid: string) {
+    const fileName = pipeFileName(outputsDirName, pipeid);
+    await createFileIfItDoesntExist(fileName);
+    return Deno.readTextFileSync(fileName);
 }
 
 // read last pipe output
 export async function readLastPipeOutput(pipeid: string) {
-    const fileName = pipeFileName(outputsDirName, pipeid);
-    return await readLastLine(fileName);
+    const rawOuputs = await readPipeOutputs(pipeid);
+    return readLastLine(rawOuputs);
 }
 
 export async function readRawJsonFile(fileName: string) {
@@ -182,4 +204,8 @@ export default {
     readLastFunctionOutput,
     readLastPipeOutput,
     manyFuncs,
+    readFunctionInputs,
+    readFunctionOuputs,
+    readPipeOutputs,
+    readPipeInputs,
 }
