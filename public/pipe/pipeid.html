@@ -14,7 +14,9 @@
 </div>
 </template>
 <template x-component="pd-pipe" c-data="{ initialInput: {} }">
-    <div x-data="pipeActions" class="d-flex flex-column gap-4">
+    <div x-init="() => {
+        $store.pdPipe.initialInput = {};
+    }" x-data="pipeActions" class="d-flex flex-column gap-4">
         <div class="d-flex gap-3">
             <h1>Pipe: <span x-text="current?.name"></span></h1>
             <div class="btn-group">
