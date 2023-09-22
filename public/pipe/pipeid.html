@@ -24,7 +24,9 @@
                 <button class="btn btn-primary" type="button" @click="() => { deletePipe(); this.$router.push('/') }">
                     Delete
                 </button>
-                <button class="btn btn-primary" type="button" @click="() => $refs.dependencyform.showModal()">Add Dependency</button>
+                <button class="btn btn-primary" type="button" @click="() => $refs.dependencyform.showModal()">Add
+                    Dependency
+                </button>
             </div>
         </div>
         <div class="form-check form-switch" :class="{'text-primary': current.execOnServer}">
@@ -105,7 +107,7 @@
                         }
                     }">
             <pd-pipe-input-selector
-                @selected="e => { $store.pdPipe.initialInput = $fromjson(e.detail) }"
+                    @selected="e => { $store.pdPipe.initialInput = $fromjson(e.detail) }"
             ></pd-pipe-input-selector>
         </div>
     </div>
@@ -146,31 +148,41 @@
 </template>
 
 <template x-component="pd-pipe-functions">
-    <div class="d-flex flex-column gap-1 py-4" x-data="{
+    <div
+        class="d-flex flex-column gap-1 py-4"
+         x-data="{
         removeFunction(id){
             $store.pipes.removeFunctionFromCurrentPipe(id);
         },
     }">
         <h3>Functions</h3>
-        <template x-for="(F, index) in current.functions" :key="F">
+        <template x-for="func in $store.pipes.funcs" :key="func.id">
             <div x-data="{
-                        get func (){
-                            return $store.functions.getFunction(F);
-                        },
                         showInput: false,
                         showCode: true,
                         showOutput: true
                     }">
-                <template x-if="func && func.id">
-                    <div class="d-flex">
-                        <div class="w-100">
-                            <pd-function
-                                    :tab="(func.transform && func.transform.prop && 'transform') || (func.pipeid && 'pipe') || 'code'"></pd-function>
-                            <json-viewer
-                                    :data="await $store.api.getFuncOutput(func.id).then(data => $tojson(data))"></json-viewer>
-                        </div>
+                <div class="d-flex">
+                    <div class="w-100">
+                        <pd-function
+                                @keydown.escape="() => {
+                                    if(func.focus){
+                                        $el.parentElement.focus()
+                                    }
+                                }"
+                                @focus="(e) => {
+                                        $store.pipes.funcs.forEach(f => f.focus = false);
+                                        func.focus = true;
+                                    }"
+                                tabindex="1"
+                                :tab="(func.transform && func.transform.prop && 'transform') || (func.pipeid && 'pipe') || 'code'"></pd-function>
+                        <json-viewer
+                                tabindex="-1"
+                                :data="await $store.api.getFuncOutput(func.id).then(data => $tojson(data))"
+                        >
+                        </json-viewer>
                     </div>
-                </template>
+                </div>
             </div>
         </template>
     </div>

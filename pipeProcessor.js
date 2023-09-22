@@ -64,6 +64,7 @@ async function resolveDependencies(input) {
                 addScriptToHeadIfMissing(makeScript(dependencyConfig))
                 return dependencyConfig;
             }
+
             await import(/* @vite-ignore */ dependencyConfig.path).then(module => {
                 pipedeps[dependencyConfig.export] = module[dependencyConfig.export] ? module[dependencyConfig.export] : module.default
                 this[dependencyConfig.export] = module[dependencyConfig.export] ? module[dependencyConfig.export] : module.default
@@ -90,14 +91,14 @@ function addLinkToHeadIfMissing(link) {
 
 function makeScript(dep) {
     const script = document.createElement('script')
-    script.src = dep.src
+    script.src = dep.path
     return script
 }
 
 function addScriptToHeadIfMissing(script) {
     let found = false
     document.querySelectorAll('script').forEach(headScript => {
-        found = headScript.src === script.path
+        found = headScript.src === script.src
     })
     !found && document.head.appendChild(script)
 }

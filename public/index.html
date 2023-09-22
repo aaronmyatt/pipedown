@@ -178,8 +178,7 @@
         propertyeditor: '',
         pipefunc: '',
     }">
-        <div tabindex="1"
-             x-data="{
+        <div x-data="{
             editFunction(content) {
                 $refs.functionform.showModal()
             },
@@ -211,6 +210,13 @@
             },
         }">
             <ul class="nav nav-tabs" style="--bs-nav-link-padding-y: 0px;">
+                <li x-show="() => {
+                    try {
+                        return $store.pipes.funcs.find(f => func.id === f.id).focus
+                    } catch(e) {
+                        return false
+                    }
+                }">*</li>
                 <li class="nav-item" @click="changeTab('detail')">
                     <button :class="(active || tab) === 'detail' && 'active'" class="nav-link">Detail</button>
                 </li>
@@ -445,7 +451,9 @@ input.${funcProp} = \`${e.detail}\``
 <script src="/scripts/pipes-3.json.js"></script>
 <script src="/scripts/pipes-1.json.js"></script>
 <script>
-    pipe1.pipe().process({action: 'NULL'})
+    document.addEventListener('alpine:initialized', function(){
+        pipe1.pipe().process({action: 'NULL'});
+    })
 </script>
 <script type="module" src="/scripts/main.js"></script>
 </body>

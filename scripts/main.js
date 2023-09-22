@@ -110,12 +110,14 @@ Alpine.magic('fromjson', (el, {}) => (expression) => {
 
 Alpine.store('pipes', {
     current: null,
+    funcs: [],
     allPipes: [],
     init() {
         this.fetch();
     },
     load(pipe) {
         this.current = this.allPipes.find(p => p.id === pipe.id);
+        this.funcs = this.getFunctions();
     },
     async save(pipe) {
         const pipePayload = JSON.stringify(pipe)
