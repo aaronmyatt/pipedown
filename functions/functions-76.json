@@ -1,0 +1,1 @@
+{"id":76,"name":"New Function","description":"","code":"input.status = await Promise.all(input.dirs.map(async (dir) => {\n  console.log(await this.$`echo $PATH`.text())\n  return await this.$`npm install`.cwd(`/tmp/${dir.name}`).text()\n}))","archived":false,"render":false,"transform":{"prop":null},"dependency":false,"execOnServer":false,"defaultInput":{},"focus":true}

@@ -30,7 +30,7 @@ createDirIfItDoesntExist(pipeDirName);
 createDirIfItDoesntExist(funcDirName);
 createDirIfItDoesntExist(inputsDirName);
 createDirIfItDoesntExist(outputsDirName);
-
+console.log(Deno.env.toObject())
 
 const app = new Application();
 const router = new Router();
