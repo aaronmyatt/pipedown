@@ -1,0 +1,38 @@
+<body>
+<div class="pdCodeMirror"></div>
+<div class="cmZebraStripes"></div>
+</body>
+<script src="js/cmirror.js"></script>
+<script src="js/cmZebraStripes.js"></script>
+<script>
+function ready(fn) {
+  if (document.readyState !== 'loading') {
+    fn();
+  } else {
+    document.addEventListener('DOMContentLoaded', fn);
+  }
+}
+ready(() => {
+
+    new EventSource('/esbuild').addEventListener('change', () => { console.info('Reloading esbuild'); location.reload(); })
+
+	console.log('ready');
+	CodeMirror({el:document.body.firstElementChild, code: 'console.log("wat")', onChange: (e) => {
+		console.log(e)
+	}})
+
+    ZebraStripes({el:document.querySelector('.cmZebraStripes'), code: 'Zebraaaa', onChange: (e) => {}})
+
+})
+</script>
+    <style>
+        body {
+            min-height: 100vh; /* Ensures the container takes up the full viewport height */
+            width: 100%; /* Ensures the container takes up the full viewport height */
+        }
+
+        /*body > div {*/
+        /*    min-height: 100vh; !* Ensures the container takes up the full viewport height *!*/
+        /*    width: 100%; !* Ensures the container takes up the full viewport height *!*/
+        /*}*/
+    </style>
