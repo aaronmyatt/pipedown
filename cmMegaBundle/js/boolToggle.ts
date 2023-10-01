@@ -16,7 +16,7 @@ class CheckboxWidget extends WidgetType {
         input.type = "checkbox"
         input.checked = this.checked
         wrap.appendChild(input)
-        return input
+        return wrap
     }
     ignoreEvent() { return false }
 }
@@ -58,7 +58,7 @@ const boolTogglePlugin = ViewPlugin.fromClass(class {
     eventHandlers: {
         mousedown: (event, view) => {
             let target = event.target as HTMLElement
-            console.log(target);
+            console.log(target.parentElement);
             if (target.nodeName === 'INPUT' && target.parentElement!.classList.contains("cm-boolean-toggle")) {
                 toggleBoolean(view, view.posAtDOM(target));
             }
@@ -72,7 +72,7 @@ function toggleBoolean(view: EditorView, pos: number){
     if (before == "false") {
         change = {from: pos - 5, to: pos, insert: "true"}
     }
-    else if (before == "true") {
+    else if (before.endsWith("true")) {
         change = {from: pos - 4, to: pos, insert: "false"}
     } else {
         return false
