@@ -23,7 +23,7 @@ ready(() => {
     new EventSource('/esbuild').addEventListener('change', () => { console.info('Reloading esbuild'); location.reload(); })
 
 	console.log('ready');
-	CodeMirror({el:document.body.firstElementChild, code: 'console.log("wat")', onChange: (e) => {
+	CodeMirror1({el:document.body.firstElementChild, code: 'console.log("wat")', onChange: (e) => {
 		console.log(e)
 	}})
 
@@ -32,10 +32,10 @@ ready(() => {
     boolToggle({el:document.querySelector('.cmBoolToggle'), code: `let value = true
 if (!value == false)
   console.log("good")`, onChange: (e) => {}})
-    atomicRanges({el:document.querySelector('.cmAtomicRanges'), code: `PD.doSomething()
-[[wat]]
-[[the]]
-[not]
+    CodeMirror({el:document.querySelector('.cmAtomicRanges'), code: `PD.doSomething()
+                          PD.pdBrowserActions({action: actions.get('PROCESS_PIPE')
+            PD.pdBrowserActions({action: actions.get('PROCESS_PIPE')
+<div @click="() => { return PD.pdBrowserActions({action: actions.get('PROCESS_PIPE') }"></div>
 [[this]]`, onChange: (e) => {}})
 
 })

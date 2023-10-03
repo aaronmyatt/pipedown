@@ -1,7 +1,7 @@
 import {EditorView, basicSetup} from "codemirror"
 import {javascript} from "@codemirror/lang-javascript"
 
-window.CodeMirror = ({el, code, onChange}) => {
+window.CodeMirror1 = ({el, code, onChange}) => {
     console.log('CodeMirror', el, code, onChange);
     const minHeightEditor = EditorView.theme({
         ".cm-content, .cm-gutter": {minHeight: "200px", whiteSpace: "pre-wrap"},
@@ -15,7 +15,7 @@ window.CodeMirror = ({el, code, onChange}) => {
                 onChange(v.state.doc.toString())
             }
         }))
-    
+
     return new EditorView({
         extensions,
         parent: el,

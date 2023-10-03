@@ -20665,22 +20665,94 @@
     ])
   ])();
 
-  // cmirror.js
-  window.CodeMirror = ({ el, code, onChange }) => {
+  // js/atomicRanges.ts
+  var PlaceholderWidget = class extends WidgetType {
+    constructor(placeholder, pipeName) {
+      super();
+      this.placeholder = placeholder;
+      this.pipeName = pipeName;
+    }
+    eq(other) {
+      return this.placeholder == other.placeholder;
+    }
+    toDOM() {
+      let wrap = document.createElement("span");
+      const pipeLink = document.createElement("a");
+      pipeLink.innerText = this.placeholder.trim();
+      pipeLink.className = "cm-placeholder";
+      wrap.appendChild(pipeLink);
+      fetch("http://localhost:8000/api/pipebyname/pdPipeToolbar").then((response) => {
+        return response.json();
+      }).then((data) => {
+        console.log(data);
+        pipeLink.href = "http://localhost:8000/pipe/" + data.id;
+      });
+      let settingsLink = document.createElement("a");
+      settingsLink.style.paddingLeft = "0.5em";
+      settingsLink.innerText = "\u2699\uFE0F";
+      settingsLink.href = "https://www.google.com/search?q=" + this.placeholder;
+      settingsLink.target = "_blank";
+      wrap.appendChild(settingsLink);
+      return wrap;
+    }
+    ignoreEvent() {
+      return false;
+    }
+  };
+  var pdMatcher = new MatchDecorator({
+    regexp: /PD\.(\w+)\([^)]*\)/g,
+    decoration: (match) => {
+      console.log(match);
+      return Decoration.replace({
+        widget: new PlaceholderWidget(match.input, match[1])
+      });
+    }
+  });
+  var pdDecorations = ViewPlugin.fromClass(class {
+    constructor(view) {
+      this.view = view;
+      this.decorations = pdMatcher.createDeco(view);
+    }
+    decorations;
+    update(update) {
+      this.decorations = pdMatcher.updateDeco(update, this.decorations);
+    }
+  }, {
+    decorations: (v) => {
+      return v.decorations;
+    },
+    provide: (plugin) => {
+      return EditorView.atomicRanges.of((view) => {
+        return view.plugin(plugin)?.decorations || Decoration.none;
+      });
+    }
+  });
+  function atomicRanges2(options = {}) {
+    return [
+      // placeholders,
+      pdDecorations
+    ];
+  }
+  window["CodeMirror"] = ({ el, code, onChange }) => {
     const minHeightEditor = EditorView.theme({
       ".cm-content, .cm-gutter": { minHeight: "200px", whiteSpace: "pre-wrap" }
     });
-    const extensions = [basicSetup, minHeightEditor];
-    if (onChange)
+    const extensions = [basicSetup, minHeightEditor, atomicRanges2()];
+    if (onChange) {
       extensions.push(EditorView.updateListener.of((v) => {
         if (v.docChanged) {
           onChange(v.state.doc.toString());
         }
       }));
+    }
     return new EditorView({
-      extensions,
+      state: EditorState.create({
+        extensions,
+        doc: code
+      }),
+      // doc: code,
+      // extensions,
       parent: el,
-      doc: code,
       lineWrapping: true
     });
   };

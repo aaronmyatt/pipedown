@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "esbuild js/cmirror.js --bundle --outfile=../scripts/cmirror.bundle.js --format=iife",
+    "build": "esbuild js/atomicRanges.ts --bundle --outfile=../scripts/cmirror.bundle.js --format=iife",
     "dev": "esbuild js/* --outdir=www/js --bundle --watch --servedir=www"
   },
   "author": "",
