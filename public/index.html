@@ -9,12 +9,13 @@
           integrity="sha384-4bw+/aepP/YC94hEpVNVgiZdgIC5+VKNBQNGCHeKRQN+PtmoHDEXuppvnDJzQIu9" crossorigin="anonymous">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
     <!--    <link rel="stylesheet" href="/styles/style.scss"/>-->
-    <!--    <script type="application/javascript" src="https://unpkg.com/prettier@3.0.0/standalone.js"></script>-->
-    <!--    <script type="application/javascript" src="https://cdn.jsdelivr.net/npm/prettier@3.0.0/plugins/babel.js"></script>-->
-    <!--    <script type="application/javascript" src="https://cdn.jsdelivr.net/npm/prettier@3.0.0/plugins/estree.js"></script>-->
+    <script type="application/javascript" src="https://unpkg.com/prettier@3.0.0/standalone.js"></script>
+    <script type="application/javascript" src="https://cdn.jsdelivr.net/npm/prettier@3.0.0/plugins/babel.js"></script>
+    <script type="application/javascript" src="https://cdn.jsdelivr.net/npm/prettier@3.0.0/plugins/estree.js"></script>
+    <script type="application/javascript" src="https://cdn.jsdelivr.net/npm/prettier@3.0.0/plugins/html.js"></script>
     <!--    import prism script and css-->
-    <!--    <script src="/prism.js"></script>-->
-    <!--    <link rel="stylesheet" href="/prism.css"/>-->
+    <script src="/prism.js"></script>
+    <link rel="stylesheet" href="/prism.css"/>
 </head>
 <body class="container-md">
 <div x-data="{
@@ -92,13 +93,13 @@
         <!--        <pre x-text="code"></pre>-->
         <!--        </div>-->
 
-<!--        <div x-html="async () => {-->
-<!--            return await PD.pdPipeList({server: true}).then(output => output.html);-->
-<!--        }"></div>-->
-<!--        <div x-html="async () => {-->
-<!--            return fetch('http://localhost:8000/api/process/10/html')-->
-<!--                .then(response => response.text())-->
-<!--        }"></div>-->
+        <!--        <div x-html="async () => {-->
+        <!--            return await PD.pdPipeList({server: true}).then(output => output.html);-->
+        <!--        }"></div>-->
+        <!--        <div x-html="async () => {-->
+        <!--            return fetch('http://localhost:8000/api/process/10/html')-->
+        <!--                .then(response => response.text())-->
+        <!--        }"></div>-->
         <pd-pipes-list></pd-pipes-list>
         <template x-component="pd-pipes-list">
             <div x-data="pipeActions">
@@ -163,7 +164,8 @@
                                     .then(async output => {
                                         await $store.pipes.fetch()
                                     })
-                            }"> Add to current pipe </button>
+                            }"> Add to current pipe
+                            </button>
                         </template>
                     </li>
                 </template>
@@ -216,7 +218,8 @@
                     } catch(e) {
                         return false
                     }
-                }">*</li>
+                }">*
+                </li>
                 <li class="nav-item" @click="changeTab('detail')">
                     <button :class="(active || tab) === 'detail' && 'active'" class="nav-link">Detail</button>
                 </li>
@@ -265,45 +268,7 @@
                     </div>
                 </template>
                 <template x-if="(active  || tab) === 'transform'">
-                    <div x-data="{
-                        funcProp: func.transform && func.transform.prop,
-                    }">
-                        <div class="input-group">
-                            <select class="form-control">
-                                <option value="property">Edit One Property</option>
-                                <option value="jmespath">jmespath</option>
-                            </select>
-                            <!--                            <pd-function-input-property-selector-->
-                            <!--                                    x-init="$nextTick(() => { $el.selected = funcProp })"-->
-                            <!--                                    @selected="(e) => {-->
-                            <!--                                        func.transform = func.transform || { prop: '' }-->
-                            <!--                                        funcProp = e.detail-->
-                            <!--                                        func.transform.prop = funcProp-->
-                            <!--                                        $store.functions.save(func)-->
-                            <!--                            }"></pd-function-input-property-selector>-->
-                            <input type="text" x-model="funcProp" :value="func.transform && func.transform.prop">
-                            <button
-                                    @click="() => {
-                                        func.transform = func.transform || { prop: '' }
-                                        func.transform.prop = funcProp
-                                        $store.functions.save(func)
-                                    }"
-                                    x-show="funcProp !== func.transform.prop">
-                                Save Change
-                            </button>
-                        </div>
-                        <template x-if="funcProp">
-                            <pd-function-property-editor
-                                    @code-change="(e) => {
-                                        func.code = `// this input was generated by the property editor
-// making changes manually may have unexpected results
-input.${funcProp} = \`${e.detail}\``
-                                        console.log(func.code)
-                                        $store.functions.save(func)
-                                    }"
-                                    :prop="() => funcProp"></pd-function-property-editor>
-                        </template>
-                    </div>
+                    <pd-function-code-editor></pd-function-code-editor>
                 </template>
                 <template x-if="(active || tab) === 'pipe'">
                     <h4><span x-text="func.name"></span></h4>
@@ -335,44 +300,63 @@ input.${funcProp} = \`${e.detail}\``
 
     <template x-component="pd-function-code-editor">
         <div
-                class="w-100"
-                style="min-height: 200px;"
-                x-data="{
-            init(){
-                const code = !this.blank && func.code || ''
-                editor = CodeMirror({el: $el, code: code, onChange: (change) => {
-                    func.code = change
-                    func.transform = func.transform || {}
-                    func.transform.prop = null
-                    $store.functions.save(func)
-                }})
-            }
-        }">
-        </div>
-    </template>
+            x-data="{
+                async init(){
+                    this.code = await prettier.format(func.code, { parser: 'babel', plugins: prettierPlugins })
+                    if(this.code[this.code.length-1] === '\n')
+                        this.code += ' '
+                },
+                code: '',
+                get editorHeight(){
+                    return this.code.split('\n').length * 29
+                },
+            }"
+            class="position-relative"
+            :style="{
+                height: editorHeight + 'px'
+             }"
+        >
+<pre class="highlighting position-absolute top-0 start-0 z-0"
+     :style="{
+        height:' editorHeight + 'px''
+     }"
+>
+<code x-html="() => Prism.highlight(code, Prism.languages.javascript, 'javascript')" >
+</code>
+</pre>
+            <textarea
+                    spellcheck="false"
+                    class="editing position-absolute top-0 start-0 z-1 overflow-auto overflow-hidden"
+                    :value="code"
+                    :style="{
+                        height: editorHeight + 'px'
+                    }"
+                    style="caret-color: #0a0e14; color: transparent; background: transparent; resize: none;"
+                    @input="() => {
+                        code = $el.value
+                        $store.functions.save(Object.assign(func, { code }))
+                    }"
+            ></textarea>
 
-    <template x-component="pd-function-property-editor">
-        <div
-                class="w-100"
-                style="min-height: 200px;"
-                x-data="{
-                    init(){
-                        this.$watch('funcProp', () => this.initEditor())
-                        this.initEditor()
-                    },
-                    initEditor(){
-                        $el.innerHTML = ''
-                        CodeMirror({el: $el, code: this.takePropValue(), onChange: (e) => {
-                            $dispatch('code-change', e)
-                        }})
-                    },
-                    takePropValue(){
-                        const valueIndex = func.code.indexOf('=')
-                        const codeValue = func.code.substring(valueIndex + 1).trim()
-                        return window.chopQuotes(codeValue)
-                    },
-                }">
         </div>
+            <style>
+                .editing, .highlighting {
+                    /* Both elements need the same text and space styling so they are directly on top of each other */
+                    margin: 10px;
+                    padding: 10px;
+                    border: 0;
+                    width: calc(100% - 32px);
+                    min-height: 100px;
+                }
+
+                .editing, .highlighting, .highlighting > code * {
+                    /* Also add text styles to highlighing tokens */
+                    font-size: 14pt;
+                    font-family: monospace;
+                    line-height: 1.5;
+                    tab-size: 2;
+                }
+            </style>
     </template>
 
     <template x-component="pd-render-function">
@@ -451,7 +435,7 @@ input.${funcProp} = \`${e.detail}\``
 <script src="/scripts/pipes-3.json.js"></script>
 <script src="/scripts/pipes-1.json.js"></script>
 <script>
-    document.addEventListener('alpine:initialized', function(){
+    document.addEventListener('alpine:initialized', function () {
         pipe1.pipe().process({action: 'NULL'});
     })
 </script>

@@ -149,8 +149,8 @@
 
 <template x-component="pd-pipe-functions">
     <div
-        class="d-flex flex-column gap-1 py-4"
-         x-data="{
+            class="d-flex flex-column gap-1 py-4"
+            x-data="{
         removeFunction(id){
             $store.pipes.removeFunctionFromCurrentPipe(id);
         },
@@ -162,27 +162,25 @@
                         showCode: true,
                         showOutput: true
                     }">
-                <div class="d-flex">
-                    <div class="w-100">
-                        <pd-function
-                                @keydown.escape="() => {
+                            <pd-function
+                                    @keydown.escape="() => {
                                     if(func.focus){
                                         $el.parentElement.focus()
                                     }
                                 }"
-                                @focus="(e) => {
+                                    @focus="(e) => {
                                         $store.pipes.funcs.forEach(f => f.focus = false);
                                         func.focus = true;
                                     }"
-                                tabindex="1"
-                                :tab="(func.transform && func.transform.prop && 'transform') || (func.pipeid && 'pipe') || 'code'"></pd-function>
-                        <json-viewer
-                                tabindex="-1"
-                                :data="await $store.api.getFuncOutput(func.id).then(data => $tojson(data))"
-                        >
-                        </json-viewer>
-                    </div>
-                </div>
+                                    tabindex="1"
+                                    :tab="(func.transform && func.transform.prop && 'transform') || (func.pipeid && 'pipe') || 'code'"></pd-function>
+                        <div>
+<!--                            <json-viewer-->
+<!--                                    tabindex="-1"-->
+<!--                                    :data="await $store.api.getFuncOutput(func.id).then(data => $tojson(data))"-->
+<!--                            >-->
+<!--                            </json-viewer>-->
+                        </div>
             </div>
         </template>
     </div>

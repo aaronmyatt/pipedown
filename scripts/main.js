@@ -6,12 +6,8 @@ import persist from '@alpinejs/persist'
 import Alpine from 'alpinejs';
 import pipeline from "../pipeline.js";
 import {setupApi, API} from "../fe/api.js";
-import {pipeProcessor} from "../pipeProcessor.js";
 import '@alenaksu/json-viewer';
-import Sortable from "sortablejs";
-import "./cmirror.bundle.js"
 
-// window.Sortable = Sortable;
 window.Pipeline = pipeline;
 window.chopQuotes = (codeValue) => {
     let chopStart = 0
@@ -22,28 +18,6 @@ window.chopQuotes = (codeValue) => {
         chopEnd--
     return codeValue.substring(chopStart, chopEnd)
 }
-
-// window.CodeMirror = ({el, code, onChange}) => {
-//     const minHeightEditor = EditorView.theme({
-//         ".cm-content, .cm-gutter": {minHeight: "200px", whiteSpace: "pre-wrap"},
-//     })
-//
-//     const extensions = [basicSetup, minHeightEditor]
-//
-//     if (onChange)
-//         extensions.push(EditorView.updateListener.of((v) => {
-//             if (v.docChanged) {
-//                 onChange(v.state.doc.toString())
-//             }
-//         }))
-//
-//     return new EditorView({
-//         extensions,
-//         parent: el,
-//         doc: code,
-//         lineWrapping: true,
-//     })
-// }
 
 Alpine.baseUrl = '/';
 Alpine.plugin(intersect)
