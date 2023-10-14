@@ -1,76 +1,63 @@
 import {basicSetup, EditorView} from "codemirror";
-import {EditorState, StateField, StateEffect} from "@codemirror/state"
-import {Decoration, DecorationSet, keymap, MatchDecorator, ViewPlugin, WidgetType} from "@codemirror/view"
+import {EditorState} from "@codemirror/state"
+import {Decoration, DecorationSet, MatchDecorator, ViewPlugin, WidgetType} from "@codemirror/view"
 
-class PlaceholderWidget extends WidgetType {
+class PipeLinkWidget extends WidgetType {
     constructor(readonly placeholder: string, readonly pipeName: string) { super() }
-    eq(other: PlaceholderWidget) { return this.placeholder == other.placeholder }
+    eq(other: PipeLinkWidget) { return this.placeholder == other.placeholder }
     toDOM() {
-        let wrap = document.createElement('span');
-
         const pipeLink = document.createElement('a');
-        pipeLink.innerText = this.placeholder.trim()
+        pipeLink.style.paddingLeft = "0.5em"
+        pipeLink.innerText = ' 🔗 '
         pipeLink.className = "cm-placeholder"
-        wrap.appendChild(pipeLink)
 
-        fetch("http://localhost:8000/api/pipebyname/" + 'pdPipeToolbar').then((response) => {
+        fetch("http://localhost:8000/api/pipebyname/" + this.pipeName).then((response) => {
             return response.json()
         }).then((data) => {
             console.log(data)
             pipeLink.href = "http://localhost:8000/pipe/" + data.id
         })
 
-        // append a link element with an emoji gear as text
+        return pipeLink;
+    }
+    ignoreEvent() { return false }
+}
+class SettingsWidget extends WidgetType {
+    constructor(readonly placeholder: string, readonly pipeName: string) { super() }
+    eq(other: SettingsWidget) { return this.placeholder == other.placeholder }
+    toDOM() {
         let settingsLink = document.createElement('a');
         settingsLink.style.paddingLeft = "0.5em"
         settingsLink.innerText = "⚙️"
         settingsLink.href = "https://www.google.com/search?q=" + this.placeholder
         settingsLink.target = "_blank"
-        wrap.appendChild(settingsLink)
-        return wrap
+        return settingsLink
     }
     ignoreEvent() { return false }
 }
 
-// const placeholderMatcher = new MatchDecorator({
-//     regexp: /\[\[(\w+)\]\]/g,
-//     decoration: match => {
-//         return Decoration.replace({
-//             widget: new PlaceholderWidget(match[1]),
-//         })
-//     }
-// })
-
 const pdMatcher = new MatchDecorator({
     regexp: /PD\.(\w+)\([^)]*\)/g,
-    decoration: match => {
-        console.log(match);
-        return Decoration.replace({
-            widget: new PlaceholderWidget(match.input, match[1]),
+    // decoration: match => {
+    //     return Decoration.widget({
+    //         widget: new PlaceholderWidget(match[0], match[1]),
+    //         side: 1,
+    //     })
+    // }
+    decorate: (add, from, to, match) => {
+        const settingsDeco = Decoration.widget({
+            widget: new SettingsWidget(match[0], match[1]),
+            side: 1,
         })
+        add(to, to, settingsDeco);
+
+        const pipeLinkDeco = Decoration.widget({
+            widget: new PipeLinkWidget(match[0], match[1]),
+            side: 1,
+        })
+        add(to, to, pipeLinkDeco);
     }
 })
-
-// const placeholders = ViewPlugin.fromClass(class {
-//     decorations: DecorationSet
-//
-//     constructor(readonly view: EditorView) {
-//         this.decorations = placeholderMatcher.createDeco(view)
-//     }
-//
-//     update(update: ViewUpdate) {
-//         this.decorations = placeholderMatcher.updateDeco(update, this.decorations)
-//     }
-// }, {
-//     decorations: (v) => {
-//         return v.decorations
-//     },
-//     provide: plugin => {
-//         return EditorView.atomicRanges.of(view => {
-//             return view.plugin(plugin)?.decorations || Decoration.none;
-//         })
-//     }
-// })
 
 const pdDecorations = ViewPlugin.fromClass(class {
     decorations: DecorationSet
@@ -86,16 +73,10 @@ const pdDecorations = ViewPlugin.fromClass(class {
     decorations: (v) => {
         return v.decorations
     },
-    provide: plugin => {
-        return EditorView.atomicRanges.of(view => {
-            return view.plugin(plugin)?.decorations || Decoration.none;
-        })
-    }
 })
 
 function atomicRanges(options: {step?: number} = {}): Extension {
     return [
-        // placeholders,
         pdDecorations,
     ]
 }
