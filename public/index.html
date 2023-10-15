@@ -77,22 +77,6 @@
 
 <div x-data>
     <template x-view="/">
-
-        <!--        <div x-data="{-->
-        <!--            code: 'function wat(watwat){ console.log(watwat) }'-->
-        <!--        }">-->
-        <!--            <pre-->
-        <!--                    @input="code = $el.textContent"-->
-        <!--                    contenteditable=""-->
-        <!--                    class="language-javascript" x-init="async () => {-->
-        <!--            code = $el.textContent-->
-        <!--            $el.textContent = await prettier.format($el.textContent, { parser: 'babel', plugins: prettierPlugins })-->
-        <!--            Prism.highlightElement($el)-->
-        <!--        }">-->
-        <!--        </pre>-->
-        <!--        <pre x-text="code"></pre>-->
-        <!--        </div>-->
-
         <!--        <div x-html="async () => {-->
         <!--            return await PD.pdPipeList({server: true}).then(output => output.html);-->
         <!--        }"></div>-->
@@ -301,12 +285,13 @@
     <template x-component="pd-function-code-editor">
         <div
             x-data="{
-                async init(){
-                    this.code = await prettier.format(func.code, { parser: 'babel', plugins: prettierPlugins })
+                code: '',
+                init(){ this.updateCode() },
+                async updateCode(latestCode){
+                    this.code = await prettier.format(latestCode || func.code, { parser: 'babel', plugins: prettierPlugins })
                     if(this.code[this.code.length-1] === '\n')
                         this.code += ' '
                 },
-                code: '',
                 get editorHeight(){
                     return this.code.split('\n').length * 29
                 },
@@ -318,7 +303,7 @@
         >
 <pre class="highlighting position-absolute top-0 start-0 z-0"
      :style="{
-        height:' editorHeight + 'px''
+        height: editorHeight + 'px'
      }"
 >
 <code x-html="() => Prism.highlight(code, Prism.languages.javascript, 'javascript')" >
@@ -334,6 +319,7 @@
                     style="caret-color: #0a0e14; color: transparent; background: transparent; resize: none;"
                     @input="() => {
                         code = $el.value
+                        //updateCode(code)
                         $store.functions.save(Object.assign(func, { code }))
                     }"
             ></textarea>

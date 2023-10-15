@@ -12,6 +12,8 @@ export function pipeProcessor(funcSequence, opts) {
 }
 
 function wrapCode(func, opts) {
+    this.html = (someHtml) => someHtml;
+    this.css = (someCss) => someCss;
     const that = this;
     const AsyncFunction = Object.getPrototypeOf(async function (){}).constructor;
     return async function (input = {}) {
