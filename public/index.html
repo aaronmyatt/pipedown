@@ -13,9 +13,6 @@
     <script type="application/javascript" src="https://cdn.jsdelivr.net/npm/prettier@3.0.0/plugins/babel.js"></script>
     <script type="application/javascript" src="https://cdn.jsdelivr.net/npm/prettier@3.0.0/plugins/estree.js"></script>
     <script type="application/javascript" src="https://cdn.jsdelivr.net/npm/prettier@3.0.0/plugins/html.js"></script>
-    <!--    import prism script and css-->
-    <script src="/prism.js"></script>
-    <link rel="stylesheet" href="/prism.css"/>
 </head>
 <body class="container-md">
 <div x-data="{
@@ -77,14 +74,8 @@
 
 <div x-data>
     <template x-view="/">
-        <!--        <div x-html="async () => {-->
-        <!--            return await PD.pdPipeList({server: true}).then(output => output.html);-->
-        <!--        }"></div>-->
-        <!--        <div x-html="async () => {-->
-        <!--            return fetch('http://localhost:8000/api/process/10/html')-->
-        <!--                .then(response => response.text())-->
-        <!--        }"></div>-->
         <pd-pipes-list></pd-pipes-list>
+
         <template x-component="pd-pipes-list">
             <div x-data="pipeActions">
                 <ul class="list-group">
@@ -105,6 +96,7 @@
             </div>
         </template>
     </template>
+
     <template x-view="/pipe/pipeid"></template>
     <template x-view="/functions">
         <pd-function-list></pd-function-list>
@@ -226,7 +218,6 @@
             <div class="border rounded">
                 <div x-show="(active || tab) === 'detail'">
                     <div class="d-flex gap-3">
-                        <h4><span x-text="func.name"></span></h4>
                         <div class="btn-group">
                             <button class="btn btn-primary" type="button" @click="editFunction(func)">Edit</button>
                             <button class="btn btn-primary" type="button" @click="() => {
@@ -238,7 +229,7 @@
                             </button>
                         </div>
                     </div>
-                    <p x-text="func !== undefined && func.description"></p>
+                    <pd-function-form></pd-function-form>
                 </div>
                 <div x-show="(active  || tab) === 'code'">
                     <pd-function-code-editor></pd-function-code-editor>
@@ -286,63 +277,45 @@
         <div
             x-data="{
                 code: '',
-                init(){ this.updateCode() },
+                init(){ 
+                    this.updateCode()
+                    const interval = setInterval(() => {
+                        if(!window.Prism && !window.Prism.Live) return;
+                        clearInterval(interval)
+                        this.updateCode()
+                        Prism.Live.create($refs.code)
+                    }, 100)
+                    
+
+                },
                 async updateCode(latestCode){
-                    this.code = await prettier.format(latestCode || func.code, { parser: 'babel', plugins: prettierPlugins })
+                    // this.code = await prettier.format(latestCode || func.code, { parser: 'babel', plugins: prettierPlugins })
+                    this.code = latestCode || func.code
                     if(this.code[this.code.length-1] === '\n')
                         this.code += ' '
                 },
                 get editorHeight(){
-                    return this.code.split('\n').length * 29
+                    const height = this.code.split('\n').length * 29
+                    if(height < 100) return 100;
+                    return height;
                 },
             }"
-            class="position-relative"
-            :style="{
-                height: editorHeight + 'px'
-             }"
         >
-<pre class="highlighting position-absolute top-0 start-0 z-0"
-     :style="{
-        height: editorHeight + 'px'
-     }"
->
-<code x-html="() => Prism.highlight(code, Prism.languages.javascript, 'javascript')" >
-</code>
-</pre>
             <textarea
-                    spellcheck="false"
-                    class="editing position-absolute top-0 start-0 z-1 overflow-auto overflow-hidden"
-                    :value="code"
-                    :style="{
-                        height: editorHeight + 'px'
-                    }"
-                    style="caret-color: #0a0e14; color: transparent; background: transparent; resize: none;"
-                    @input="() => {
-                        code = $el.value
-                        //updateCode(code)
-                        $store.functions.save(Object.assign(func, { code }))
-                    }"
+                @input="() => {
+                    code = $el.value
+                    //updateCode(code)
+                    $store.functions.save(Object.assign(func, { code }))
+                }"
+                x-ref="code"
+                :value="code"
+                class="prism-live language-javascript"
             ></textarea>
-
+            <script src="/prism.js"></script>
+            <link rel="stylesheet" href="/prism.css"/>
+            <script src="/prism-live.js"></script>
+            <link rel="stylesheet" href="/prism-live.css"/>
         </div>
-            <style>
-                .editing, .highlighting {
-                    /* Both elements need the same text and space styling so they are directly on top of each other */
-                    margin: 10px;
-                    padding: 10px;
-                    border: 0;
-                    width: calc(100% - 32px);
-                    min-height: 100px;
-                }
-
-                .editing, .highlighting, .highlighting > code * {
-                    /* Also add text styles to highlighing tokens */
-                    font-size: 14pt;
-                    font-family: monospace;
-                    line-height: 1.5;
-                    tab-size: 2;
-                }
-            </style>
     </template>
 
     <template x-component="pd-render-function">

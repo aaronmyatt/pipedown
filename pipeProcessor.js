@@ -2,7 +2,7 @@ import Pipeline from "./pipeline.js";
 
 const defaultOpts = { _pipe: {}, defaultInput: {}, callbacks: {always: () => {}} };
 export function pipeProcessor(funcSequence, opts) {
-    opts = Object.assign({}, defaultOpts, opts)
+    opts = Object.assign({}, defaultOpts, opts  )
     const codeToFunctions = funcSequence
         // .filter(func => func.code)
         .map((func) => wrapCode.call(this, func, opts))

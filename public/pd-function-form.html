@@ -1,9 +1,5 @@
-<h4>Function Form</h4>
-<form class="d-flex flex-column gap-4" @submit.prevent="() => $store.functions.save(func)">
-    <label for="funcname" class="form-label"> Name </label>
+<form class="d-flex flex-column gap-1" @input.prevent="() => $store.functions.save(func)">
     <input class="form-control" type="text" id="funcname" x-model="func.name">
     <label for="funcdescription" class="form-label"> Description </label>
-    <input type="text" id="funcdescription" x-model="func.description" class="form-control">
-    <button class="btn btn-primary">Save</button>
+    <textarea type="text" id="funcdescription" x-model="func.description" class="form-control">
 </form>
-<json-viewer :data="$tojson(func)"></json-viewer>

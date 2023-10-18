@@ -1,0 +1,1 @@
+{"id":82,"name":"Download images from URL","description":"","code":"const download = await import(\"https://deno.land/x/download/mod.ts\");\n\ntry {\n  input.imageFile = await download.download(input.imageUrl);\n} catch (err) {\n  input.error = err;\n}","archived":false,"render":false,"transform":{"prop":""},"dependency":false,"execOnServer":false,"defaultInput":{},"focus":true}

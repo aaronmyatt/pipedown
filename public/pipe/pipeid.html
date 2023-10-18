@@ -164,16 +164,16 @@
                     }">
                             <pd-function
                                     @keydown.escape="() => {
-                                    if(func.focus){
-                                        $el.parentElement.focus()
-                                    }
-                                }"
+                                        if(func.focus){
+                                            $el.parentElement.focus()
+                                        }
+                                    }"
                                     @focus="(e) => {
                                         $store.pipes.funcs.forEach(f => f.focus = false);
                                         func.focus = true;
                                     }"
                                     tabindex="1"
-                                    :tab="(func.transform && func.transform.prop && 'transform') || (func.pipeid && 'pipe') || 'code'"></pd-function>
+                                    :tab="func.code ? 'code' : 'detail'"></pd-function>
                         <div>
 <!--                            <json-viewer-->
 <!--                                    tabindex="-1"-->
