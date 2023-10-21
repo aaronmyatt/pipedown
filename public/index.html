@@ -1,116 +1,116 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-    <meta charset="UTF-8"/>
-    <link rel="icon" type="image/svg+xml" href="/vite.svg"/>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Vite App</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/css/bootstrap.min.css" rel="stylesheet"
-          integrity="sha384-4bw+/aepP/YC94hEpVNVgiZdgIC5+VKNBQNGCHeKRQN+PtmoHDEXuppvnDJzQIu9" crossorigin="anonymous">
+        integrity="sha384-4bw+/aepP/YC94hEpVNVgiZdgIC5+VKNBQNGCHeKRQN+PtmoHDEXuppvnDJzQIu9" crossorigin="anonymous">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
-    <!--    <link rel="stylesheet" href="/styles/style.scss"/>-->
     <script type="application/javascript" src="https://unpkg.com/prettier@3.0.0/standalone.js"></script>
     <script type="application/javascript" src="https://cdn.jsdelivr.net/npm/prettier@3.0.0/plugins/babel.js"></script>
     <script type="application/javascript" src="https://cdn.jsdelivr.net/npm/prettier@3.0.0/plugins/estree.js"></script>
     <script type="application/javascript" src="https://cdn.jsdelivr.net/npm/prettier@3.0.0/plugins/html.js"></script>
+    <script src="/prism.js"></script>
+    <script src="/prism-live.js"></script>
 </head>
+
 <body class="container-md">
-<div x-data="{
+    <div x-data="{
     burnToast(toast, timeout = 5000) {
         setTimeout(() => {
             $store.toaster = $store.toaster.filter(t => t.message !== toast.message)
         }, timeout)
     }
 }" class="toast-container top-0 end-0">
-    <template x-for="toast in $store.toaster">
-        <div class="toast show" role="alert" aria-live="assertive" aria-atomic="true">
-            <div class="toast-header">
-                <i class="bi bi-exclamation-circle-fill text-warning"></i>
-                <strong class="me-auto">Hol' up!</strong>
-                <small class="text-body-secondary">just now</small>
-                <button
-                        @click="() => burnToast(toast, 0)"
-                        type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close">
-                </button>
-            </div>
-            <div class="toast-body">
-                <p x-text="toast.message"></p>
-                <div class="mt-2 pt-2 border-top">
-                    <template x-for="action in toast.actions">
-                        <button class="btn btn-primary" @click="() => action.callback(); burnToast(toast)"
+        <template x-for="toast in $store.toaster">
+            <div class="toast show" role="alert" aria-live="assertive" aria-atomic="true">
+                <div class="toast-header">
+                    <i class="bi bi-exclamation-circle-fill text-warning"></i>
+                    <strong class="me-auto">Hol' up!</strong>
+                    <small class="text-body-secondary">just now</small>
+                    <button @click="() => burnToast(toast, 0)" type="button" class="btn-close" data-bs-dismiss="toast"
+                        aria-label="Close">
+                    </button>
+                </div>
+                <div class="toast-body">
+                    <p x-text="toast.message"></p>
+                    <div class="mt-2 pt-2 border-top">
+                        <template x-for="action in toast.actions">
+                            <button class="btn btn-primary" @click="() => action.callback(); burnToast(toast)"
                                 x-text="action.label"></button>
-                    </template>
+                        </template>
+                    </div>
                 </div>
             </div>
-        </div>
-    </template>
-</div>
-<nav class="navbar" x-data>
-    <div class="d-flex align-items-center gap-4">
-        <div class="nav-item">
-            <a class="nav-link" href x-route="/">
-                <h3 class="mx-auto">
-                    Pipe <i class="bi bi-arrow-down"></i>
-                </h3>
-            </a>
-        </div>
-
-        <div class="nav-item" x-show="$store.pipes.current?.id">
-            <a class="nav-link" href x-route="`/pipe/${$store.pipes.current}`">Pipe</a>
-        </div>
-
-        <div class="nav-item">
-            <a class="nav-link" href x-route="/functions">Functions</a>
-        </div>
-    </div>
-</nav>
-<main>
-</main>
-<footer class="d-flex flex-wrap justify-content-between align-items-center py-3 my-4 border-top">
-    <h3 class="mx-auto">
-        Pipe <i class="bi bi-arrow-down"></i>
-    </h3>
-</footer>
-
-<div x-data>
-    <template x-view="/">
-        <pd-pipes-list></pd-pipes-list>
-
-        <template x-component="pd-pipes-list">
-            <div x-data="pipeActions">
-                <ul class="list-group">
-                    <template x-for="pipe in pipes()">
-                        <li class="list-group-item list-group-item-action"
-                            @click="() => $router.push('/pipe/' + pipe.id)">
-                            <a href="#" class="d-flex justify-content-between align-items-start ">
-                                <div class="ms-2 me-auto">
-                                    <div class="fw-bold" x-text="pipe.name"></div>
-                                    <span x-text="pipe.description"></span>
-                                </div>
-                                <button class="btn btn-primary" @click="deletePipe(pipe)">Remove</button>
-                            </a>
-                        </li>
-                    </template>
-                </ul>
-                <button @click="newPipe()">New Pipe</button>
-            </div>
         </template>
-    </template>
+    </div>
+    <nav class="navbar" x-data>
+        <div class="d-flex align-items-center gap-4">
+            <div class="nav-item">
+                <a class="nav-link" href x-route="/">
+                    <h3 class="mx-auto">
+                        Pipe <i class="bi bi-arrow-down"></i>
+                    </h3>
+                </a>
+            </div>
 
-    <template x-view="/pipe/pipeid"></template>
-    <template x-view="/functions">
-        <pd-function-list></pd-function-list>
-    </template>
-    <template x-view="/functions/add-to-current-pipe">
-        <pd-function-list addtocurrent="1"></pd-function-list>
-    </template>
-    <template x-component="pd-function-list" c-data="{
+            <div class="nav-item" x-show="$store.pipes.current?.id">
+                <a class="nav-link" href x-route="`/pipe/${$store.pipes.current}`">Pipe</a>
+            </div>
+
+            <div class="nav-item">
+                <a class="nav-link" href x-route="/functions">Functions</a>
+            </div>
+        </div>
+    </nav>
+    <main>
+    </main>
+    <footer class="d-flex flex-wrap justify-content-between align-items-center py-3 my-4 border-top">
+        <h3 class="mx-auto">
+            Pipe <i class="bi bi-arrow-down"></i>
+        </h3>
+    </footer>
+
+    <div x-data>
+        <template x-view="/">
+            <pd-pipes-list></pd-pipes-list>
+
+            <template x-component="pd-pipes-list">
+                <div x-data="pipeActions">
+                    <ul class="list-group">
+                        <template x-for="pipe in pipes()">
+                            <li class="list-group-item list-group-item-action"
+                                @click="() => $router.push('/pipe/' + pipe.id)">
+                                <a href="#" class="d-flex justify-content-between align-items-start ">
+                                    <div class="ms-2 me-auto">
+                                        <div class="fw-bold" x-text="pipe.name"></div>
+                                        <span x-text="pipe.description"></span>
+                                    </div>
+                                    <button class="btn btn-primary" @click="deletePipe(pipe)">Remove</button>
+                                </a>
+                            </li>
+                        </template>
+                    </ul>
+                    <button @click="newPipe()">New Pipe</button>
+                </div>
+            </template>
+        </template>
+
+        <template x-view="/pipe/pipeid"></template>
+        <template x-view="/functions">
+            <pd-function-list></pd-function-list>
+        </template>
+        <template x-view="/functions/add-to-current-pipe">
+            <pd-function-list addtocurrent="1"></pd-function-list>
+        </template>
+        <template x-component="pd-function-list" c-data="{
             addtocurrent: false,
         }">
-        <div>
-            <ul
-                    class="list-group"
-                    x-data="{
+            <div>
+                <ul class="list-group" x-data="{
                     query: '',
             functions(){
                 return $store.functions.allFunctions
@@ -120,210 +120,127 @@
                     })
             }
         }">
-                <div class="input-group mb-3">
-                    <input type="text" class="form-control" placeholder="Search" aria-label="Search"
-                           aria-describedby="button-addon2" x-model="query">
-                </div>
-                <template x-for="func in functions()" :key="func.id">
-                    <li class="list-group-item list-group-item-action"
-                        x-data="{
+                    <div class="input-group mb-3">
+                        <input type="text" class="form-control" placeholder="Search" aria-label="Search"
+                            aria-describedby="button-addon2" x-model="query">
+                    </div>
+
+                    <template x-for="func in functions()" :key="func.id">
+                        <li class="list-group-item list-group-item-action" x-data="{
                     output: null,
                     testInput: null,
                 }">
-                        <div class="d-flex">
-                            <p class="flex-shrink-1" x-text="func.id"></p>
-                            <pd-function tab="detail"></pd-function>
-                        </div>
-                        <template x-if="addtocurrent">
-                            <button class="btn btn-primary" @click.prevent="() => {
+                            <div class="d-flex">
+                                <p class="flex-shrink-1" x-text="func.id"></p>
+                                <pd-function tab="detail"></pd-function>
+                            </div>
+                            <template x-if="addtocurrent">
+                                <button class="btn btn-primary" @click.prevent="() => {
                                 PD.pdBrowserActions({action: 'ADD_EXISTING_FUNCTION', pipe: $store.pipes.current, func })
                                     .then(async output => {
                                         await $store.pipes.fetch()
                                     })
                             }"> Add to current pipe
-                            </button>
-                        </template>
-                    </li>
-                </template>
-            </ul>
-        </div>
-    </template>
-
-
-    <template x-component="pd-function" c-data="{
-        tab: '',
-        render: '',
-        propertyeditor: '',
-        pipefunc: '',
-    }">
-        <div x-data="{
-            editFunction(content) {
-                $refs.functionform.showModal()
-            },
-            deleteFunction(func, archive = false){
-                try{
-                    $store.pipes.removeFunctionFromCurrentPipe(func.id);
-                }catch(e){
-                    console.warn(func.name + ' is not in current pipe')
-                }
-                if(archive)
-                    $store.functions.delete(func)
-                $refs.deletefunctiondialog.close()
-            },
-            processFunction(func){
-                $store.pipes.process({name: 'temp'}, { temp: true, funcs: [func.id] })
-            },
-            editCode() {
-                $refs.functioncodeeditor.showModal()
-            },
-            testFunction() {
-                $refs.functiontestdialog.showModal()
-            },
-            active: null,
-            testInput: {},
-            testOutput: null,
-            changeTab(tab) {
-                this.tab = null;
-                this.active = tab
-            },
-        }">
-            <ul class="nav nav-tabs" style="--bs-nav-link-padding-y: 0px;">
-                <li x-show="() => {
-                    try {
-                        return $store.pipes.funcs.find(f => func.id === f.id).focus
-                    } catch(e) {
-                        return false
-                    }
-                }">*
-                </li>
-                <li class="nav-item" @click="changeTab('detail')">
-                    <button :class="(active || tab) === 'detail' && 'active'" class="nav-link">Detail</button>
-                </li>
-                <li class="nav-item" @click="changeTab('code')">
-                    <button :class="(active || tab) === 'code' && 'active'" class="nav-link">Code</button>
-                </li>
-                <li class="nav-item" @click="changeTab('raw')">
-                    <button :class="(active || tab) === 'raw' && 'active'" class="nav-link">Raw</button>
-                </li>
-                <li x-show="func && func.render" class="nav-item" @click="changeTab('render')">
-                    <button :class="(active || tab) === 'render' && 'active'" class="nav-link">Render</button>
-                </li>
-                <li class="nav-item" @click="changeTab('transform')">
-                    <button :class="(active || tab) === 'transform' && 'active'" class="nav-link">Transform</button>
-                </li>
-                <li class="nav-item" @click="changeTab('pipe')">
-                    <button :class="(active || tab) === 'pipe' && 'active'" class="nav-link">Pipe</button>
-                </li>
-            </ul>
-            <div class="border rounded">
-                <div x-show="(active || tab) === 'detail'">
-                    <div class="d-flex gap-3">
-                        <div class="btn-group">
-                            <button class="btn btn-primary" type="button" @click="editFunction(func)">Edit</button>
-                            <button class="btn btn-primary" type="button" @click="() => {
-                                $refs.deletefunctiondialog.showModal()
-                            }">Delete
-                            </button>
-                            <button
-                                    class="btn btn-primary" type="button" @click="testFunction">Test
-                            </button>
-                        </div>
-                    </div>
-                    <pd-function-form></pd-function-form>
-                </div>
-                <div x-show="(active  || tab) === 'code'">
-                    <pd-function-code-editor></pd-function-code-editor>
-                </div>
-                <div x-show="(active  || tab) === 'raw'">
-                    <json-viewer :data="$tojson(func)"></json-viewer>
-                </div>
-                <template x-if="(active  || tab) === 'render'">
-                    <div>
-                        <pd-render-function></pd-render-function>
-                    </div>
-                </template>
-                <template x-if="(active  || tab) === 'transform'">
-                    <pd-function-code-editor></pd-function-code-editor>
-                </template>
-                <template x-if="(active || tab) === 'pipe'">
-                    <h4><span x-text="func.name"></span></h4>
-                </template>
+                                </button>
+                            </template>
+                        </li>
+                    </template>
+                </ul>
             </div>
+        </template>
 
-            <dialog x-ref="functioncodeeditor" class="w-75 h-75">
-                <pd-function-code-editor></pd-function-code-editor>
-            </dialog>
-            <dialog x-ref="functionform" class="w-75 h-75">
-                <pd-function-form></pd-function-form>
-            </dialog>
-            <dialog x-ref="functiontestdialog">
-                <pd-function-input-selector @selected="e => testInput = e.detail"></pd-function-input-selector>
-                <button class="btn btn-primary w-100" @click="processFunction(func)">Process</button>
-                <div x-show="testOutput">
-                    <h5>Test Output</h5>
-                    <json-viewer :data="$tojson(testOutput, { pretty: true })"></json-viewer>
+
+        <template x-component="pd-function">
+            <div x-data="{
+                deleteFunction(func, archive = false){
+                    try{
+                        $store.pipes.removeFunctionFromCurrentPipe(func.id);
+                    }catch(e){
+                        console.warn(func.name + ' is not in current pipe')
+                    }
+                    if(archive)
+                        $store.functions.delete(func)
+                    $refs.deletefunctiondialog.close()
+                },
+                processFunction(func){
+                    $store.pipes.process({name: 'temp'}, { temp: true, funcs: [func.id] })
+                },
+                testFunction() {
+                    $refs.functiontestdialog.showModal()
+                },
+                testInput: {},
+                testOutput: null,
+                code: func.code,
+            }">
+                <div>
+                    <pd-function-form></pd-function-form>
+                    <pd-code-editor @input="() => { $store.functions.save(Object.assign(func, { code }))}">
+                    </pd-code-editor>
                 </div>
-            </dialog>
-            <dialog x-ref="deletefunctiondialog">
-                <div class="btn-group">
-                    <button class="btn btn-danger" @click="deleteFunction(func)">Delete From Pipe</button>
-                    <button class="btn btn-danger" @click="deleteFunction(func, true)">Delete From Everywhere</button>
-                </div>
-            </dialog>
-        </div>
-    </template>
+                <dialog x-ref="functiontestdialog">
+                    <pd-function-input-selector @selected="e => testInput = e.detail"></pd-function-input-selector>
+                    <button class="btn btn-primary w-100" @click="processFunction(func)">Process</button>
+                    <div x-show="testOutput">
+                        <h5>Test Output</h5>
+                        <json-viewer :data="$tojson(testOutput, { pretty: true })"></json-viewer>
+                    </div>
+                </dialog>
+                <dialog x-ref="deletefunctiondialog">
+                    <div class="btn-group">
+                        <button class="btn btn-danger" @click="deleteFunction(func)">Delete From Pipe</button>
+                        <button class="btn btn-danger" @click="deleteFunction(func, true)">Delete From
+                            Everywhere</button>
+                    </div>
+                </dialog>
+            </div>
+        </template>
 
-    <template x-component="pd-function-code-editor">
-        <div
-            x-data="{
-                code: '',
-                init(){ 
-                    this.updateCode()
-                    const interval = setInterval(() => {
-                        if(!window.Prism && !window.Prism.Live) return;
-                        clearInterval(interval)
-                        this.updateCode()
-                        Prism.Live.create($refs.code)
-                    }, 100)
-                    
-
-                },
-                async updateCode(latestCode){
-                    // this.code = await prettier.format(latestCode || func.code, { parser: 'babel', plugins: prettierPlugins })
-                    this.code = latestCode || func.code
-                    if(this.code[this.code.length-1] === '\n')
-                        this.code += ' '
-                },
-                get editorHeight(){
-                    const height = this.code.split('\n').length * 29
-                    if(height < 100) return 100;
-                    return height;
-                },
-            }"
-        >
-            <textarea
-                @input="() => {
-                    code = $el.value
-                    //updateCode(code)
-                    $store.functions.save(Object.assign(func, { code }))
-                }"
-                x-ref="code"
-                :value="code"
-                class="prism-live language-javascript"
-            ></textarea>
-            <script src="/prism.js"></script>
-            <link rel="stylesheet" href="/prism.css"/>
-            <script src="/prism-live.js"></script>
-            <link rel="stylesheet" href="/prism-live.css"/>
-        </div>
-    </template>
-
-    <template x-component="pd-render-function">
-        <div
-                x-init="() => {
-                renderPreview()
-            }"
+        <template x-component="pd-code-editor">
+            <div 
+                class="container"
                 x-data="{
+                    init(){ 
+                        this.updateCode()
+                        const interval = setInterval(() => {
+                            if(!window.Prism || !window.Prism.Live) return;
+                            clearInterval(interval)
+                            this.updateCode()
+                            Prism.Live.create($refs.code)
+                        }, 100)
+                    },
+                    async updateCode(latestCode){
+                        // this.code = await prettier.format(latestCode || func.code, { parser: 'babel', plugins: prettierPlugins })
+                        code = latestCode || code
+                        if(code[code.length-1] === '\n')
+                            code += ' '
+                    },
+                }"
+            >
+                <textarea style="--max-height: 500px" x-ref="code" x-model="code" class="prism-live language-javascript"></textarea>
+                <link rel="stylesheet" href="/prism.css" />
+                <link rel="stylesheet" href="/prism-live.css" />
+            </div>
+        </template>
+        <template x-component="pd-code-renderer" c-data="{code: ''}">
+            <div class="container">
+                <pre class="language-json"><code class="language-json" x-effect="async () => {
+                    if(!window.Prism || !window.Prism.Live || !code) return;
+                    code = await prettier.format(code, { parser: 'json', plugins: prettierPlugins })
+                    $el.innerHTML = Prism.highlight(code, Prism.languages.json, 'json')
+                }"></code></pre>
+                <link rel="stylesheet" href="/prism.css" />
+                <style>
+                    pre {
+                        max-height: 500px;
+                    }    
+                </style>
+            </div>
+        </template>
+
+        <template x-component="pd-render-function">
+            <div x-init="() => {
+                renderPreview()
+            }" x-data="{
                 async renderPreview(input){
                     PD.pdCoreRenderHtmlPreview()
                         .then(pipe => pipe.process())
@@ -339,34 +256,31 @@
                         })
 
                 }
-            }"
-        >
-            <div class="w-100" x-ref="putIframe"></div>
-        </div>
-    </template>
+            }">
+                <div class="w-100" x-ref="putIframe"></div>
+            </div>
+        </template>
 
-    <template x-component="pd-function-input-selector">
-        <div x-data="{
+        <template x-component="pd-function-input-selector">
+            <div x-data="{
                 funcInputs: [],
                 init(){
                     this.funcInputs = Array.from(new Set(this.func.inputs))
                 }
             }">
-            <select
-                    class="form-control"
-                    @input.stop="() => $dispatch('selected', funcInputs[$el.value])">
-                <option> --- Test with an input ---</option>
-                <template x-for="(input, index) in funcInputs">
-                    <option x-text="$tojson(input, { pretty: true })" :value="index"></option>
-                </template>
-            </select>
-        </div>
-    </template>
+                <select class="form-control" @input.stop="() => $dispatch('selected', funcInputs[$el.value])">
+                    <option> --- Test with an input ---</option>
+                    <template x-for="(input, index) in funcInputs">
+                        <option x-text="$tojson(input, { pretty: true })" :value="index"></option>
+                    </template>
+                </select>
+            </div>
+        </template>
 
-    <template x-component="pd-function-input-property-selector" c-data="{
+        <template x-component="pd-function-input-property-selector" c-data="{
         selected: null,
     }">
-        <div x-data="{
+            <div x-data="{
                 keySet: new Set(),
                 uniqueFuncPropertyKeys: [],
                 init(){
@@ -378,26 +292,26 @@
                     this.uniqueFuncPropertyKeys = Array.from(this.keySet)
                 }
             }">
-            <select
-                    class="form-control">
-                @input.stop="() => $dispatch('selected', uniqueFuncPropertyKeys[$el.value] || $el.value)">
-                <option> --- Select a property ---</option>
-                <template x-for="(key, index) in uniqueFuncPropertyKeys">
-                    <option :selected="key === selected" x-text="key" :value="index"></option>
-                </template>
-            </select>
-        </div>
-    </template>
-    <template x-component="pd-function-form"></template>
-</div>
-<script src="/scripts/pdglobal.client.js"></script>
-<script src="/scripts/pipes-3.json.js"></script>
-<script src="/scripts/pipes-1.json.js"></script>
-<script>
-    document.addEventListener('alpine:initialized', function () {
-        pipe1.pipe().process({action: 'NULL'});
-    })
-</script>
-<script type="module" src="/scripts/main.js"></script>
+                <select class="form-control">
+                    @input.stop="() => $dispatch('selected', uniqueFuncPropertyKeys[$el.value] || $el.value)">
+                    <option> --- Select a property ---</option>
+                    <template x-for="(key, index) in uniqueFuncPropertyKeys">
+                        <option :selected="key === selected" x-text="key" :value="index"></option>
+                    </template>
+                </select>
+            </div>
+        </template>
+        <template x-component="pd-function-form"></template>
+    </div>
+    <script src="/scripts/pdglobal.client.js"></script>
+    <script src="/scripts/pipes-3.json.js"></script>
+    <script src="/scripts/pipes-1.json.js"></script>
+    <script>
+        document.addEventListener('alpine:initialized', function () {
+            pipe1.pipe().process({ action: 'NULL' });
+        })
+    </script>
+    <script type="module" src="/scripts/main.js"></script>
 </body>
+
 </html>

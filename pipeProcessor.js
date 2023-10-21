@@ -1,13 +1,13 @@
 import Pipeline from "./pipeline.js";
 
-const defaultOpts = { _pipe: {}, defaultInput: {}, callbacks: {always: () => {}} };
+const defaultOpts = { _pipe: {}, defaultInput: {}, callbacks: { always: () => { } } };
 export function pipeProcessor(funcSequence, opts) {
-    opts = Object.assign({}, defaultOpts, opts  )
+    opts = Object.assign({}, defaultOpts, opts)
     const codeToFunctions = funcSequence
         // .filter(func => func.code)
         .map((func) => wrapCode.call(this, func, opts))
     const pipe = new Pipeline(codeToFunctions);
-    pipe.defaultArgs = Object.assign({}, this.defaultInput,  opts.defaultInput);
+    pipe.defaultArgs = Object.assign({}, this.defaultInput, opts.defaultInput);
     return pipe;
 }
 
@@ -15,11 +15,12 @@ function wrapCode(func, opts) {
     this.html = (someHtml) => someHtml;
     this.css = (someCss) => someCss;
     const that = this;
-    const AsyncFunction = Object.getPrototypeOf(async function (){}).constructor;
+    const AsyncFunction = Object.getPrototypeOf(async function () { }).constructor;
+
     return async function (input = {}) {
         input = input || {}
-        if(input.error) return input;
-        const state = {name: func.name, func}
+        if (input.error) return input;
+        const state = { name: func.name, func }
         state.start = Date.now()
         state.input = Object.assign({}, input)
 
@@ -54,7 +55,7 @@ async function resolveDependencies(input) {
                 try {
                     // we may want to refer to a css dependency server side
                     addLinkToHeadIfMissing(addCssLink(dependencyConfig))
-                } catch(e) {
+                } catch (e) {
                     input.warn = {
                         message: `Could not load css dependency ${dependencyConfig.path}`,
                     }
@@ -85,7 +86,7 @@ function addCssLink(dep) {
 function addLinkToHeadIfMissing(link) {
     let found = false
     document.querySelectorAll('link').forEach(headLink => {
-        if(found) return;
+        if (found) return;
         found = headLink.href === link.href
     })
     !found && document.head.appendChild(link)

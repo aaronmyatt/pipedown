@@ -2,8 +2,10 @@ import {saveFunctionOutput, saveFunctionInput} from "../utils.ts";
 import './pdglobal.deno.worker.ts'
 
 self.pipedeps = {}
-self.output = {}
-const errors = {}
+self.output = {
+    error: {}
+}
+const error = {}
 self.onmessage = async (event) => {
     const data = JSON.parse(event.data);
 
@@ -17,27 +19,34 @@ self.onmessage = async (event) => {
                 } catch (e) {
                     // don't let it kill the server; just log the error
                     console.error('always', e.message);
-                    errors['always'] = e.message;
+                    error['always'] = e.message;
                 }
             }
         }).process(data.inputs);
     } catch (e) {
-        errors[data.scriptName] = e.message
+        error[data.scriptName] = e.message
         console.error('pipe catch', e.message);
     }
 
     try {
-        self.output.errors = errors;
+        self.output.error = combineErrors();
         self.postMessage(JSON.stringify(self.output));
     } catch (e) {
         // don't let it kill the server
         console.error('postMessage catch', e.message);
-        errors['postMessage'] = e.message
-        self.output.errors = errors
+        error['postMessage'] = e.message
+        self.output.error = combineErrors();
         self.postMessage(JSON.stringify(self.output));
         if (self.output.hasOwnProperty('then')) {
-            console.warn('output is a promise; please check your code for async errors')
+            console.warn('output is a promise; please check your code for async error')
         }
     }
-    self.close();
+
+    setTimeout(() => {
+        self.close();
+    }, 1000)
 };
+
+function combineErrors() {
+    return Object.assign({}, self.output?.error || {}, error);
+}

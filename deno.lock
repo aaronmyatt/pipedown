@@ -1605,6 +1605,7 @@
   "redirects": {
     "https://deno.land/x/cors/mod.ts": "https://deno.land/x/cors@v1.2.2/mod.ts",
     "https://deno.land/x/dax/mod.ts": "https://deno.land/x/dax@0.34.0/mod.ts",
+    "https://deno.land/x/deno_dom/deno-dom-wasm.ts": "https://deno.land/x/deno_dom@v0.1.38/deno-dom-wasm.ts",
     "https://deno.land/x/download/mod.ts": "https://deno.land/x/download@v2.0.2/mod.ts",
     "https://deno.land/x/oak/mod.ts": "https://deno.land/x/oak@v12.5.0/mod.ts",
     "https://deno.land/x/response_creators/index.ts": "https://deno.land/x/response_creators@v1.2.0-pre.6/index.ts",

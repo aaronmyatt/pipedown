@@ -1,11 +1,12 @@
-<div x-data="pipeActions"
-     x-init="() => {
+<div x-data="pipeActions" x-init="() => {
                 const pipe = pipes().find(p => p.id === Number($router.params.pipeid))
                 if (pipe) {
                     load(pipe)
+                    PD.pdGetPipeOutputs({ server: true, pipe }).then(outputs => {
+                        $store.pdPipe.output = outputs.funcOutputs
+                    })
                 }
-            }"
->
+            }">
     <template x-if="current">
         <div>
             <pd-pipe></pd-pipe>
@@ -16,7 +17,8 @@
 <template x-component="pd-pipe" c-data="{ initialInput: {} }">
     <div x-init="() => {
         $store.pdPipe.initialInput = {};
-    }" x-data="pipeActions" class="d-flex flex-column gap-4">
+        $store.pdPipe.output = {};
+    }" class="d-flex flex-column gap-4">
         <div class="d-flex gap-3">
             <h1>Pipe: <span x-text="current?.name"></span></h1>
             <div class="btn-group">
@@ -29,17 +31,6 @@
                 </button>
             </div>
         </div>
-        <div class="form-check form-switch" :class="{'text-primary': current.execOnServer}">
-            <input class="form-check-input" type="checkbox" role="switch" id="flexSwitchCheckDefault"
-                   :checked="current.execOnServer" @click="() => {
-                        current.execOnServer = !current.execOnServer
-                        $store.pipes.save(current)
-                    }">
-            <label class="form-check-label"
-                   for="flexSwitchCheckDefault">Execute on backend</label>
-            <i x-transition x-show="current.execOnServer" class="bi bi-cloud-arrow-up"></i>
-        </div>
-        <pd-pipe-output></pd-pipe-output>
         <p x-text="current.description"></p>
         <dialog x-ref="pipeform" class="w-75 h-75">
             <h4>Pipe Form</h4>
@@ -51,8 +42,7 @@
                 <div>
                     <label for="pipedefaultinput" class="form-label"> Default Input </label>
                     <input class="form-control" type="text" id="pipedefaultinput"
-                           x-text="$el.value = $tojson($store.pipes.current.defaultInput || {})"
-                           @input="(event) => {
+                        x-text="$el.value = $tojson($store.pipes.current.defaultInput || {})" @input="(event) => {
                         try {
                             $store.pipes.current.defaultInput = JSON.parse(event.target.value)
                             event.target.classList.add('is-valid')
@@ -91,25 +81,6 @@
             </form>
             <json-viewer :data="$tojson(current)"></json-viewer>
         </dialog>
-
-        <div class="border">
-            <label for="pipeinitialinput" class="form-label"> Pipe Input </label>
-            <input class="form-control" type="text" id="pipeinitialinput"
-                   x-text="$el.value = $tojson($store.pdPipe.initialInput)"
-                   @input="(event) => {
-                        try {
-                            $store.pdPipe.initialInput = JSON.parse(event.target.value)
-                            event.target.classList.add('is-valid')
-                            event.target.classList.remove('is-invalid')
-                        } catch (e) {
-                            console.error(e)
-                            event.target.classList.add('is-invalid')
-                        }
-                    }">
-            <pd-pipe-input-selector
-                    @selected="e => { $store.pdPipe.initialInput = $fromjson(e.detail) }"
-            ></pd-pipe-input-selector>
-        </div>
     </div>
     <div class="pdtoolbar sticky-top" x-html="() => {
         return PD.pdPipeToolbar()
@@ -122,67 +93,79 @@
         </pd-pipe-functions>
     </template>
 </template>
-<template x-component="pd-pipe-output">
-    <div class="d-flex flex-column gap-3"
-         x-data="{
-            init(){
-                window.addEventListener('message', (e) => {
-                  const data = JSON.parse(e.data)
-                  this.output = data;
-                  if(data.server) e.source.close();
-                })
-            },
-            output: {},
-        }">
-        <h3>Pipe Input</h3>
-        <json-viewer :data="$tojson($store.pdPipe.initialInput)"></json-viewer>
-
-        <div :style="output.error && { backgroundColor: 'red'}">
-            <h3>Pipe Output</h3>
-            <json-viewer :data="$tojson(output)"></json-viewer>
-            <template x-if="output.error">
-                <json-viewer :data="$tojson(output.error)"></json-viewer>
-            </template>
-        </div>
-    </div>
-</template>
 
 <template x-component="pd-pipe-functions">
-    <div
-            class="d-flex flex-column gap-1 py-4"
-            x-data="{
+    <div class="d-flex flex-column gap-1 py-4" x-data="{
         removeFunction(id){
             $store.pipes.removeFunctionFromCurrentPipe(id);
         },
+        code: '',
+        inputJsonValid: true,
     }">
-        <h3>Functions</h3>
-        <template x-for="func in $store.pipes.funcs" :key="func.id">
-            <div x-data="{
-                        showInput: false,
-                        showCode: true,
-                        showOutput: true
-                    }">
-                            <pd-function
-                                    @keydown.escape="() => {
-                                        if(func.focus){
-                                            $el.parentElement.focus()
-                                        }
-                                    }"
-                                    @focus="(e) => {
-                                        $store.pipes.funcs.forEach(f => f.focus = false);
-                                        func.focus = true;
-                                    }"
-                                    tabindex="1"
-                                    :tab="func.code ? 'code' : 'detail'"></pd-function>
-                        <div>
-<!--                            <json-viewer-->
-<!--                                    tabindex="-1"-->
-<!--                                    :data="await $store.api.getFuncOutput(func.id).then(data => $tojson(data))"-->
-<!--                            >-->
-<!--                            </json-viewer>-->
+        <h3 class="h3">Functions</h3>
+        (Test) Pipe Input
+        <pd-code-editor :class="{
+                'border border-2 border-danger': !inputJsonValid,
+                'border border-2 border-success': inputJsonValid,
+            }" @input="(e) => {
+                try{
+                    $store.pdPipe.initialInput = JSON.parse(code)
+                    inputJsonValid = true
+                    
+                } catch(e){
+                    inputJsonValid = false
+                }
+            }"></pd-code-editor>
+        <p class="text-danger" x-show="!inputJsonValid">JSON invalid</p>
+        <div class="d-flex flex-column gap-3" @keydown.escape="() => {
+                $el.focus()
+                $store.pipes.funcs.forEach(f => f.focus = false);
+            }">
+            <pd-pipe-input-selector
+                @selected="e => { $store.pdPipe.initialInput = $fromjson(e.detail) }"></pd-pipe-input-selector>
+            <template x-for="func in $store.pipes.funcs.map(f => { f.focus = false; return f; })" :key="func.id">
+                    <div 
+                        class="d-flex flex-column gap-1"
+                        @focusin="(e) => {
+                            $store.pipes.funcs.forEach(f => f.focus = false);
+                            func.focus = true;
+                        }" 
+                        tabindex="1"
+                        :class="{
+                            'border-start border-success border-5': func.focus,
+                            'border border-primary': !func.focus,
+                        }"
+                    >
+                        <pd-function></pd-function>
+                        <div x-data="{
+                                outputVisible: true,
+                            }" 
+                            x-init="() => {
+                                $watch('$store.pdPipe.output', (value) => {
+                                    // console.log(value)
+                                    $refs.renderOutput.code = value[func.id]
+                                })
+                            }"
+                            class="accordion">
+                            <div class="accordion-item">
+                                <h2 class="accordion-header">
+                                    <button @click="outputVisible = !outputVisible" class="accordion-button p-1"
+                                        type="button" data-bs-toggle="collapse" data-bs-target="#collapseOne"
+                                        aria-expanded="true" aria-controls="collapseOne">
+                                        Output
+                                    </button>
+                                </h2>
+                                <div id="collapseOne" class="accordion-collapse collapse"
+                                    :class="outputVisible && 'show'" data-bs-parent="#accordionExample">
+                                    <div class="accordion-body">
+                                        <pd-code-renderer x-ref="renderOutput"></pd-code-renderer>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-            </div>
-        </template>
+                    </div>
+            </template>
+        </div>
     </div>
 </template>
 
@@ -194,9 +177,7 @@
                 })
             }
         }">
-        <select
-                class="overflow-hidden"
-                @input.stop="() => $dispatch('selected', $el.value)">
+        <select class="overflow-hidden" @input.stop="() => $dispatch('selected', $el.value)">
             <option> --- Test with an input ---</option>
             <template x-for="(input, index) in pipeInputs">
                 <option x-text="$tojson(input)"></option>
@@ -222,4 +203,3 @@
         </div>
     </div>
 </template>
-

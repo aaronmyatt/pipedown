@@ -94,7 +94,10 @@ export async function writeLineToFile (fileName: string, data: Record<string, un
 
 // get last line of file
 export function readLastLine(fileData: string) {
-    const lines = fileData.split('\n');
+    const lines = fileData.split('\n')
+        // filter all lines that equal 'null'
+        .filter(line => line !== 'null')
+
     return lines.at(-2);
 }
 
@@ -131,7 +134,7 @@ export async function readPipeInputs(pipeid: string) {
 // read last pipe input
 export async function readLastPipeInput(pipeid: string) {
     const rawInputs = await readPipeInputs(pipeid);
-    return readLastLine(rawInputs);
+    return readLastLine(rawInputs) || '{}';
 }
 
 export async function readPipeOutputs(pipeid: string) {
@@ -143,7 +146,7 @@ export async function readPipeOutputs(pipeid: string) {
 // read last pipe output
 export async function readLastPipeOutput(pipeid: string) {
     const rawOuputs = await readPipeOutputs(pipeid);
-    return readLastLine(rawOuputs);
+    return readLastLine(rawOuputs) || '{}';
 }
 
 export async function readRawJsonFile(fileName: string) {
