@@ -14,10 +14,11 @@
     </template>
 </div>
 </template>
-<template x-component="pd-pipe" c-data="{ initialInput: {} }">
+<template x-component="pd-pipe" c-data="{ initialInput: {}, output: {}, error: {} }">
     <div x-init="() => {
         $store.pdPipe.initialInput = {};
         $store.pdPipe.output = {};
+        $store.pdPipe.error = {};
     }" class="d-flex flex-column gap-4">
         <div class="d-flex gap-3">
             <h1>Pipe: <span x-text="current?.name"></span></h1>
@@ -72,7 +73,7 @@
                 <input name="alias" type="text" id="alias" class="form-control">
                 <label for="deptype" class="form-label"> Type </label>
                 <select required name="deptype" type="text" id="deptype" class="form-control">
-                    <option value="javascript">.js</option>
+                    <option value="javascript">.js</option> 
                     <option value="css">.css</option>
                     <option value="deno">Deno</option>
                     <!--                    <option value="npm">NPM</option>-->
@@ -88,9 +89,21 @@
             return outputs.html
           })
     }"></div>
+    <template x-if="$store.pdPipe.error?.message">
+        <div class="bg-danger-subtle pb-2">
+            <h4>Error</h4>
+            <pd-code-renderer :code="$tojson($store.pdPipe.error)"></pd-code-renderer>
+        </div>
+    </template>
     <template x-if="$store.functions.loaded">
         <pd-pipe-functions>
         </pd-pipe-functions>
+    </template>
+    <template x-if="$store.pdPipe.error?.message">
+        <div class="bg-danger-subtle pb-2">
+            <h4>Error</h4>
+            <pd-code-renderer :code="$tojson($store.pdPipe.error)"></pd-code-renderer>
+        </div>
     </template>
 </template>
 
