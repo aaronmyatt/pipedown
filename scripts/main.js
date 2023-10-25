@@ -6,7 +6,6 @@ import persist from '@alpinejs/persist'
 import Alpine from 'alpinejs';
 import pipeline from "../pipeline.js";
 import {setupApi, API} from "../fe/api.js";
-import '@alenaksu/json-viewer';
 
 window.Pipeline = pipeline;
 window.chopQuotes = (codeValue) => {
@@ -46,18 +45,6 @@ Alpine.data('pipeActions', () => ({
     deletePipe(pipe) {
         this.$store.pipes.deletePipe(pipe || this.current)
     },
-    pipeForm(please) {
-        if (please === 'close') {
-            this.$refs.pipeform.close()
-        }
-        if (please === 'open') {
-            this.$refs.pipeform.showModal()
-        }
-    },
-    get lastOutput(){
-        return this.current.outputs.at(-1)
-    }
-
 }))
 Alpine.magic('tojson', (el, {}) => (expression, opts) => {
     // example usage: <div x-text="$json({foo: 'bar'})"></div>
@@ -84,30 +71,19 @@ Alpine.magic('fromjson', (el, {}) => (expression) => {
 
 Alpine.store('pipes', {
     current: null,
-    funcs: [],
     allPipes: [],
     init() {
         this.fetch();
     },
     load(pipe) {
         this.current = this.allPipes.find(p => p.id === pipe.id);
-        this.funcs = this.getFunctions();
     },
     async save(pipe) {
-        const pipePayload = JSON.stringify(pipe)
-        if (this.allPipes.length === 0 || !this.allPipes.find(p => p.id === pipe.id)) {
-            this.allPipes.push(pipe);
-        }
+        // const pipePayload = JSON.stringify(pipe)
+        // if (this.allPipes.length === 0 || !this.allPipes.find(p => p.id === pipe.id)) {
+        //     this.allPipes.push(pipe);
+        // }
         await Alpine.store('api').savePipe(pipe)
-    },
-    getFunctions(pipe) {
-        pipe = pipe || this.current;
-        return Alpine.store('functions').allFunctions
-            .filter(f => pipe.functions.includes(f.id))
-            // sort based on id order in pipe.functions
-            .sort((a, b) => {
-                return pipe.functions.indexOf(a.id) - pipe.functions.indexOf(b.id)
-            })
     },
     addFunctionToCurrentPipe(id, config = {after: 0, start: false}) {
         this.current.functions = this.current.functions || [];
@@ -126,45 +102,6 @@ Alpine.store('pipes', {
     removeFunctionFromCurrentPipe(id) {
         this.current.functions = this.current.functions.filter(fid => fid !== id);
         this.save(this.current)
-    },
-    async process(pipe, input = {}) {
-        if (pipe.execOnServer) {
-            return await this.processOnServer(pipe, input)
-        } else {
-            return await this.processOnClient(pipe, input)
-        }
-    },
-    async processOnServer(pipe, inputs = {}) {
-        return Alpine.store('api').process({ id: pipe.id, inputs })
-    },
-    async processOnClient(pipe, inputs = {}) {
-        const inputsClone = Object.assign({}, inputs)
-        const W = window.open('/testwindow.html')
-        W.addEventListener('load', () => {
-            W.postMessage(JSON.stringify({pipe: pipe.name, inputs: inputsClone}), '*')
-        })
-
-        // const pipeClone = Object.assign({}, pipe || this.current)
-        // since we're executing this within the pipedown client app context
-        // we should skip css dependencies to avoid screwing the apps layout/presentation
-        // const skipCss = Object.assign({}, DEFAULT_FUNCTION, {code: `input.nocss = true;`, skip: true})
-        // const funcSequence = [skipCss].concat(this.getFunctions(pipeClone))
-        // return pipeProcessor(funcSequence, {
-        //     always: (state, args) => {
-        //         const func = state.func;
-        //         if (func.skip) return;
-        //         state.input && func.inputs.push(state.input)
-        //         state.output && func.outputs.push(state.output)
-        //         Alpine.store('functions').save(func)
-        //     }
-        // })
-        //     .process(inputClone)
-        //     .then(output => {
-        //         pipeClone.inputs.push(input);
-        //         pipeClone.outputs.push(output);
-        //         this.save(pipeClone);
-        //         return output;
-        //     })
     },
     newPipe(config = {}) {
         this.current = Object.assign({}, DEFAULT_PIPE, config);

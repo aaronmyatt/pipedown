@@ -2,28 +2,36 @@
                 const pipe = pipes().find(p => p.id === Number($router.params.pipeid))
                 if (pipe) {
                     load(pipe)
-                    PD.pdGetPipeOutputs({ server: true, pipe }).then(outputs => {
-                        $store.pdPipe.output = outputs.funcOutputs
-                    })
                 }
             }">
     <template x-if="current">
         <div>
+            <div
+                class="position-fixed top-50 start-0 translate-middle-y"
+                x-html="() => {
+                    return PD.sortableFunctionList()
+                    .then(outputs => {
+                        return outputs.html
+                    })
+                }">
+
+            </div>
             <pd-pipe></pd-pipe>
         </div>
     </template>
 </div>
 </template>
 <template x-component="pd-pipe" c-data="{ initialInput: {}, output: {}, error: {} }">
-    <div x-init="() => {
+    <div x-init="async () => {
         $store.pdPipe.initialInput = {};
         $store.pdPipe.output = {};
         $store.pdPipe.error = {};
+        await PD.pdGetPipeOutputs({ server: true, pipe: current }).then(outputs => {
+            $store.pdPipe.output = outputs.funcOutputs
+        })
     }" class="d-flex flex-column gap-4">
         <div class="d-flex gap-3">
-            <h1>Pipe: <span x-text="current?.name"></span></h1>
             <div class="btn-group">
-                <button class="btn btn-primary" type="button" @click="() => pipeForm('open')">Edit</button>
                 <button class="btn btn-primary" type="button" @click="() => { deletePipe(); this.$router.push('/') }">
                     Delete
                 </button>
@@ -32,32 +40,34 @@
                 </button>
             </div>
         </div>
-        <p x-text="current.description"></p>
-        <dialog x-ref="pipeform" class="w-75 h-75">
-            <h4>Pipe Form</h4>
-            <form class="d-flex flex-column gap-4" @submit.prevent="() => { savePipe(); pipeForm('close') }">
-                <label for="pipename" class="form-label"> Name </label>
-                <input class="form-control" type="text" id="pipename" x-model="current.name">
-                <label for="pipedescription" class="form-label"> Description </label>
-                <input type="text" id="pipedescription" x-model="current.description" class="form-control">
-                <div>
-                    <label for="pipedefaultinput" class="form-label"> Default Input </label>
-                    <input class="form-control" type="text" id="pipedefaultinput"
-                        x-text="$el.value = $tojson($store.pipes.current.defaultInput || {})" @input="(event) => {
-                        try {
-                            $store.pipes.current.defaultInput = JSON.parse(event.target.value)
-                            event.target.classList.add('is-valid')
-                            event.target.classList.remove('is-invalid')
-                        } catch (e) {
-                            console.error(e)
-                            event.target.classList.add('is-invalid')
-                        }
-                    }">
+        <div class="row gap-3" @input.stop="() => { savePipe(); }">
+            <div class="row">
+                <input class="form-control form-control-lg" type="text" id="pipename" x-model="$store.pipes.current.name">
+            </div>
+            <div class="row">
+                <label for="pipedescription" class="form-label col-sm-2 col-form-label"> Description </label>
+                <div class="col-sm-10">
+                    <input type="text" id="pipedescription" x-model="$store.pipes.current.description" class="form-control">
                 </div>
-                <button class="btn btn-primary">Save</button>
-            </form>
-            <json-viewer :data="$tojson(current)"></json-viewer>
-        </dialog>
+            </div>
+            <div class="row">
+                <label for="pipedefaultinput" class="form-label col-sm-2 col-form-label"> Default Input </label>
+                <div class="col-sm-10">
+                    <input class="form-control" type="text" id="pipedefaultinput"
+                        x-text="$el.value = $tojson($store.pipes.current.defaultInput || {})" 
+                        @input="(event) => {
+                            try {
+                                $store.pipes.current.defaultInput = JSON.parse(event.target.value)
+                                event.target.classList.add('is-valid')
+                                event.target.classList.remove('is-invalid')
+                            } catch (e) {
+                                console.error(e)
+                                event.target.classList.add('is-invalid')
+                            }
+                        }">
+                </div>
+            </div>
+        </div>
         <dialog x-ref="dependencyform" class="w-75 h-75">
             <h4>Pipe Form</h4>
             <form class="d-flex flex-column gap-4" @submit.prevent="async (e) => {
@@ -80,7 +90,6 @@
                 </select>
                 <button class="btn btn-primary">Save</button>
             </form>
-            <json-viewer :data="$tojson(current)"></json-viewer>
         </dialog>
     </div>
     <div class="pdtoolbar sticky-top" x-html="() => {
@@ -114,7 +123,22 @@
         },
         code: '',
         inputJsonValid: true,
-    }">
+    }"
+    x-init="() => {
+        $store.pdPipeFunctions.funcs = []
+        const pipe = current;
+        $store.pdPipeFunctions.funcs = Alpine.store('functions').allFunctions
+            .filter(f => pipe.functions.includes(f.id))
+            // sort based on id order in pipe.functions
+            .map(f => {
+                f.focus = false;
+                return f;
+            })
+            .sort((a, b) => {
+                return pipe.functions.indexOf(a.id) - pipe.functions.indexOf(b.id)
+            })
+    }"
+    >
         <h3 class="h3">Functions</h3>
         (Test) Pipe Input
         <pd-code-editor :class="{
@@ -132,17 +156,22 @@
         <p class="text-danger" x-show="!inputJsonValid">JSON invalid</p>
         <div class="d-flex flex-column gap-3" @keydown.escape="() => {
                 $el.focus()
-                $store.pipes.funcs.forEach(f => f.focus = false);
+                $store.pdPipeFunctions.funcs.forEach(f => f.focus = false);
             }">
             <pd-pipe-input-selector
                 @selected="e => { $store.pdPipe.initialInput = $fromjson(e.detail) }"></pd-pipe-input-selector>
-            <template x-for="func in $store.pipes.funcs.map(f => { f.focus = false; return f; })" :key="func.id">
+            <template x-for="func in $store.pdPipeFunctions.funcs" :key="func.id">
                     <div 
                         class="d-flex flex-column gap-1"
                         @focusin="(e) => {
-                            $store.pipes.funcs.forEach(f => f.focus = false);
+                            $store.pdPipeFunctions.funcs.forEach(f => f.focus = false);
                             func.focus = true;
-                        }" 
+                        }"
+                        x-effect="() => {
+                            if(func.focus){
+                                $el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                            }
+                        }"
                         tabindex="1"
                         :class="{
                             'border-start border-success border-5': func.focus,
@@ -154,9 +183,10 @@
                                 outputVisible: true,
                             }" 
                             x-init="() => {
-                                $watch('$store.pdPipe.output', (value) => {
-                                    // console.log(value)
-                                    $refs.renderOutput.code = value[func.id]
+                                $watch('$store.pdPipe.output', value => {
+                                    if(value && func.id in value){
+                                        $refs.renderOutput.code = value[func.id];
+                                    }
                                 })
                             }"
                             class="accordion">
@@ -185,9 +215,10 @@
 <template x-component="pd-pipe-input-selector">
     <div x-data="{
             async pipeInputs(){
-                return await PD.pdGetPipeInputs({ server: true, pipe: $store.pipes.current }).then(outputs => {
-                    return outputs.pipeInputs
-                })
+                return []
+                // return await PD.pdGetPipeInputs({ server: true, pipe: $store.pipes.current }).then(outputs => {
+                //     return outputs.pipeInputs
+                // })
             }
         }">
         <select class="overflow-hidden" @input.stop="() => $dispatch('selected', $el.value)">

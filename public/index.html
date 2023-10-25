@@ -57,10 +57,6 @@
                 </a>
             </div>
 
-            <div class="nav-item" x-show="$store.pipes.current?.id">
-                <a class="nav-link" href x-route="`/pipe/${$store.pipes.current}`">Pipe</a>
-            </div>
-
             <div class="nav-item">
                 <a class="nav-link" href x-route="/functions">Functions</a>
             </div>
@@ -112,13 +108,13 @@
             <div>
                 <ul class="list-group" x-data="{
                     query: '',
-            functions(){
-                return $store.functions.allFunctions
-                    .filter(func => !func.archived)
-                    .filter(func => {
-                        return func.name.toLowerCase().includes(this.query.toLowerCase()) || func.description.toLowerCase().includes(this.query.toLowerCase())
-                    })
-            }
+                    functions(){
+                        return $store.functions.allFunctions
+                            .filter(func => !func.archived)
+                            .filter(func => {
+                                return func.name.toLowerCase().includes(this.query.toLowerCase()) || func.description.toLowerCase().includes(this.query.toLowerCase())
+                            })
+                    }
         }">
                     <div class="input-group mb-3">
                         <input type="text" class="form-control" placeholder="Search" aria-label="Search"
@@ -151,7 +147,7 @@
 
 
         <template x-component="pd-function">
-            <div x-data="{
+            <div :id="`func-${func.id}`" x-data="{
                 deleteFunction(func, archive = false){
                     try{
                         $store.pipes.removeFunctionFromCurrentPipe(func.id);
@@ -182,7 +178,6 @@
                     <button class="btn btn-primary w-100" @click="processFunction(func)">Process</button>
                     <div x-show="testOutput">
                         <h5>Test Output</h5>
-                        <json-viewer :data="$tojson(testOutput, { pretty: true })"></json-viewer>
                     </div>
                 </dialog>
                 <dialog x-ref="deletefunctiondialog">
@@ -196,9 +191,7 @@
         </template>
 
         <template x-component="pd-code-editor">
-            <div 
-                class="container"
-                x-data="{
+            <div class="container" x-data="{
                     init(){ 
                         this.updateCode()
                         const interval = setInterval(() => {
@@ -214,12 +207,12 @@
                         if(code[code.length-1] === '\n')
                             code += ' '
                     },
-                }"
-            >
-                <textarea style="--max-height: 500px" x-ref="code" x-model="code" class="prism-live language-javascript"></textarea>
+                }">
+                <textarea style="--max-height: 500px" x-ref="code" x-model="code"
+                    class="prism-live language-javascript"></textarea>
+                </div>
                 <link rel="stylesheet" href="/prism.css" />
                 <link rel="stylesheet" href="/prism-live.css" />
-            </div>
         </template>
         <template x-component="pd-code-renderer" c-data="{code: ''}">
             <div class="container">
@@ -232,7 +225,7 @@
                 <style>
                     pre {
                         max-height: 500px;
-                    }    
+                    }
                 </style>
             </div>
         </template>
