@@ -18,35 +18,6 @@
 </head>
 
 <body class="container-md">
-    <div x-data="{
-    burnToast(toast, timeout = 5000) {
-        setTimeout(() => {
-            $store.toaster = $store.toaster.filter(t => t.message !== toast.message)
-        }, timeout)
-    }
-}" class="toast-container top-0 end-0">
-        <template x-for="toast in $store.toaster">
-            <div class="toast show" role="alert" aria-live="assertive" aria-atomic="true">
-                <div class="toast-header">
-                    <i class="bi bi-exclamation-circle-fill text-warning"></i>
-                    <strong class="me-auto">Hol' up!</strong>
-                    <small class="text-body-secondary">just now</small>
-                    <button @click="() => burnToast(toast, 0)" type="button" class="btn-close" data-bs-dismiss="toast"
-                        aria-label="Close">
-                    </button>
-                </div>
-                <div class="toast-body">
-                    <p x-text="toast.message"></p>
-                    <div class="mt-2 pt-2 border-top">
-                        <template x-for="action in toast.actions">
-                            <button class="btn btn-primary" @click="() => action.callback(); burnToast(toast)"
-                                x-text="action.label"></button>
-                        </template>
-                    </div>
-                </div>
-            </div>
-        </template>
-    </div>
     <nav class="navbar" x-data>
         <div class="d-flex align-items-center gap-4">
             <div class="nav-item">
@@ -210,9 +181,9 @@
                 }">
                 <textarea style="--max-height: 500px" x-ref="code" x-model="code"
                     class="prism-live language-javascript"></textarea>
-                </div>
-                <link rel="stylesheet" href="/prism.css" />
-                <link rel="stylesheet" href="/prism-live.css" />
+            </div>
+            <link rel="stylesheet" href="/prism.css" />
+            <link rel="stylesheet" href="/prism-live.css" />
         </template>
         <template x-component="pd-code-renderer" c-data="{code: ''}">
             <div class="container">
@@ -295,6 +266,36 @@
             </div>
         </template>
         <template x-component="pd-function-form"></template>
+
+        <div x-data="{
+                burnToast(toast, timeout = 5000) {
+                    setTimeout(() => {
+                        $store.toaster = $store.toaster.filter(t => t.message !== toast.message)
+                    }, timeout)
+                }
+            }" class="toast-container top-0 end-0">
+            <template x-for="toast in $store.toaster">
+                <div class="toast show" role="alert" aria-live="assertive" aria-atomic="true">
+                    <div class="toast-header">
+                        <i class="bi bi-exclamation-circle-fill text-warning"></i>
+                        <strong class="me-auto">Hol' up!</strong>
+                        <small class="text-body-secondary">just now</small>
+                        <button @click="() => burnToast(toast, 0)" type="button" class="btn-close"
+                            data-bs-dismiss="toast" aria-label="Close">
+                        </button>
+                    </div>
+                    <div class="toast-body">
+                        <p x-text="toast.message"></p>
+                        <div class="mt-2 pt-2 border-top">
+                            <template x-for="action in toast.actions">
+                                <button class="btn btn-primary" @click="() => action.callback(); burnToast(toast)"
+                                    x-text="action.label"></button>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+            </template>
+        </div>
     </div>
     <script src="/scripts/pdglobal.client.js"></script>
     <script src="/scripts/pipes-3.json.js"></script>

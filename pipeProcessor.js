@@ -12,8 +12,6 @@ export function pipeProcessor(funcSequence, opts) {
 }
 
 function wrapCode(func, opts) {
-    this.html = someHtml => someHtml;
-    this.css = someCss => someCss;
     const that = this;
     const AsyncFunction = Object.getPrototypeOf(async function () { }).constructor;
 
@@ -26,7 +24,7 @@ function wrapCode(func, opts) {
 
         try {
             await resolveDependencies.call(that, input)
-            await new AsyncFunction('input', func.code).call(that, input)
+            await func.exec(input)
         } catch (e) {
             console.error(e)
             console.log(JSON.stringify(e))

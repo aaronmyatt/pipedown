@@ -1,7 +1,6 @@
 import {saveFunctionOutput, saveFunctionInput} from "../utils.ts";
 import './pdglobal.deno.worker.ts'
 
-self.pipedeps = {}
 self.output = {
     error: {}
 }

@@ -23,7 +23,7 @@ import {
     readLastFunctionInput,
     readLastFunctionOutput, readLastPipeOutput
 } from './utils.ts';
-import {generateClientPipeScript, generateServerScript} from './scriptGenerator.ts';
+import {generateClientScript, generateServerScript} from './scriptGenerator.ts';
 import * as esbuild from "https://deno.land/x/esbuild@v0.18.17/mod.js";
 
 createDirIfItDoesntExist(pipeDirName);
@@ -169,7 +169,7 @@ router.all('/api/processbyname/:pipename/:prop?', async (context) => {
 router.get('/api/script/:pipeid', async (context) => {
     const pipeid = context.params.pipeid
     const pipe = await onePipe(pipeid);
-    const pipeScript = await generateClientPipeScript(pipe);
+    const pipeScript = await generateClientScript(pipe);
     context.response.body = {script: pipeScript};
 })
 
@@ -182,7 +182,7 @@ router.get('/api/scriptbyname/:pipename', async (context) => {
     }
 
     if (pipe) {
-        const pipeScript = await generateClientPipeScript(pipe);
+        const pipeScript = await generateClientScript(pipe);
         context.response.body = {script: pipeScript, id: pipe.id};
     } else {
         context.response.status = Status.NotFound
@@ -201,7 +201,7 @@ router.post('/api/temporaryscript', async (context) => {
     const pipe = {
         functions: requestData.funcs,
     }
-    const pipeScript = await generateClientPipeScript(pipe, {globalName: 'pipetemp'})
+    const pipeScript = await generateClientScript(pipe, {globalName: 'pipetemp'})
     context.response.body = {script: pipeScript, id: 'temp'};
 })
 
@@ -225,10 +225,11 @@ app.use(async (ctx, next) => {
 
     const pipes = await allPipes()
     for (const pipe of pipes) {
-        if (pipe.execOnServer) {
-            await generateServerScript(pipe);
-        } else {
-            await generateClientPipeScript(pipe);
+        await generateServerScript(pipe);
+        try{
+            await generateClientScript(pipe);
+        } catch(e){
+            console.warn(`pipe-${pipe.id} is probably not intended for the browser`)
         }
     }
 
