@@ -141,7 +141,9 @@
             }">
                 <div>
                     <pd-function-form></pd-function-form>
-                    <pd-code-editor @input="() => { $store.functions.save(Object.assign(func, { code }))}">
+                    <pd-code-editor 
+                        ignore-global-css="true"
+                        @input="() => { $store.functions.save(Object.assign(func, { code }))}">
                     </pd-code-editor>
                 </div>
                 <dialog x-ref="functiontestdialog">
@@ -162,7 +164,7 @@
         </template>
 
         <template x-component="pd-code-editor">
-            <div class="container" x-data="{
+            <div x-data="{
                     init(){ 
                         this.updateCode()
                         const interval = setInterval(() => {
@@ -179,7 +181,7 @@
                             code += ' '
                     },
                 }">
-                <textarea style="--max-height: 500px" x-ref="code" x-model="code"
+                <textarea style="--max-height: 30em" x-ref="code" x-model="code"
                     class="prism-live language-javascript"></textarea>
             </div>
             <link rel="stylesheet" href="/prism.css" />
@@ -297,15 +299,15 @@
             </template>
         </div>
     </div>
-    <script src="/scripts/pdglobal.client.js"></script>
-    <script src="/scripts/pipes-3.json.js"></script>
-    <script src="/scripts/pipes-1.json.js"></script>
+    <script src="/scripts/client/pdglobal.client.js"></script>
+    <script src="/scripts/client/pipes-3.json.js"></script>
+    <script src="/scripts/client/pipes-1.json.js"></script>
     <script>
         document.addEventListener('alpine:initialized', function () {
             pipe1.pipe().process({ action: 'NULL' });
         })
     </script>
-    <script type="module" src="/scripts/main.js"></script>
+    <script type="module" src="/scripts/client/main.js"></script>
 </body>
 
 </html>
