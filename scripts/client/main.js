@@ -1,11 +1,11 @@
-import {DEFAULT_PIPE, DEFAULT_FUNCTION} from "../default_schemas.js";
-import registerWebComponents from "../alpine-router/plugins/component.js";
-import router from "../alpine-router/plugins/router.js";
+import {DEFAULT_PIPE, DEFAULT_FUNCTION} from "../../default_schemas.js";
+import registerWebComponents from "../../alpine-router/plugins/component.js";
+import router from "../../alpine-router/plugins/router.js";
 import intersect from '@alpinejs/intersect'
 import persist from '@alpinejs/persist'
 import Alpine from 'alpinejs';
-import pipeline from "../pipeline.js";
-import {setupApi, API} from "../fe/api.js";
+import pipeline from "../../pipeline.js";
+import {setupApi, API} from "./fe/api.js";
 
 window.Pipeline = pipeline;
 window.chopQuotes = (codeValue) => {

@@ -6,6 +6,8 @@ export const outputsDirName = 'outputs';
 export const pipeFileName = (dirname: string, id: string) => `${Deno.cwd()}/${dirname}/pipes-${id}.json`;
 export const funcFileName = (dirname: string, id: string) => `${Deno.cwd()}/${dirname}/functions-${id}.json`;
 export const pipeScriptName = (pipe) => pipeFileName('out/scripts', pipe.id) + '.js'
+export const pipeServerScriptName = (pipe) => pipeFileName('out/scripts/server', pipe.id) + '.js'
+export const pipeClientScriptName = (pipe) => pipeFileName('out/scripts/client', pipe.id) + '.js'
 export const writePipeDataToFile = (pipeData: Record<string, unknown>) => writeDataToFile(pipeFileName(pipeDirName, pipeData.id), pipeData);
 export const writeFuncDataToFile = (funcData: Record<string, unknown>) => writeDataToFile(funcFileName(funcDirName, funcData.id), funcData);
 export const writeFuncInputsDataToFile = (func: Record<string, unknown>, inputs: Record<string, unknown>) => writeLineToFile(funcFileName(inputsDirName, func.id), inputs);

@@ -1,4 +1,4 @@
-import {getPipeFunctions, pipeScriptName} from "./utils.ts";
+import {getPipeFunctions, pipeScriptName, pipeClientScriptName} from "./utils.ts";
 import * as esbuild from "https://deno.land/x/esbuild@v0.18.17/mod.js";
 import { httpImports } from "https://deno.land/x/esbuild_plugin_http_imports/index.ts";
 
@@ -8,6 +8,7 @@ export async function generateServerScript(pipe, buildConfig = {}) {
         format: 'esm',
         write: false,
         treeShaking: true,
+        plugins: [],
     }, buildConfig);
     const result = await generatePipeScript(pipe, buildConfig)
     const scriptName = pipeScriptName(pipe)
@@ -16,9 +17,14 @@ export async function generateServerScript(pipe, buildConfig = {}) {
 }
 
 export async function generateClientScript(pipe, buildConfig = {}) {
-    buildConfig = Object.assign({format: 'iife', platform: 'browser', globalName: 'pipe' + pipe.id}, buildConfig);
+    buildConfig = Object.assign({
+        format: 'iife', 
+        platform: 'browser', 
+        globalName: 'pipe' + pipe.id, 
+        plugins: [httpImports()]
+    }, buildConfig);
     const result = await generatePipeScript(pipe, buildConfig)
-    const scriptName = pipeScriptName(pipe)
+    const scriptName = pipeClientScriptName(pipe)
     await Deno.writeTextFile(scriptName, result)
     return result;
 }
@@ -48,7 +54,7 @@ async function generatePipeScript(pipe: Record<string, unknown>, buildConfig = {
     }))
 
 
-    const config = Object.assign({
+    const config = Object.assign({}, {
         bundle: true,
         stdin: {
             contents: PIPE_TEMPLATE(pipe, funcSequence),
@@ -57,16 +63,16 @@ async function generatePipeScript(pipe: Record<string, unknown>, buildConfig = {
         format: 'esm',
         write: false,
         treeShaking: true,
-        plugins: [httpImports()],
     }, buildConfig)
     const pipeBuild = await esbuild.build(config)
     return pipeBuild.outputFiles[0].text
 }
 
 const FUNC_TEMPLATE = (func) => `${[...func.code.matchAll(/^import.*/g, '')].join('\n')}
-export async function func${func.id}(input={}) {
+export default async function func${func.id}(input={}) {
 ${func.code.replaceAll(/^import.*/g, '')}
-}`
+}
+export {func${func.id}}`
 
 export async function generateFuncScript(func:Record<string, unknown>, buildConfig = {}) {
     const config = Object.assign({

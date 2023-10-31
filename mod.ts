@@ -23,14 +23,15 @@ import {
     readLastFunctionInput,
     readLastFunctionOutput, readLastPipeOutput
 } from './utils.ts';
-import {generateClientScript, generateServerScript} from './scriptGenerator.ts';
+import {generateClientScript, generateFuncScript, generateServerScript} from './scriptGenerator.ts';
 import * as esbuild from "https://deno.land/x/esbuild@v0.18.17/mod.js";
 
 createDirIfItDoesntExist(pipeDirName);
 createDirIfItDoesntExist(funcDirName);
 createDirIfItDoesntExist(inputsDirName);
 createDirIfItDoesntExist(outputsDirName);
-console.log(Deno.env.toObject())
+createDirIfItDoesntExist('./out/scripts/client');
+// console.log(Deno.env.toObject())
 
 const app = new Application();
 const router = new Router();
@@ -223,9 +224,19 @@ app.use(async (ctx, next) => {
     await next();
     const pathname = ctx.request.url.pathname
 
+    
+    const funcs = await allFuncs()
+    for (const func of funcs) {
+        await generateFuncScript(func, {plugins: []});
+    }
+
     const pipes = await allPipes()
     for (const pipe of pipes) {
-        await generateServerScript(pipe);
+        try{
+            await generateServerScript(pipe);
+        } catch(e){
+            console.warn(`pipe-${pipe.id} is probably not intended for the server`)
+        }
         try{
             await generateClientScript(pipe);
         } catch(e){
@@ -236,18 +247,14 @@ app.use(async (ctx, next) => {
     if (pathname.startsWith('/scripts')) {
         const entryPoint = `${Deno.cwd()}${pathname}`
         try {
-            if (pathname.includes('pipes-')) {
-                // if it's a pipe script, we can skip
-            } else {
-                await esbuild.build({
-                    bundle: true,
-                    entryPoints: [entryPoint],
-                    platform: 'browser',
-                    write: true,
-                    format: 'iife',
-                    outdir: 'out/scripts',
-                })
-            }
+            await esbuild.build({
+                bundle: true,
+                entryPoints: [entryPoint],
+                platform: 'browser',
+                write: true,
+                format: 'iife',
+                outdir: 'out/scripts/client',
+            })
         } catch (e) {
             console.warn(`Nothing to build at: ${entryPoint}`)
         } finally {

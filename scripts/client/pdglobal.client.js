@@ -1,4 +1,4 @@
-import {API} from "../fe/api.js";
+import {API} from "./fe/api.js";
 
 const PD = {}
 window.pipedeps = window.pipedeps || {}
