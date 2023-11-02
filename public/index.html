@@ -156,8 +156,7 @@
                 <dialog x-ref="deletefunctiondialog">
                     <div class="btn-group">
                         <button class="btn btn-danger" @click="deleteFunction(func)">Delete From Pipe</button>
-                        <button class="btn btn-danger" @click="deleteFunction(func, true)">Delete From
-                            Everywhere</button>
+                        <button class="btn btn-danger" @click="deleteFunction(func, true)">Delete From Everywhere</button>
                     </div>
                 </dialog>
             </div>
@@ -181,7 +180,9 @@
                             code += ' '
                     },
                 }">
-                <textarea style="--max-height: 30em" x-ref="code" x-model="code"
+                <textarea
+                    style="font-size: 1em; line-height: 1.5; --max-height: 500px; caret-color: black;"
+                    x-ref="code" x-model="code"
                     class="prism-live language-javascript"></textarea>
             </div>
             <link rel="stylesheet" href="/prism.css" />

@@ -394,8 +394,8 @@
     
             for (var prop in cs) {
                 if (cs[prop] && prop in this.textarea.style && properties.test(prop)) {
-                    this.wrapper.style[prop] = cs[prop];
-                    this.textarea.style[prop] = this.pre.style[prop] = "inherit";
+                    // this.wrapper.style[prop] = cs[prop];
+                    // this.textarea.style[prop] = this.pre.style[prop] = "inherit";
                 }
             }
     
