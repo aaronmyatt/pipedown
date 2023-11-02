@@ -180,7 +180,7 @@
                     >
                         <pd-function></pd-function>
                         <div x-data="{
-                                outputVisible: true,
+                                outputVisible: $persist(true).as(`pd-pipe-function-${func.id}-output-visible`),
                             }" 
                             x-init="() => {
                                 $watch('$store.pdPipe.output', value => {

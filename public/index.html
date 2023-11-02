@@ -77,16 +77,17 @@
             addtocurrent: false,
         }">
             <div>
-                <ul class="list-group" x-data="{
-                    query: '',
-                    functions(){
-                        return $store.functions.allFunctions
-                            .filter(func => !func.archived)
-                            .filter(func => {
-                                return func.name.toLowerCase().includes(this.query.toLowerCase()) || func.description.toLowerCase().includes(this.query.toLowerCase())
-                            })
-                    }
-        }">
+                <ul class="list-group" 
+                    x-data="{
+                        query: '',
+                        functions(){
+                            return $store.functions.allFunctions
+                                .filter(func => !func.archived)
+                                .filter(func => {
+                                    return func.name.toLowerCase().includes(this.query.toLowerCase()) || func.description.toLowerCase().includes(this.query.toLowerCase())
+                                })
+                        }
+            }">
                     <div class="input-group mb-3">
                         <input type="text" class="form-control" placeholder="Search" aria-label="Search"
                             aria-describedby="button-addon2" x-model="query">
