@@ -27,3 +27,4 @@ pipe-*
 /pipes-*
 outputs/
 inputs/
+/.pd/

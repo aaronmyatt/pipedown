@@ -1,6 +1,7 @@
 import type {pdCliInput} from "./pdCli/mod.ts";
 
 import {walk} from "https://deno.land/std@0.206.0/fs/mod.ts";
+import type {WalkOptions} from "https://deno.land/std@0.206.0/fs/mod.ts";
 import * as colors from "https://deno.land/x/std/fmt/colors.ts";
 import {dirname, parse} from "https://deno.land/std@0.208.0/path/mod.ts";
 
@@ -16,7 +17,8 @@ const fileName = (path: string) => parse(path).name;
 
 async function parseMdFiles(input: pdBuildInput) {
     input.errors = input.errors || [];
-    const opts = {exts: [".md"], skip: [/node_modules/, /\.pd/], match: input.match ? [RegExp(input.match)] : []};
+    const opts: WalkOptions = {exts: [".md"], skip: [/node_modules/, /\.pd/]};
+    if(input.match) opts.match = [new RegExp(input.match)];
     for await (const entry of walk(".", opts)) {
         const markdown = await Deno.readTextFile(entry.path);
         const output = await mdToPipe({markdown});
