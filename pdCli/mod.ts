@@ -23,14 +23,15 @@ import {defaultCommand} from "./defaultCommand.ts";
 
     addEventListener("keypress", async (e) => {
         const detail = (e as CustomEvent).detail;
-        if (detail.name === "c" && detail.ctrl) {
+        if (detail.keycode.name === "c" && detail.keycode.ctrl) {
+            console.log('Exiting')
             Deno.exit();
         }
-        console.log(detail);
 
-        if (detail.name === "e") {
+        if (detail.keycode.name === "e") {
             console.log('Exporting')
         }
+        console.log(detail);
     });
 
     Deno.stdin.setRaw(true)
