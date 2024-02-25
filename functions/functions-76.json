@@ -1,1 +1,0 @@
-{"id":76,"name":"New Function","description":"","code":"for(const dir of input.dirs){\n  const dirPath = `/tmp/${dir.name}`\n  await this.$`npm install`.cwd(dirPath).text()\n  console.log(`Done: ${dirPath}`);\n}\n","archived":false,"render":false,"transform":{"prop":null},"dependency":false,"execOnServer":false,"defaultInput":{},"focus":true}

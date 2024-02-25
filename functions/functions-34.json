@@ -1,1 +1,0 @@
-{"id":34,"name":"pdPipeFunctionOrderDialog selectors","description":"","code":"input.selectorText = 'pdPipeFunctionOrderDialog'\ninput.selector = '.'+input.selectorText","archived":false,"render":false,"transform":{"prop":null},"dependency":false,"execOnServer":false}

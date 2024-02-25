@@ -1,1 +1,0 @@
-{"id":67,"name":"New Function","description":"","code":"let editor = new CodeMirror.EditorView({\n  extensions: minimalSetup,\n  parent: document.body\n})","archived":false,"render":false,"transform":{"prop":null},"dependency":false,"execOnServer":false,"defaultInput":{},"focus":true}

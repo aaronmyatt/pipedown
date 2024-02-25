@@ -1,1 +1,0 @@
-{"id":31,"name":"getPipe","description":"sets input.foundPipe","code":"input.foundPipe = await pipedeps.pdUtils.onePipe(input.pipeId || input.pipe.id)","archived":false,"render":false,"transform":{"prop":null},"dependency":false,"execOnServer":false}

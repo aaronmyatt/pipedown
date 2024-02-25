@@ -1,8 +1,0 @@
-<form class="d-flex flex-column gap-1" @input.prevent="() => $store.functions.save(func)">
-    <div class="d-flex align-items-center">
-        <span  class="badge bg-primary fs-5">FUNC: <span x-text="func.id"></span></span>
-        <input class="form-control fs-5" type="text" id="funcname" x-model="func.name">
-    </div>
-    <label for="funcdescription" class="form-label"> Description </label>
-    <textarea type="text" id="funcdescription" x-model="func.description" class="form-control">
-</form>

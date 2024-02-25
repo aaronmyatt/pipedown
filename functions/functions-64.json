@@ -1,1 +1,0 @@
-{"id":64,"name":"New Function","description":"","code":"console.log(tabbable.tabbable(document.querySelector('pd-pipe').shadowRoot.firstElementChild, {getShadowRoot: true}))","archived":false,"render":false,"transform":{"prop":null},"dependency":false,"execOnServer":false,"defaultInput":{}}

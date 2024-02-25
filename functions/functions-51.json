@@ -1,1 +1,0 @@
-{"id":51,"name":"New Function","description":"","code":"input.html = await Deno.readTextFile('./public/testwindow.html')","archived":false,"render":false,"transform":{"prop":null},"dependency":false,"execOnServer":false,"defaultInput":{}}

@@ -1,1 +1,0 @@
-{"id":88,"name":"New Function","description":"","code":"const interval = setInterval(() => {\n  if (window.toastui) input.setupEditor();\n  if (window.toastui) clearInterval(interval);\n  console.log('interval')\n}, 100);\n ","archived":false,"render":false,"transform":{"prop":""},"dependency":false,"execOnServer":false,"defaultInput":{},"focus":true}

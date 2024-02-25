@@ -1,1 +1,0 @@
-{"id":70,"name":"Dependency: deno $","description":"","code":"input.dependencies = input.dependencies || [];\ninput.dependencies.push({\"path\":\"https://deno.land/x/dax/mod.ts\",\"export\":\"$\",\"alias\":\"\",\"deptype\":\"deno\"})","archived":false,"render":false,"transform":{"prop":""},"dependency":false,"execOnServer":false,"defaultInput":{}}

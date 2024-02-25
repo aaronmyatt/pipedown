@@ -1,1 +1,0 @@
-{"id":60,"name":"New Function","description":"","code":"input.rawInputs = await pipedeps.pdUtils.readPipeInputs(input.pipe.id)\ninput.pipeInputs = Array.from(new Set(input.rawInputs.split('\\n').filter(i => (i && i !== 'null')))).map(JSON.parse)","archived":false,"render":false,"transform":{"prop":null},"dependency":false,"execOnServer":false,"defaultInput":{},"focus":true}

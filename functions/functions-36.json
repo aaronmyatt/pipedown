@@ -1,1 +1,0 @@
-{"id":36,"name":"Wrap with dialog","description":"","code":"input.html = `<dialog class=\"${input.selectorText}\">${input.html}</dialog>`","archived":true,"render":false,"transform":{"prop":""},"dependency":false,"execOnServer":false,"focus":true}

@@ -1,1 +1,0 @@
-{"id":33,"name":"writePipeUpdatedPipe","description":"expects input.updatedPipe","code":"await pipedeps.pdUtils.writePipeDataToFile(input.updatedPipe);","archived":false,"render":false,"transform":{"prop":null},"dependency":false,"execOnServer":false}

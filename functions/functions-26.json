@@ -1,1 +1,0 @@
-{"id":26,"name":"pdExistingFuncDialog selectors","description":"","code":"input.selectorText = 'pdExistingFuncDialog'\ninput.selector = '.'+input.selectorText;","archived":false,"render":false,"transform":{"prop":null},"dependency":false,"execOnServer":false}
