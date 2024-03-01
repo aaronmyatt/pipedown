@@ -59,9 +59,9 @@ Finally, we the super Dax library to run a simple (awkward af) Applescript to
 save override the current wallpaper.
 
 ```js
-import $ from "https://deno.land/x/dax/mod.ts";
+import _$ from "https://deno.land/x/dax/mod.ts";
 input.osaout =
-  await $`osascript -e 'tell application "System Events" to tell every desktop to set picture to "${input.imageFile.fullPath}"'`
+  await _$`osascript -e 'tell application "System Events" to tell every desktop to set picture to "${input.imageFile.fullPath}"'`
     .captureCombined();
 ```
 
@@ -80,7 +80,7 @@ input.osaout =
 
 ## Test Inputs
 
-```json
+```
 {
   "inputs": [{ "points": { "add": true, "amount": 1 } }]
 }
@@ -88,7 +88,7 @@ input.osaout =
 
 ## Test Inputs1
 
-```json
+```
 {
   "inputs": [{ "points": { "add": true, "amount": 100 } }]
 }
