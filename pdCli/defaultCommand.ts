@@ -20,6 +20,12 @@ export async function defaultCommand(input: pdCliInput) {
 
   }, 200);
 
+  function dispatchFileChangedEvent(input: pdCliInput){
+    const event = new CustomEvent('pdfilechanged', {detail: input})
+    dispatchEvent(event)
+  }
+  const lazyDispatchFileChanged = debounce(dispatchFileChangedEvent, 200);
+
   console.log([
     "r: run",
     "c: exit",
@@ -42,6 +48,7 @@ export async function defaultCommand(input: pdCliInput) {
       const fileName = basename(event.paths[0]);
       console.log(colors.brightGreen(`File changed: ${fileName}`));
       lazyIO({match: fileName, ...input});
+      lazyDispatchFileChanged(input);
     }
   }
 
