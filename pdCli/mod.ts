@@ -24,6 +24,15 @@ import {defaultCommand} from "./defaultCommand.ts";
     addEventListener("keypress", async (e) => {
         const detail = (e as CustomEvent).detail;
         if (detail.keycode.name === "c" && detail.keycode.ctrl) {
+            if(globalThis.processes && globalThis.processes.length > 0){ // @ts-nocheck helper to close any running process
+                for (const process of globalThis.processes) { // @ts-nocheck helper to close any running process
+                    try {
+                        process.kill();
+                    } catch (e) {
+                        console.error(e)
+                    }
+                }
+            }
             console.log('Exiting')
             Deno.exit();
         }
