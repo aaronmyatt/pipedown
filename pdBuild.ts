@@ -187,6 +187,57 @@ interface pdBuildInput extends pdCliInput {
     pipes?: Pipe[];
 }
 
+const writeCliFile = async (input: pdBuildInput) => {
+    for (const pipe of (input.pipes || [])) {
+        const cliPath = `${pipe.dir}/cli.ts`;
+        await Deno.writeTextFile(cliPath, `import pipe from "./index.ts"
+import { parse } from "https://deno.land/std@0.202.0/flags/mod.ts";
+
+const flags = parse(Deno.args);
+const output = await pipe.process({ flags })
+
+if(flags.pretty || flags.p){
+  console.log(output);
+} else {
+  console.log(JSON.stringify(output));
+}
+`)
+    }
+}
+
+const writeServerFile = async (input: pdBuildInput) => {
+    for (const pipe of (input.pipes || [])) {
+        const serverPath = `${pipe.dir}/server.ts`;
+        await Deno.writeTextFile(serverPath, `import pipe from "./index.ts"
+        globalThis.abort = new AbortController();
+        const server = Deno.serve({ signal: abort.signal },
+            async (request: Request) => {
+                let json = {};
+                try {
+                    json = await request.json();
+                } catch (e) {
+                    // console.error(e);
+                }
+                const output = await pipe.process({request, json, body: {}, responseOptions: {
+                        headers: {
+                            "content-type": "application/json"
+                        },
+                        status: 200,
+                    }
+                });
+                if(output.response){
+                    return output.response;
+                } 
+                return new Response(output.body, output.responseOptions);
+            }
+        );
+        // server.finished.then(() => console.log("Server closed"));
+        // globalThis.abort.abort();
+`)
+    }
+    return input;
+}
+
 function report(input: pdBuildInput) {
     if (input.pipes && input.pipes.length > 1) {
         console.log(
