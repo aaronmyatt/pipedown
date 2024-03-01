@@ -2,7 +2,8 @@ import {process} from "../pdPipe.ts";
 import {
     PD_DIR,
     objectEmpty,
-    colors
+    colors,
+    pdRun,
 } from "./helpers.ts";
 import {parse} from "https://deno.land/std@0.202.0/flags/mod.ts";
 import {WalkEntry} from "https://deno.land/std@0.208.0/fs/mod.ts";
@@ -14,13 +15,13 @@ import {parse as parsePath, ParsedPath} from "https://deno.land/std@0.208.0/path
 import {helpCommand} from "./helpCommand.ts";
 import {buildCommand} from "./buildCommand.ts";
 import {runCommand} from "./runCommand.ts";
+import {serveCommand} from "./serveCommand.ts";
 import {listCommand} from "./listCommand.ts";
 import {testCommand} from "./testCommand.ts";
 import {cleanCommand} from "./cleanCommand.ts";
 import {defaultCommand} from "./defaultCommand.ts";
 
 (async () => {
-
     addEventListener("keypress", async (e) => {
         const detail = (e as CustomEvent).detail;
         if (detail.keycode.name === "c" && detail.keycode.ctrl) {
@@ -65,7 +66,10 @@ async function pdInit(input: pdCliInput) {
     // read global config file, config.json, from the current directory,
     // if it exists
     const configPath = `${Deno.cwd()}/config.json`;
-    input.globalConfig = {};
+    input.globalConfig = {
+        on: {},
+        ...input.globalConfig
+    };
     try {
         const config = JSON.parse(await Deno.readTextFile(configPath));
         Object.assign(input, {globalConfig: config});
@@ -89,18 +93,28 @@ export function checkFlags(flags: string[], func: (input: pdCliInput) => Promise
     };
 }
 
-const funcs = [
-    pdInit,
-    async (input: pdCliInput) => {
-        input.projectPipes = [];
-        const opts = {exts: [".md"], skip: [/node_modules/, /\.pd/]};
-        for await (const entry of walk(".", opts)) {
-            input.projectPipes.push({
-                path: entry.path,
-                entry,
-                ...parsePath(entry.path)
-            });
-        }
+const runAsCommand = async (input: pdCliInput) => {
+    if (input.flags._.length > 0) {
+        // console.log("Running command: ", input.flags._[1]);
+        await runCommand(input);
+    } else {
+        console.error("Command not found: ", input.flags._[1]);
+    }
+    return input;
+};
+
+const gatherProjectContext = async (input: pdCliInput) => {
+    input.projectPipes = [];
+    const opts = {exts: [".md"], skip: [/node_modules/, /\.pd/]};
+    for await (const entry of walk(".", opts)) {
+        input.projectPipes.push({
+            path: entry.path,
+            entry,
+            ...parsePath(entry.path)
+        });
+    }
+}
+
 const startListeners = async (input: pdCliInput) => {
     input.globalConfig.on = input.globalConfig.on || {};
     console.log(input.globalConfig.on)
@@ -126,26 +140,29 @@ const startListeners = async (input: pdCliInput) => {
         });
     }
 }
+
+const funcs = [
+    pdInit,
+    gatherProjectContext,
+    startListeners,
+    function dispatchProcessStartEvent(input: pdCliInput){
+        const event = new CustomEvent('pdstart', {detail: input})
+        dispatchEvent(event)
     },
     checkFlags(["none"], defaultCommand),
     checkFlags(["help"], helpCommand),
     checkFlags(["build"], buildCommand),
     checkFlags(["run", "*", "*"], runCommand),
+    checkFlags(["serve", "*", "*"], serveCommand),
     checkFlags(["list"], listCommand),
     checkFlags(["test"], testCommand),
     checkFlags(["clean"], cleanCommand),
-    async (input: pdCliInput) => {
-        if (input.flags._.length > 0) {
-            const found = input.projectPipes.find(pipe => {
-                return pipe.path === input.flags._[0] || pipe.name === input.flags._[0];
-            });
-            if (found) {
-                input.flags._ = [0, ...input.flags._]
-                await runCommand(input);
-            }
-        }
-        // input.errors.push(`Command not found: ${input.flags._[0]}`);
-    },
+    checkFlags(["c", '*'], runAsCommand),
+    checkFlags(["command", '*'], runAsCommand),
+    function dispatchProcessEndEvent(input: pdCliInput){
+        const event = new CustomEvent('pdend', {detail: input})
+        dispatchEvent(event)
+    }
 ];
 
 const debugParamPresent = Deno.env.get("DEBUG") || Deno.args.includes("--debug") ||
@@ -154,16 +171,7 @@ const debugParamPresent = Deno.env.get("DEBUG") || Deno.args.includes("--debug")
 
 export type pdCliInput = {
     flags: typeof flags,
-    globalConfig: {
-        on?: {
-            filechange: string[],
-            before: string[],
-            after: string[],
-        }
-        commands?: {
-            [key: string]: string
-        }
-    },
+    globalConfig: PipeConfig,
     projectPipes: Array<{ path: string, entry: WalkEntry } & ParsedPath>,
     errors?: Array<PDError>,
     output: Input,
