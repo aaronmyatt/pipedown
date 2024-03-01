@@ -58,6 +58,14 @@ type Steps = Step[];
 
 type PipeConfig  = {
     [key: string]: unknown;
+    on?: {
+        [key: string]: Array<string|{
+            [key: string]: Input,
+        }>
+    },
+    inputs?: Array<{
+        [key: string]: Input,
+    }>
 };
 
 type Pipe = {
