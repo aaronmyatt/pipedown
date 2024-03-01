@@ -3,7 +3,7 @@ import type {pdCliInput} from "./pdCli/mod.ts";
 import {walk} from "https://deno.land/std@0.206.0/fs/mod.ts";
 import type {WalkOptions} from "https://deno.land/std@0.206.0/fs/mod.ts";
 import * as colors from "https://deno.land/x/std/fmt/colors.ts";
-import {dirname, parse} from "https://deno.land/std@0.208.0/path/mod.ts";
+import {dirname, parse, join} from "https://deno.land/std@0.208.0/path/mod.ts";
 
 import {mdToPipe} from "./mdToPipe.ts";
 import {pipeToScript} from "./pipeToScript.ts";
@@ -14,25 +14,26 @@ import {PD_PIPE_DIR} from "./pdUtils.ts";
 
 const PD_DIR = `./.pd`;
 const fileName = (path: string) => parse(path).name;
+const fileDir = (path: string) => parse(path).dir;
 
 async function parseMdFiles(input: pdBuildInput) {
     input.errors = input.errors || [];
     const opts: WalkOptions = {exts: [".md"], skip: [/node_modules/, /\.pd/]};
-    if(input.match) opts.match = [new RegExp(input.match)];
+    if (input.match) opts.match = [new RegExp(input.match)];
     for await (const entry of walk(".", opts)) {
         const markdown = await Deno.readTextFile(entry.path);
         const output = await mdToPipe({markdown});
         input = mergeErrors(input, output);
         if (output.pipe && output.pipe.steps.length > 0) {
-            output.pipe.dir = `${PD_DIR}/${fileName(entry.path)}`;
             output.pipe.fileName = fileName(entry.path);
+            output.pipe.dir = join(PD_DIR, fileDir(entry.path), output.pipe.fileName);
             output.pipe.config = output.pipe.config || {};
             output.pipe.config = deepMerge(input.globalConfig, output.pipe.config);
 
             input.pipes && input.pipes.push(output.pipe);
 
             try {
-                await Deno.mkdir(output.pipe.dir);
+                await Deno.mkdir(output.pipe.dir, {recursive: true});
             } catch (e) {
                 if (e.name !== "AlreadyExists") throw e;
             }
@@ -111,7 +112,7 @@ async function writeDenoImportMap(input: pdBuildInput) {
     for await (const entry of walk("./.pd", {exts: [".ts"]})) {
         // extract directory name from entry.path
         const dirName = dirname(entry.path).split("/").pop();
-        input.importMap.imports[`${dirName}`] = `./${dirName}/index.ts`;
+        input.importMap.imports[`${dirName}`] = `./${dirname(entry.path).replace(/\.pd\//, '')}/index.ts`;
     }
     await Deno.writeTextFile(
         `${PD_DIR}/deno.json`,
@@ -239,11 +240,9 @@ const writeServerFile = async (input: pdBuildInput) => {
 }
 
 function report(input: pdBuildInput) {
-    if (input.pipes && input.pipes.length > 1) {
-        console.log(
-            colors.brightGreen(`Markdown files processed: ${input.pipes?.length}`),
-        );
-    }
+    console.log(
+        colors.brightGreen(`Markdown files processed: ${input.pipes?.length}`),
+    );
     return input;
 }
 
@@ -260,23 +259,8 @@ export const pdBuild = async (input: pdBuildInput) => {
         writeTests,
         writeDenoImportMap,
         writeReplEvalFile,
-        async (input: pdBuildInput) => {
-            for (const pipe of (input.pipes || [])) {
-                const cliPath = `${pipe.dir}/cli.ts`;
-                await Deno.writeTextFile(cliPath, `import pipe from "./index.ts"
-import { parse } from "https://deno.land/std@0.202.0/flags/mod.ts";
-
-const flags = parse(Deno.args);
-const output = await pipe.process({ flags })
-
-if(flags.pretty || flags.p){
-  console.log(output);
-} else {
-  console.log(JSON.stringify(output));
-}
-`)
-            }
-        },
+        writeCliFile,
+        writeServerFile,
         report,
     ];
 
