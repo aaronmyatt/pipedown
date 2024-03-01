@@ -101,6 +101,31 @@ const funcs = [
                 ...parsePath(entry.path)
             });
         }
+const startListeners = async (input: pdCliInput) => {
+    input.globalConfig.on = input.globalConfig.on || {};
+    console.log(input.globalConfig.on)
+    for (const key in input.globalConfig.on) {
+        const scripts = input.globalConfig.on[key];
+        if (!Array.isArray(scripts)) {
+            throw new Error(`Expected an array of scripts for the config key: on.${key}`);
+        }
+
+        addEventListener(key, async (e) => {
+            console.log(`Running scripts for event: ${key}`);
+            await Promise.all(scripts.map(async (script: (string | {[p: string]: Input})) => {
+                console.log(`Running script: ${script}`);
+                if(typeof script === "string") {
+                    await pdRun(script, "{}");
+                }
+                else {
+                    for (const key in script) {
+                        await pdRun(key, JSON.stringify(script[key]));
+                    }
+                }
+            }));
+        });
+    }
+}
     },
     checkFlags(["none"], defaultCommand),
     checkFlags(["help"], helpCommand),
