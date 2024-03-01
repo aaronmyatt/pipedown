@@ -370,6 +370,10 @@
     "https://deno.land/x/lz4@v0.1.2/wasm.js": "b9c65605327ba273f0c76a6dc596ec534d4cda0f0225d7a94ebc606782319e46",
     "https://deno.land/x/rusty_markdown@v0.4.1/event.ts": "d77c27dca6e70837f2adcffecdb032742dd6e79cf2d56d73227f2eaa910cb6c4",
     "https://deno.land/x/rusty_markdown@v0.4.1/mod.ts": "3ed2f7b57ef13b56e4f5b650e3696778bf3ea528f748fd3876d97ade189cdab6",
-    "https://deno.land/x/rusty_markdown@v0.4.1/wasm/deno_rusty_markdown.js": "fcdbce8bd23a6c8237254f882e82fe89e04444f3abdd56bb8297ffb1f6dee6d6"
+    "https://deno.land/x/rusty_markdown@v0.4.1/wasm/deno_rusty_markdown.js": "fcdbce8bd23a6c8237254f882e82fe89e04444f3abdd56bb8297ffb1f6dee6d6",
+    "https://esm.sh/v133/@babel/helper-string-parser@7.22.5/denonext/helper-string-parser.mjs": "efa7ca885793051f9681f7644e2e3bbfc58ce9055219d428d96434dc2bf0ebc0",
+    "https://esm.sh/v133/@babel/helper-validator-identifier@7.22.20/denonext/helper-validator-identifier.mjs": "1ad312a9040d1f3b096e90a3e6a9da7ecfc99662140852fe3862a316c2591c93",
+    "https://esm.sh/v133/@babel/types@7.23.0/denonext/types.mjs": "4f4ba0a1f8c83a2e8c1b4bad197b089e96716c3f4f484ad14a75876b687c90e4",
+    "https://esm.sh/v133/to-fast-properties@2.0.0/denonext/to-fast-properties.mjs": "ffa9a6b8fb95dcdb30f51e9185b030fff6ae60e9082f1ad4946c05d7d2d2158b"
   }
 }

@@ -1,0 +1,12 @@
+{
+  "on": {
+    "pdstart": [
+      "scripts/tailwindSetup"
+    ],
+    "pdbeforerun": [
+    ],
+    "pdafterrun": [],
+    "pdend": [],
+    "pdfilechange": []
+  }
+}
