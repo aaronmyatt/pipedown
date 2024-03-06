@@ -94,9 +94,9 @@ async function writeTests(input: pdBuildInput) {
 }
 
 async function writeDenoImportMap(input: pdBuildInput) {
+    // "pdlib": `file://${Deno.cwd()}/.pd`,
     input.importMap = {
         imports: {
-            "pdlib": `file://${Deno.cwd()}/.pd`,
         },
         lint: {
             include: [
@@ -112,6 +112,8 @@ async function writeDenoImportMap(input: pdBuildInput) {
     for await (const entry of walk("./.pd", {exts: [".ts"]})) {
         // extract directory name from entry.path
         const dirName = dirname(entry.path).split("/").pop();
+        // exclude .pd directory
+        if (dirName === ".pd") continue;
         input.importMap.imports[`${dirName}`] = `./${dirname(entry.path).replace(/\.pd\//, '')}/index.ts`;
     }
     await Deno.writeTextFile(
@@ -196,11 +198,15 @@ import { parse } from "https://deno.land/std@0.202.0/flags/mod.ts";
 
 const flags = parse(Deno.args);
 const output = await pipe.process({ flags })
-
+if(output.errors){
+  console.error(output.errors)
+  Deno.exit(1);
+}
 if(flags.pretty || flags.p){
   console.log(output);
 } else {
   console.log(JSON.stringify(output));
+  Deno.exit(0);
 }
 `)
     }
@@ -211,14 +217,14 @@ const writeServerFile = async (input: pdBuildInput) => {
         const serverPath = `${pipe.dir}/server.ts`;
         await Deno.writeTextFile(serverPath, `import pipe from "./index.ts"
         globalThis.abort = new AbortController();
-        const server = Deno.serve({ signal: abort.signal },
-            async (request: Request) => {
+        const server = Deno.serve({ signal: abort.signal, handler: async (request: Request) => {
                 let json = {};
                 try {
                     json = await request.json();
                 } catch (e) {
                     // console.error(e);
                 }
+                console.log(request.url);
                 const output = await pipe.process({request, json, body: {}, responseOptions: {
                         headers: {
                             "content-type": "application/json"
@@ -226,14 +232,33 @@ const writeServerFile = async (input: pdBuildInput) => {
                         status: 200,
                     }
                 });
-                if(output.response){
-                    return output.response;
-                } 
-                return new Response(output.body, output.responseOptions);
-            }
-        );
-        // server.finished.then(() => console.log("Server closed"));
+                if(output.errors) {
+                    console.error(output.errors);
+                    return new Response(JSON.stringify(output.errors), {status: 500});
+                }
+                const response = output.response || new Response(output.body, output.responseOptions);
+                return response;
+            } });
+        server.finished.then(() => console.log("Server closed"));
         // globalThis.abort.abort();
+`)
+    }
+    return input;
+}
+
+const writeWorkerFile = async (input: pdBuildInput) => {
+    for (const pipe of (input.pipes || [])) {
+        const workerPath = `${pipe.dir}/worker.ts`;
+        await Deno.writeTextFile(workerPath, `import pipe from "./index.ts"
+addEventListener("install", async (event) => {
+    await pipe.process({event, type: {install: true}});
+})
+addEventListener("activate", async (event) => {
+    await pipe.process({event, type: {activate: true}});
+})
+addEventListener("fetch", async (event) => {
+    await pipe.process({event, type: {fetch: true}});
+});
 `)
     }
     return input;
@@ -261,6 +286,7 @@ export const pdBuild = async (input: pdBuildInput) => {
         writeReplEvalFile,
         writeCliFile,
         writeServerFile,
+        writeWorkerFile,
         report,
     ];
 
