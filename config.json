@@ -1,7 +1,6 @@
 {
   "on": {
     "pdstart": [
-      "scripts/tailwindSetup"
     ],
     "pdbeforerun": [
     ],
