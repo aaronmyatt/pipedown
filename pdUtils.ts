@@ -29,6 +29,7 @@ function funcWrapper<I extends Input>(funcs: Stage<I>[], opts: Pipe) {
       if(!pattern.test(input.request.url)){
         return input
       }
+      input.route = pattern.exec(input.request.url);
     }
 
     if (input.errors && input.errors.length > 0) {
