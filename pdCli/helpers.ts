@@ -1,5 +1,6 @@
 import {pdBuild} from "../pdBuild.ts";
 import {basename} from "https://deno.land/std@0.208.0/path/mod.ts";
+import {assert} from "https://deno.land/std@0.208.0/testing/asserts.ts";
 import {debounce} from "https://deno.land/std@0.208.0/async/debounce.ts";
 import * as colors from "https://deno.land/x/std@0.208.0/fmt/colors.ts";
 
@@ -35,26 +36,27 @@ export const lazyTest = debounce(async () => {
 }, 100);
 
 const stashProcess = (process: AsyncDisposable) => {
-    globalThis.processes = globalThis.processes || []; // @ts-nocheck helper to close any running process
-    globalThis.processes.push(process); // @ts-nocheck helper to close any running process
+    globalThis.processes = globalThis.processes || []; // @ts-expect-error helper to close any running process
+    globalThis.processes.push(process);
 }
 
 export async function pdRun(scriptName: string, testInput: string) {
     const pipeDir = `${PD_DIR}/${scriptName.replace(/\.md/, '')}`;
     const scriptPath = `${pipeDir}/cli.ts`;
-    const command = new Deno.Command(Deno.execPath(), {
+    console.log(colors.brightGreen(`Running... ${scriptName}`));
+    const command = new Deno.Command('deno', {
         args: [
             "run",
             "-A",
+            "-c",
+            ".pd/deno.json",
             scriptPath,
             testInput || "{}",
         ],
         stdout: "inherit",
         stderr: "inherit",
     });
-    const process =  command.spawn();
-    stashProcess(process);
-    await process.output();
+    command.outputSync();
 }
 
 export async function pdServe(scriptName: string, testInput: string) {
@@ -64,6 +66,8 @@ export async function pdServe(scriptName: string, testInput: string) {
         args: [
             "run",
             "-A",
+            "-c",
+            ".pd/deno.json",
             "--unstable",
             "--watch",
             scriptPath,
