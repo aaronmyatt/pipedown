@@ -7,8 +7,6 @@ import {
 } from "./helpers.ts";
 import {parse} from "https://deno.land/std@0.202.0/flags/mod.ts";
 import {WalkEntry} from "https://deno.land/std@0.208.0/fs/mod.ts";
-import {parse as keycodeParse} from "https://deno.land/x/cliffy@v1.0.0-rc.3/keycode/mod.ts";
-import {firstNotNullishOf} from "https://deno.land/std@0.208.0/collections/mod.ts";
 import {walk} from "https://deno.land/std@0.206.0/fs/mod.ts";
 import {parse as parsePath, ParsedPath} from "https://deno.land/std@0.208.0/path/mod.ts";
 
@@ -20,39 +18,6 @@ import {listCommand} from "./listCommand.ts";
 import {testCommand} from "./testCommand.ts";
 import {cleanCommand} from "./cleanCommand.ts";
 import {defaultCommand} from "./defaultCommand.ts";
-
-(async () => {
-    addEventListener("keypress", async (e) => {
-        const detail = (e as CustomEvent).detail;
-        if (detail.keycode.name === "c" && detail.keycode.ctrl) {
-            if(globalThis.processes && globalThis.processes.length > 0){ // @ts-nocheck helper to close any running process
-                for (const process of globalThis.processes) { // @ts-nocheck helper to close any running process
-                    try {
-                        process.kill();
-                    } catch (e) {
-                        console.error(e)
-                    }
-                }
-            }
-            console.log('Exiting')
-            Deno.exit();
-        }
-
-        if (detail.keycode.name === "e") {
-            console.log('Exporting')
-        }
-        console.log(detail);
-    });
-
-    Deno.stdin.setRaw(true)
-    // Deno.stdin.setRaw(true, {cbreak: true})
-    for await (const stdin of Deno.stdin.readable) {
-        const keycode = firstNotNullishOf(keycodeParse(stdin), (k => k))
-        if (keycode) {
-            dispatchEvent(new CustomEvent('keypress', {detail: {keycode}}))
-        }
-    }
-})()
 
 async function pdInit(input: pdCliInput) {
     try {
@@ -95,7 +60,6 @@ export function checkFlags(flags: string[], func: (input: pdCliInput) => Promise
 
 const runAsCommand = async (input: pdCliInput) => {
     if (input.flags._.length > 0) {
-        // console.log("Running command: ", input.flags._[1]);
         await runCommand(input);
     } else {
         console.error("Command not found: ", input.flags._[1]);
@@ -113,6 +77,7 @@ const gatherProjectContext = async (input: pdCliInput) => {
             ...parsePath(entry.path)
         });
     }
+    return input;
 }
 
 const startListeners = async (input: pdCliInput) => {
@@ -188,7 +153,6 @@ const output = await process<pdCliInput>(funcs, {
     output: {errors: []},
     debug: debugParamPresent,
 }, {});
-
 
 if (output.errors && output.errors.filter((err: PDError) => err).length > 0) {
     console.error(output);
