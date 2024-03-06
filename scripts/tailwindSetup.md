@@ -4,19 +4,21 @@
 import _$ from "https://deno.land/x/dax/mod.ts";
 import { download } from "https://deno.land/x/download/mod.ts";
 import {exists} from "https://deno.land/std@0.213.0/fs/exists.ts";
+import daisyui from "npm:daisyui"
 ```
 
 Setup Directories
 ```ts
+console.log('Setting up Tailwind CSS project');
 input.binDir = '/Users/aaronmyatt/bin'
-const publicDir = './.pd/public'
+input.publicDir = './.pd/public'
 try {
     await Deno.mkdir(input.binDir)
 } catch (err) {
     //console.log('bin exists')
 }
 try {
-    await Deno.mkdir(publicDir)
+    await Deno.mkdir(input.publicDir)
 } catch (err) {
     //console.log('public dir exists')
 }
@@ -59,7 +61,7 @@ module.exports = {
   plugins: [],
 }
 `
-const twConfigPath = './.pd/tailwind.config.js'
+const twConfigPath = input.publicDir+'/tailwind.config.js'
 const twConfigFile = await Deno.writeTextFile(twConfigPath, twConfig);
 ```
 
@@ -71,35 +73,19 @@ const twStyles = `
 @import 'tailwindcss/components';
 @import 'tailwindcss/utilities';
 `
-const twStylesPath = './.pd/public/tailwind.css'
+const twStylesPath = input.publicDir+'/tailwind.css'
 const twStylesFile = await Deno.writeTextFile(twStylesPath, twStyles);
 ```
 
-## Create Tailwind CSS HTML
-Create a new Tailwind CSS HTML file in the ./.pd directory:
-```
-const twHtml = `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link href="./tailwind.css" rel="stylesheet">
-  <title>Tailwind CSS</title>
-</head>
-<body>
-  <div class="container mx-auto">
-    <h1 class="text-4xl font-bold text-center mt-10">Hello, Tailwind CSS!</h1>
-  </div>
-</body>
-</html>
-`
-const twHtmlPath = './.pd/index.html'
-const twHtmlFile = await Deno.writeTextFile(twHtmlPath, twHtml);
+## Download DaisyUI
+```ts
+const url = 'https://cdn.jsdelivr.net/npm/daisyui@4.7.2/dist/full.min.css'
+const itdoes = await exists(input.publicDir+'/daisyui.css', {isReadable: true, isFile: true})
+!itdoes &&  await download(url, {file: 'daisyui.css', dir: input.publicDir, mode: 777});
 ```
 
 ## Run Tailwind CSS
 Run the Tailwind CSS binary to generate the styles:
 ```ts
-input.twBuild = await _$`/Users/aaronmyatt/bin/tailwindcss build ./.pd/public/tailwind.css --config="./.pd/tailwind.config.js" -o ./.pd/public/styles.css`.captureCombined();
+input.twBuild = await _$`/Users/aaronmyatt/bin/tailwindcss build ./.pd/public/tailwind.css --config="./.pd/public/tailwind.config.js" -o ./.pd/public/styles.css`.captureCombined();
 ```

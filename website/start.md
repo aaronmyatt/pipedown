@@ -4,6 +4,12 @@
 We'll get a Deno.serve `{ request }` object and
 use that to determine which page to serve.
 
+## setupCSS
+```ts
+import tw from "tailwindSetup"
+tw.process()
+```
+
 ## Serve a page
 ```ts
 import pages from 'pages';
@@ -17,60 +23,28 @@ Use Server Sent Events to reload the browser when a file changes.
 - https://deno.com/blog/deploy-streams#server-sent-events
 - route: /sse
 - ```ts
-    let _controller;
-    if (!globalThis.watchingFileSystem) {
-        (async () => {
-            const watcher = Deno.watchFs('./', { recursive: true });
-            for await (const event of watcher) {
-                console.log('file change', event, _controller);
-                const payload = "data: 1\n\n"
-                if(!_controller) continue;
-                try {
-                    _controller.enqueue(payload);
-                } catch (err) {
-                    console.log('err', err);
-                    console.log('err', _controller);
-                    globalThis.watchingFileSystem = false
-                    break;
-                }
-            }
-        })();
-        globalThis.watchingFileSystem = true;
-        console.info('watching file system');
-    }
-    const body = new ReadableStream({
-        start(controller) {
-              _controller = controller;      
-            // interval = setInterval(() => {
-            //     const payload = "data: 1\n\n"
-            //     console.log('sending', payload, controller);
-            //     controller.enqueue(payload);
-            // }, 1000);
-        },
-      cancel() {
-            // _controller = null;
-        }
-    })
-    input.response = new Response(body.pipeThrough(new TextEncoderStream()), {
-        headers: {
-            "content-type": "text/event-stream",
-            "cache-control": "no-cache",
-            //"connection": "keep-alive",
-        },
-    });
+    import triggerSSE from 'SSEOnFileChange';
+    Object.assign(input, await triggerSSE.process(input));
     ```
+
+## Serve a PD file
+- route: /pd/:path(.*)
+- ```ts
+    import pdFileServer from 'pdFileServer'
+    Object.assign(input, await pdFileServer.process(input))
+    ```
+
 
 ## publicContent
 ```ts
-import { serveFile } from "https://deno.land/std@0.217.0/http/file_server.ts";
+import { serveFile } from 'https://deno.land/std/http/file_server.ts';
 const publicDir = './.pd/public'; 
 if(Object.keys(input.body).length || input.response) return;
 const path = publicDir+(new URL(input.request.url)).pathname;
 try {
     input.response = await serveFile(input.request, path);
-    console.log({path});
 } catch (err) {
-    console.log('err', err);
+    console.log(`Couldn't serve ${path}`);
     return;
 }
 ```
