@@ -10,9 +10,9 @@ export async function runCommand(input: pdCliInput) {
   const command = commandName.get(input);
   const testInput = inputRaw.get(input) || inputParam.get(input) || "{}";
 
-  dispatchRunStartEvent(input);
-  await pdRun(command, JSON.stringify(testInput))
-  dispatchRunEndEvent(input);
+  // dispatchRunStartEvent(input);
+  await pdRun(command, testInput)
+  // dispatchRunEndEvent(input);
   return input;
 }
 
