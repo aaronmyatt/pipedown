@@ -10,7 +10,7 @@ const camelCaseString = (s: string) => {
     }).replace(/\s+/g, "");
 };
 
-const detectImports = /^import.*/gm;
+const detectImports = /import.*from.*/gm;
 const detectZod = /z\./;
 const toggleZod = (code: string) => {
     const zodImport = `import {z} from "https://deno.land/x/zod/mod.ts";`;
