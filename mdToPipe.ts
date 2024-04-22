@@ -93,7 +93,7 @@ export const mdToPipe = async (input: mdToPipeInput) => {
         step.inList = inList || false;
         return step;
       })
-        .map((step: Step) => {
+        .map((step: Step, stepIndex: number) => {
           if (step.inList) {
             // slice from start of list to start of codeblock
             const listRange = input.ranges.lists.find((listRange: number[]) => {
@@ -126,17 +126,39 @@ export const mdToPipe = async (input: mdToPipeInput) => {
               })
               .forEach((listItem: string) => {
                 step.config = step.config || {};
-                const checkWhenIf = /(?:check|when|if):/g;
-                const match = listItem.match(checkWhenIf);
-                if (match) {
-                  const check = listItem.replace(checkWhenIf, "").trim();
-                  step.config.check = step.config.check || [];
-                  step.config.check.push(check);
+                step.config.checks = step.config.checks || [];
+                step.config.routes = step.config.routes || [];
+                const pattern = /(?:check|when|if|route|stop|only):/g;
+                const match = listItem.match(pattern);
+                if (!match) {
+                  return;
                 }
-                if (listItem.startsWith("route:")) {
-                  step.config.route = listItem.replace("route:", "")
-                    .trim();
-                }
+
+                const actions: Record<string, () => void> = ({
+                  "check": () => {
+                    const check = listItem.replace('check:', '').trim()
+                    step.config.checks.push(check);
+                  },
+                  "if": () => {
+                    const check = listItem.replace('if:', '').trim()
+                    step.config.checks.push(check);
+                  },
+                  "when": () => {
+                    const check = listItem.replace('when:', '').trim()
+                    step.config.checks.push(check);
+                  },
+                  "route": () => {
+                    const check = listItem.replace('route:', '').trim()
+                    step.config.routes.push(check);
+                  },
+                  "stop": () => step.config.stop = stepIndex,
+                  "only": () => step.config.only = stepIndex,
+                })
+
+                match.forEach((match: string) => {
+                  const key = match.replace(':', '');
+                  actions[key]();
+                });
               });
           }
           return step;
