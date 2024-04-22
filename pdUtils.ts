@@ -10,11 +10,11 @@ const REMOTE_PDPIPE_PATH =
 function funcWrapper<I extends Input>(funcs: Stage<I>[], opts: Pipe) {
   opts.$p = $p;
 
-  return funcs.map((func, index: number) => async (input: I) => {
+  return funcs.map((func, index: number) => async function(input: I) {
     const funcConfig = $p.get(opts, '/steps/' + index + '/config')
 
-    if(funcConfig && funcConfig.check){
-      const checks = funcConfig.check.reduce((acc: Pipe['checks'], check: string) => {
+    if(funcConfig && funcConfig.checks){
+      const checks = funcConfig.checks.reduce((acc: Pipe['checks'], check: string) => {
         acc[check] = $p.get(input, check)
         return acc
       }, {} as Pipe['checks'])
@@ -24,12 +24,28 @@ function funcWrapper<I extends Input>(funcs: Stage<I>[], opts: Pipe) {
       }
     }
 
-    if(funcConfig && funcConfig.route && input.request){
-      const pattern = new URLPattern({ pathname: funcConfig.route });
-      if(!pattern.test(input.request.url)){
+    if(funcConfig && funcConfig.routes && input.request){
+      const route = funcConfig.routes
+      .map((route: string) => new URLPattern({ pathname: route }))
+      .findFirst((route: URLPattern) => {
+        return route.test(input.request.url);
+      })
+
+      if(!route){
         return input
       }
-      input.route = pattern.exec(input.request.url);
+
+      input.route = route.exec(input.request.url);
+    }
+
+    const only = (funcConfig && funcConfig.only) || input.only
+    if(only && only !== index){
+      return input
+    }
+
+    const stop = (funcConfig && funcConfig.stop) || input.stop
+    if(index > stop){
+      return input
     }
 
     if (input.errors && input.errors.length > 0) {
@@ -49,8 +65,20 @@ function funcWrapper<I extends Input>(funcs: Stage<I>[], opts: Pipe) {
     }
 
     return input;
-  });
+  })
+  .map((func, index) => {
+    Object.defineProperty(func, 'name', { value: `${index}-${funcs[index].name}` });
+    return func;
+  })
 }
+
+const camelCaseString = (s: string) => {
+  return s
+    .replace(/[\W_]+/g, ' ').trim()
+    .replace(/(?:^\w|[A-Z]|\b\w)/g, function (word, index) {
+      return index === 0 ? word.toLowerCase() : word.toUpperCase();
+  }).replace(/\s+/g, "");
+};
 
 // const shouldSaveOutput = (opts, func) => {
 //   if (opts.save || opts.saveOutput) {
@@ -126,7 +154,7 @@ function funcWrapper<I extends Input>(funcs: Stage<I>[], opts: Pipe) {
 //   if (key in oldOutput) {
 //     return;
 //   } else {
-//     oldOutput[key] = output;
+//     oldOutput[key] p= output;
 //     await Deno.writeTextFile(
 //       `${OUTPUT_DIR}/${name}.json`,
 //       JSON.stringify(oldOutput, null, 4),
@@ -134,4 +162,4 @@ function funcWrapper<I extends Input>(funcs: Stage<I>[], opts: Pipe) {
 //   }
 // }
 
-export { funcWrapper, PD_PIPE_DIR, REMOTE_PDPIPE_PATH};
+export { funcWrapper, PD_PIPE_DIR, REMOTE_PDPIPE_PATH, camelCaseString };
