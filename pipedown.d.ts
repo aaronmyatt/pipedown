@@ -66,10 +66,12 @@ type PipeConfig  = {
     inputs?: Array<{
         [key: string]: Input,
     }>
+    build: string[],
 };
 
 type Pipe = {
     name: string,
+    camelName: string,
     steps: Step[],
     config?: PipeConfig,
     dir: string,
