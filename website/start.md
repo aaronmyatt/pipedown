@@ -23,7 +23,7 @@ Use Server Sent Events to reload the browser when a file changes.
 - https://deno.com/blog/deploy-streams#server-sent-events
 - route: /sse
 - ```ts
-    import triggerSSE from 'SSEOnFileChange';
+    import triggerSSE from 'sseOnFileChange';
     Object.assign(input, await triggerSSE.process(input));
     ```
 

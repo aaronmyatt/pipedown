@@ -1,28 +1,51 @@
 # triggerSSEOnFileChange
 
+
+*All software is bespoke*
+```json
+{
+    "pathToRoute": {
+        "home.md": ["/home"],
+        ".css": ["/daisyui.css", "/styles.css"]
+    }
+}
+```
+
 ```ts
-    let _controller;
+let _controller;
 if (!globalThis.watchingFileSystem) {
     (async () => {
         const watcher = Deno.watchFs('./', {recursive: true});
         for await (const event of watcher) {
-            const extensions = [".ts", ".js", ".json", ".md", ".html", ".css"];
+            const path = event.paths[0];
+            // const inProtectedDir = event.paths.every((path) =>
+            //     path.match("\.pd|deno|dist|\.git|\.vscode|\.github|\.cache|\.history|\.log|\.lock|\.swp")
+            // );
             if (!_controller) continue;
-            const hasValidExtension = event.paths.every((path) =>
-                extensions.some((ext) => path.endsWith(ext))
-            );
-            if (!hasValidExtension) continue;
-
-            const payload = `data: ${event.paths[0]}\n\n`
-
-            try {
-                _controller.enqueue(payload);
-            } catch (err) {
-                console.log('err', err);
-                console.log('err', _controller);
-                globalThis.watchingFileSystem = false
-                break;
+            if(path.endsWith('.ts')){
+                console.log(path)
+                const payload = `data: reload\n\n`
+    
+                try {
+                    _controller.enqueue(payload);
+                } catch (err) {
+                    console.log('err', err);
+                    console.log('err', _controller);
+                    globalThis.watchingFileSystem = false
+                    break;
+                }
             }
+
+            
+            // const pathToRoute = $p.get(opts, '/config/pathToRoute')
+            // for(const entry of (Object.entries(pathToRoute))){
+            //     const [pattern, routes] = entry;
+
+            //     if(path.match(pattern)){
+            //         console.log(path);
+            //     }
+
+            // }
         }
     })();
     globalThis.watchingFileSystem = true;
@@ -31,11 +54,7 @@ if (!globalThis.watchingFileSystem) {
 const body = new ReadableStream({
     start(controller) {
         _controller = controller;
-        // interval = setInterval(() => {
-        //     const payload = "data: 1\n\n"
-        //     console.log('sending', payload, controller);
-        //     controller.enqueue(payload);
-        // }, 1000);
+        controller.enqueue('data: all\n\n')
     },
     cancel() {
         // _controller = null;
@@ -46,7 +65,7 @@ input.response = new Response(body.pipeThrough(new TextEncoderStream()), {
     headers: {
         "content-type": "text/event-stream",
         "cache-control": "no-cache",
-        //"connection": "keep-alive",
+        "connection": "keep-alive",
     },
 });
 ```

@@ -30,6 +30,13 @@ We need at least a path from the CLI flags or one passed in by the calling modul
 if(!$p.get(input, '/buildConfig/entryPoints') || $p.get(input, '/buildConfig/entryPoints').length === 0) throw new Error("No entry point provided")
 ```
 
+## getGlobalName
+```ts
+const entryPoint = $p.get(input, '/buildConfig/entryPoints/0')
+const pathParts = parse(entryPoint)
+input.globalName = pathParts.dir.split('/').at(-1)
+```
+
 The only important piece here is that I want to develop this pipe in such a manner that I can pass it a path as an input and have it fetch that file from the filesystem. This way I can trivially develop the pipe with pdrepl and then import it into a server context needing only to map the expected inputs.
 
 Though I remember now that esbuild will handle reading from the path, this is necessary, I suppose, so that esbuild can follow the import dependency tree, relative to that files location on the system.
@@ -49,6 +56,7 @@ Though I remember now that esbuild will handle reading from the path, this is ne
     treeShaking: true,
     // outdir: '.pd/public',
     outfile,
+    globalName: `PD.${input.globalName}`,
     plugins: [...denoPlugins({configPath: Deno.cwd()+'/.pd/deno.json'})]
   }, input.buildConfig);
 ```
