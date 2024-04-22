@@ -18,6 +18,7 @@ import {listCommand} from "./listCommand.ts";
 import {testCommand} from "./testCommand.ts";
 import {cleanCommand} from "./cleanCommand.ts";
 import {defaultCommand} from "./defaultCommand.ts";
+import { replCommand } from "./replCommand.ts";
 
 async function pdInit(input: pdCliInput) {
     try {
@@ -82,7 +83,6 @@ const gatherProjectContext = async (input: pdCliInput) => {
 
 const startListeners = async (input: pdCliInput) => {
     input.globalConfig.on = input.globalConfig.on || {};
-    console.log(input.globalConfig.on)
     for (const key in input.globalConfig.on) {
         const scripts = input.globalConfig.on[key];
         if (!Array.isArray(scripts)) {
@@ -90,7 +90,7 @@ const startListeners = async (input: pdCliInput) => {
         }
 
         addEventListener(key, async (e) => {
-            console.log(`Running scripts for event: ${key}`);
+            //console.log(`Running scripts for event: ${key}`);
             await Promise.all(scripts.map(async (script: (string | {[p: string]: Input})) => {
                 console.log(`Running script: ${script}`);
                 if(typeof script === "string") {
@@ -119,6 +119,7 @@ const funcs = [
     checkFlags(["build"], buildCommand),
     checkFlags(["run", "*", "*"], runCommand),
     checkFlags(["serve", "*", "*"], serveCommand),
+    checkFlags(["repl"], replCommand),
     checkFlags(["list"], listCommand),
     checkFlags(["test"], testCommand),
     checkFlags(["clean"], cleanCommand),
