@@ -1,4 +1,4 @@
-import {process} from "../pdPipe.ts";
+import { process } from "jsr:@pd/pdpipe@0.1.1";
 import {
     PD_DIR,
     objectEmpty,

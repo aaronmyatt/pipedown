@@ -1,6 +1,6 @@
 import { deepMerge } from "https://deno.land/std@0.208.0/collections/mod.ts";
 import { tokens } from "https://deno.land/x/rusty_markdown/mod.ts";
-import { process } from "./pdPipe.ts";
+import { process } from "jsr:@pd/pdpipe@0.1.1";
 import { rangeFinder } from "./rangeFinder.ts";
 import { mdToPipeInput, Pipe, Step, Steps } from "./pipedown.d.ts";
 

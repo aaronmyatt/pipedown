@@ -1,5 +1,5 @@
 import {Pipe, Input, Stage} from "./pipedown.d.ts";
-import {$p} from "./jsonPointers.ts";
+import {$p} from "jsr:@pd/pointers@0.1.1";
 
 const PD_PIPE_DIR = `/Users/aaronmyatt/WebstormProjects/pipedown`;
 const REMOTE_PDPIPE_PATH =

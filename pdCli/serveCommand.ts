@@ -1,6 +1,6 @@
 import type { pdCliInput } from "./mod.ts";
 import {pdServe} from "./helpers.ts";
-import {$p} from "../jsonPointers.ts";
+import {$p} from "jsr:@pd/pointers@0.1.1";
 
 const commandName = $p.compile('/flags/_/1')
 const inputRaw = $p.compile('/flags/_/2')

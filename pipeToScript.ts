@@ -1,6 +1,6 @@
 import type {PipeToScriptInput} from "./pipedown.d.ts";
-import {process} from "./pdPipe.ts";
-import {REMOTE_PDPIPE_PATH, PD_PIPE_DIR} from "./pdUtils.ts";
+import { process } from "jsr:@pd/pdpipe@0.1.1";
+import {camelCaseString} from "./pdUtils.ts";
 
 const PD_IMPORTS = [`import Pipe from "${REMOTE_PDPIPE_PATH}";`, `import {$p} from "${PD_PIPE_DIR}/jsonPointers.ts"`];
 
