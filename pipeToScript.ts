@@ -2,13 +2,7 @@ import type {PipeToScriptInput} from "./pipedown.d.ts";
 import { process } from "jsr:@pd/pdpipe@0.1.1";
 import {camelCaseString} from "./pdUtils.ts";
 
-const PD_IMPORTS = [`import Pipe from "${REMOTE_PDPIPE_PATH}";`, `import {$p} from "${PD_PIPE_DIR}/jsonPointers.ts"`];
-
-const camelCaseString = (s: string) => {
-    return s.replace(/(?:^\w|[A-Z]|\b\w)/g, function (word, index) {
-        return index === 0 ? word.toLowerCase() : word.toUpperCase();
-    }).replace(/\s+/g, "");
-};
+const PD_IMPORTS = [`import Pipe from "jsr:@pd/pdpipe@0.1.1";`, `import $p from "jsr:@pd/pointers@0.1.1";`];
 
 const detectImports = /import.*from.*/gm;
 const detectZod = /z\./;
