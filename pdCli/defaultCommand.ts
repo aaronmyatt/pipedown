@@ -1,12 +1,8 @@
 import type { pdCliInput } from "./mod.ts";
-import { debounce } from "https://deno.land/std@0.208.0/async/debounce.ts";
-import { pdBuild } from "../pdBuild.ts";
-import { reportErrors } from "./reportErrors.ts";
-import { basename } from "https://deno.land/std@0.206.0/path/basename.ts";
 import { colors } from "./helpers.ts";
-import { testCommand } from "./testCommand.ts";
 import {firstNotNullishOf} from "https://deno.land/std@0.208.0/collections/first_not_nullish_of.ts";
 import {parse as keycodeParse} from "https://deno.land/x/cliffy@v1.0.0-rc.3/keycode/key_code.ts";
+import {serve} from "./buildandserve.ts"
 
 const listenForKeypresses = async () => {
   addEventListener("keypress", async (e) => {
@@ -43,53 +39,6 @@ const listenForKeypresses = async () => {
 
 export async function defaultCommand(input: pdCliInput) {
   console.log(colors.brightGreen("Watching for changes..."));
-  await pdBuild(input);
-
-  const lazyIO = debounce(async (input: pdCliInput) => {
-    Object.assign(input, await pdBuild(input));
-    if (input.errors && input.errors.length > 0) {
-      reportErrors(input);
-    }
-    input.errors = [];
-
-  }, 200);
-
-  function dispatchFileChangedEvent(input: pdCliInput){
-    const event = new CustomEvent('pdfilechanged', {detail: input})
-    dispatchEvent(event)
-  }
-  const lazyDispatchFileChanged = debounce(dispatchFileChangedEvent, 200);
-
-  console.log([
-    "r: run",
-    "c: exit",
-    "t: test",
-    "h: help",
-    "b: build",
-    "l: lint",
-    "f: format",
-    "e: export",
-  ].join(" | "));
-
-  for await (const event of Deno.watchFs(".", { recursive: true,  })) {
-    const notInProtectedDir = event.paths.every((path) =>
-      !path.match("\.pd|deno|dist")
-    );
-
-    const extensions = [".md"];
-    const hasValidExtension = event.paths.every((path) =>
-      extensions.some((ext) => path.endsWith(ext))
-    );
-
-    if (
-      event.kind === "modify" && event.paths.length === 1 && notInProtectedDir && hasValidExtension
-    ) {
-      const fileName = basename(event.paths[0]);
-      console.log(colors.brightGreen(`File changed: ${fileName}`));
-      lazyIO({match: fileName, ...input});
-      //lazyDispatchFileChanged(input);
-    }
-  }
-
+  await serve(input)
   return input;
 }
