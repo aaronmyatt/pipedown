@@ -1,4 +1,4 @@
-import {Pipe, Input, Stage} from "./pipedown.d.ts";
+import {Pipe, type Input, type Stage} from "./pipedown.d.ts";
 import Pipeline from "./pipeline.ts";
 import { funcWrapper } from "./pdUtils.ts";
 

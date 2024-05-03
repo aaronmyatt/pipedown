@@ -1,4 +1,5 @@
 import type {pdCliInput} from "./mod.ts";
+
 export function helpCommand(input: pdCliInput) {
   console.log(`Pipedown.
 Markdown to Pipe! Literate Markdown for any usecase.

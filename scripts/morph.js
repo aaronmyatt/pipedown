@@ -1,6 +1,9 @@
+// deno-lint-ignore-file prefer-const
 
+
+// deno-lint-ignore no-unused-vars
 let resolveStep = () => {}
-
+// deno-lint-ignore no-unused-vars
 let logger = () => {}
 
 export function morph(from, toHtml, options) {
@@ -10,6 +13,7 @@ export function morph(from, toHtml, options) {
     // because it's an async function and if run twice, they would overwrite
     // each other.
 
+    // deno-lint-ignore no-unused-vars
     let fromEl
     let toEl
     let key, lookahead, updating, updated, removing, removed, adding, added
@@ -38,7 +42,7 @@ export function morph(from, toHtml, options) {
         if (shouldSkip(updating, from, to, () => updateChildrenOnly = true)) return
 
         // Initialize the server-side HTML element with Alpine...
-        if (from.nodeType === 1 && window.Alpine) {
+        if (from.nodeType === 1 && globalThis.Alpine) {
             window.Alpine.cloneNode(from, to)
         }
 
@@ -306,7 +310,7 @@ export function morph(from, toHtml, options) {
 
         // Now we can do the actual removals.
         while (removals.length) {
-            let domForRemoval = removals.shift()
+            const domForRemoval = removals.shift()
 
             domForRemoval.remove()
 
@@ -319,10 +323,10 @@ export function morph(from, toHtml, options) {
     }
 
     function keyToMap(els) {
-        let map = {}
+        const map = {}
 
-        for (let el of els) {
-            let theKey = getKey(el)
+        for (const el of els) {
+            const theKey = getKey(el)
 
             if (theKey) {
                 map[theKey] = el
@@ -334,7 +338,7 @@ export function morph(from, toHtml, options) {
 
     function addNodeBefore(parent, node, beforeMe) {
         if(! shouldSkip(adding, node)) {
-            let clone = node.cloneNode(true)
+            const clone = node.cloneNode(true)
 
             parent.insertBefore(clone, beforeMe)
 
@@ -353,7 +357,7 @@ export function morph(from, toHtml, options) {
     fromEl = from
     toEl = typeof toHtml === 'string' ? createElement(toHtml) : toHtml
 
-    if (window.Alpine && window.Alpine.closestDataStack && ! from._x_dataStack) {
+    if (globalThis.Alpine && window.Alpine.closestDataStack && ! from._x_dataStack) {
         // Just in case a part of this template uses Alpine scope from somewhere
         // higher in the DOM tree, we'll find that state and replace it on the root
         // element so everything is synced up accurately.
@@ -408,7 +412,7 @@ class Block {
     }
 
     get children() {
-        let children = [];
+        const children = [];
 
         let currentNode = this.startComment.nextSibling
 
@@ -426,15 +430,15 @@ class Block {
     }
 
     get firstChild() {
-        let first = this.startComment.nextSibling
+        const first = this.startComment.nextSibling
 
-        if (first === this.endComment) return
+        if (first === this.endComment) return null
 
         return first
     }
 
     nextNode(reference) {
-        let next = reference.nextSibling
+        const next = reference.nextSibling
 
         if (next === this.endComment) return
 
@@ -472,9 +476,9 @@ function monkeyPatchDomSetAttributeToAllowAtSymbols() {
     // Because morphdom may add attributes to elements containing "@" symbols
     // like in the case of an Alpine `@click` directive, we have to patch
     // the standard Element.setAttribute method to allow this to work.
-    let original = Element.prototype.setAttribute
+    const original = Element.prototype.setAttribute
 
-    let hostDiv = document.createElement('div')
+    const hostDiv = document.createElement('div')
 
     Element.prototype.setAttribute = function newSetAttribute(name, value) {
         if (! name.includes('@')) {
@@ -483,7 +487,7 @@ function monkeyPatchDomSetAttributeToAllowAtSymbols() {
 
         hostDiv.innerHTML = `<span ${name}="${value}"></span>`
 
-        let attr = hostDiv.firstElementChild.getAttributeNode(name)
+        const attr = hostDiv.firstElementChild.getAttributeNode(name)
 
         hostDiv.firstElementChild.removeAttributeNode(attr)
 
@@ -492,7 +496,7 @@ function monkeyPatchDomSetAttributeToAllowAtSymbols() {
 }
 
 function seedingMatchingId(to, from) {
-    let fromId = from && from._x_bindings && from._x_bindings.id
+    const fromId = from && from._x_bindings && from._x_bindings.id
 
     if (! fromId) return
 

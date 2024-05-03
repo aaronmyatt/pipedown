@@ -1,35 +1,24 @@
 import type { pdCliInput } from "./pdCli/mod.ts";
+import type { WalkOptions } from "./pipedown.d.ts";
 
-import * as esbuild from "https://deno.land/x/esbuild@v0.20.2/mod.js";
+import { esbuild, std, pd } from "./deps.ts";
 import { denoPlugins } from "jsr:@luca/esbuild-deno-loader";
-import { walk } from "https://deno.land/std@0.206.0/fs/mod.ts";
-import type { WalkOptions } from "https://deno.land/std@0.206.0/fs/mod.ts";
-import * as colors from "https://deno.land/x/std/fmt/colors.ts";
-import {
-  dirname,
-  join,
-  parse,
-} from "https://deno.land/std@0.208.0/path/mod.ts";
-import { exists } from "https://deno.land/std@0.213.0/fs/exists.ts";
-import { globToRegExp } from "https://deno.land/std@0.220.1/path/glob_to_regexp.ts";
 
 import { mdToPipe } from "./mdToPipe.ts";
 import { pipeToScript } from "./pipeToScript.ts";
-import { process } from "jsr:@pd/pdpipe@0.1.1";
 import { mergeErrors } from "./pdCli/helpers.ts";
-import { deepMerge } from "https://deno.land/std@0.208.0/collections/deep_merge.ts";
 import { camelCaseString } from "./pdUtils.ts";
 
 const PD_DIR = `./.pd`;
-const fileName = (path: string) => camelCaseString(parse(path).name);
-const fileDir = (path: string) => parse(path).dir;
+const fileName = (path: string) => camelCaseString(std.parsePath(path).name);
+const fileDir = (path: string) => std.parsePath(path).dir;
 
 const respectGitIgnore = () => {
-  const gitIgnorePath = join(Deno.cwd(), ".gitignore");
+  const gitIgnorePath = std.join(Deno.cwd(), ".gitignore");
   try {
     const gitIgnore = Deno.readTextFileSync(gitIgnorePath);
-    return gitIgnore.split("\n").map((glob) => globToRegExp(glob));
-  } catch (e) {
+    return gitIgnore.split("\n").map((glob) => std.globToRegExp(glob));
+  } catch (_e) {
     // probably no .gitignore file
     return [];
   }
@@ -49,15 +38,15 @@ async function parseMdFiles(input: pdBuildInput) {
     ].concat(respectGitIgnore()),
   };
   if (input.match) opts.match = [new RegExp(input.match)];
-  for await (const entry of walk(".", opts)) {
+  for await (const entry of std.walk(".", opts)) {
     const markdown = await Deno.readTextFile(entry.path);
     const output = await mdToPipe({ markdown });
     input = mergeErrors(input, output);
     if (output.pipe && output.pipe.steps.length > 0) {
       output.pipe.fileName = fileName(entry.path);
-      output.pipe.dir = join(PD_DIR, fileDir(entry.path), output.pipe.fileName);
+      output.pipe.dir = std.join(PD_DIR, fileDir(entry.path), output.pipe.fileName);
       output.pipe.config = output.pipe.config || {};
-      output.pipe.config = deepMerge(input.globalConfig, output.pipe.config);
+      output.pipe.config = std.deepMerge(input.globalConfig, output.pipe.config);
 
       input.pipes && input.pipes.push(output.pipe);
 
@@ -90,11 +79,11 @@ async function transformMdFiles(input: pdBuildInput) {
 async function writeTests(input: pdBuildInput) {
   for (const pipe of (input.pipes || [])) {
     const testPath = `${pipe.dir}/test.ts`;
-    if (await exists(testPath)) continue;
+    if (await std.exists(testPath)) continue;
     await Deno.writeTextFile(
       testPath,
-      `import { assertEquals } from "https://deno.land/std/testing/asserts.ts";
-    import { assertSnapshot } from "https://deno.land/std@0.208.0/testing/snapshot.ts";
+      `import {assertEquals} from "jsr:@std/assert" 
+    import { assertSnapshot } from "jsr:@std/testing/snapshot";
     import {pipe, rawPipe} from "./index.ts";
 
     Deno.test("${pipe.name}", async (t) => {
@@ -139,12 +128,12 @@ async function writeDenoImportMap(input: pdBuildInput) {
     },
   };
 
-  for await (const entry of walk("./.pd", { exts: [".ts"] })) {
+  for await (const entry of std.walk("./.pd", { exts: [".ts"] })) {
     // extract directory name from entry.path
-    const dirName = dirname(entry.path).split("/").pop();
+    const dirName = std.dirname(entry.path).split("/").pop();
     // exclude .pd directory
     if (dirName === ".pd") continue;
-    const innerPath = dirname(entry.path).replace(/\.pd\//, "");
+    const innerPath = std.dirname(entry.path).replace(/\.pd\//, "");
     input.importMap.imports[`${dirName}`] = `./${innerPath}/index.ts`;
     input.importMap.imports['/'+innerPath] = `./${innerPath}/index.ts`;
   }
@@ -228,13 +217,13 @@ async function writeReplEvalFile(input: pdBuildInput) {
 const writeCliFile = async (input: pdBuildInput) => {
   for (const pipe of (input.pipes || [])) {
     const cliPath = `${pipe.dir}/cli.ts`;
-    if (await exists(cliPath)) continue;
+    if (await std.exists(cliPath)) continue;
     await Deno.writeTextFile(
       cliPath,
       `import pipe from "./index.ts"
-import { parse } from "https://deno.land/std@0.202.0/flags/mod.ts";
+import {parseArgs} from "jsr:@std/cli@0.224.0";
 
-const flags = parse(Deno.args);
+const flags = parseArgs(Deno.args);
 const output = await pipe.process({ flags, mode: "cli" })
 if(output.errors){
   console.error(output.errors)
@@ -254,7 +243,7 @@ if(flags.pretty || flags.p){
 const writeServerFile = async (input: pdBuildInput) => {
   for (const pipe of (input.pipes || [])) {
     const serverPath = `${pipe.dir}/server.ts`;
-    if (await exists(serverPath)) continue;
+    if (await std.exists(serverPath)) continue;
     await Deno.writeTextFile(
       serverPath,
       `import pipe from "./index.ts"
@@ -288,7 +277,7 @@ server.finished.then(() => console.log("Server closed"));
 const writeWorkerFile = async (input: pdBuildInput) => {
   for (const pipe of (input.pipes || [])) {
     const workerPath = `${pipe.dir}/worker.ts`;
-    if (await exists(workerPath)) continue;
+    if (await std.exists(workerPath)) continue;
     await Deno.writeTextFile(
       workerPath,
       `import pipe from "./index.ts"
@@ -350,7 +339,7 @@ globalThis.addEventListener("message", async (event) => {
 
 async function buildIIFE(input: pdBuildInput) {
   const configPath = Deno.cwd() + "/.pd/deno.json";
-  const _denoPlugins = denoPlugins({ configPath })
+  const _denoPlugins = denoPlugins({ configPath, loader: "native" })
   const filteredPipes = input.pipes?.filter((pipe) => pipe.config?.build?.includes("iife")) || [];
   for (const pipe of filteredPipes) {
     const scriptPath = `${pipe.dir}/index.ts`;
@@ -397,7 +386,7 @@ async function buildESM(input: pdBuildInput) {
 
 function report(input: pdBuildInput) {
   console.log(
-    colors.brightGreen(`Markdown files processed: ${input.pipes?.length}`),
+    std.colors.brightGreen(`Markdown files processed: ${input.pipes?.length}`),
   );
   return input;
 }
@@ -413,6 +402,7 @@ export interface pdBuildInput extends pdCliInput {
     };
   };
   pipes?: Pipe[];
+  warning?: string[];
 }
 
 export const pdBuild = async (input: pdBuildInput) => {
@@ -435,5 +425,5 @@ export const pdBuild = async (input: pdBuildInput) => {
     report,
   ];
 
-  return await process(funcs, input, {});
+  return await pd.process(funcs, input, {});
 };

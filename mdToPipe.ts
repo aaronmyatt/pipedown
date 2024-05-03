@@ -1,8 +1,6 @@
-import { deepMerge } from "https://deno.land/std@0.208.0/collections/mod.ts";
-import { tokens } from "https://deno.land/x/rusty_markdown/mod.ts";
-import { process } from "jsr:@pd/pdpipe@0.1.1";
+import { std, pd, md } from "./deps.ts";
 import { rangeFinder } from "./rangeFinder.ts";
-import { mdToPipeInput, Pipe, Step, Steps } from "./pipedown.d.ts";
+import type { mdToPipeInput, Pipe, Step, Steps } from "./pipedown.d.ts";
 
 const camelCaseString = (input: string) => {
   return input.replace(/(?:^\w|[A-Z]|\b\w)/g, function (word, index) {
@@ -11,7 +9,7 @@ const camelCaseString = (input: string) => {
 };
 
 const parseMarkdown = (input: mdToPipeInput) => {
-  input.tokens = tokens(input.markdown);
+  input.tokens = md.tokens(input.markdown);
 };
 
 const findRanges = async (input: mdToPipeInput) => {
@@ -73,7 +71,7 @@ const mergeMetaConfig = (input: mdToPipeInput) => {
       return JSON.parse(input.tokens.at(metaBlockRange[0] + 1).content);
     },
   ).reduce((acc: PipeConfig, step: Step) => {
-    return deepMerge(acc, step);
+    return std.deepMerge(acc, step);
   }, {});
 };
 
@@ -168,7 +166,7 @@ export const mdToPipe = async (input: mdToPipeInput) => {
 
   input.pipe = input.pipe || {};
 
-  const output = await process(funcs, input, {} as Pipe);
+  const output = await pd.process(funcs, input, {} as Pipe);
   if (output.debug) {
     // keep tokens for debugging
   } else {

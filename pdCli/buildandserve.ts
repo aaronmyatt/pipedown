@@ -1,17 +1,12 @@
 import type { pdBuildInput } from "../pdBuild.ts";
-import { serveFile } from "https://deno.land/std/http/file_server.ts";
-import { walk } from "https://deno.land/std@0.208.0/fs/walk.ts";
-import { basename } from "https://deno.land/std@0.208.0/path/basename.ts";
-import { colors } from "./helpers.ts";
-import { debounce } from "https://deno.land/std@0.208.0/async/debounce.ts";
+import { std } from "../deps.ts";
 
 import { pdBuild } from "../pdBuild.ts";
 import { reportErrors } from "./reportErrors.ts";
 
-let lastScript = "";
 let _controller: ReadableStreamDefaultController<string> | null = null;
 
-const lazyIO = debounce(async (input = { errors: [] }) => {
+const lazyIO = std.debounce(async (input = { errors: [] }) => {
   Object.assign(input, await pdBuild(input));
   _controller && _controller.enqueue("data: reload\n\n");
   if (input.errors && input.errors.length > 0) {
@@ -161,8 +156,8 @@ async function watchFs(input: pdBuildInput) {
       event.kind === "modify" && event.paths.length === 1 &&
       notInProtectedDir && hasValidExtension
     ) {
-      const fileName = basename(event.paths[0]);
-      console.log(colors.brightGreen(`File changed: ${fileName}`));
+      const fileName = std.basename(event.paths[0]);
+      console.log(std.colors.brightGreen(`File changed: ${fileName}`));
       lazyIO(Object.assign(input, { match: fileName }));
     }
   }
@@ -196,8 +191,7 @@ export async function serve(input: pdBuildInput){
       const url = new URL(request.url);
       if (url.pathname.endsWith(".js")) {
         const pathname = url.pathname;
-        const response = await serveFile(request, "." + pathname);
-        lastScript = pathname;
+        const response = await std.serveFile(request, "." + pathname);
         response.headers.set("Access-Control-Allow-Origin", "*");
         response.headers.set(
           "Access-Control-Allow-Headers",
@@ -211,7 +205,7 @@ export async function serve(input: pdBuildInput){
       }
   
       const scriptsPaths = [];
-      for await (const entry of walk("./.pd")) {
+      for await (const entry of std.walk("./.pd")) {
         if (entry.path.endsWith(".js")) {
           scriptsPaths.push(entry.path);
         }

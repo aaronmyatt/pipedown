@@ -1,8 +1,8 @@
 import type { Pipe, RangeFinderInput } from "./pipedown.d.ts";
 import type {Token} from "https://deno.land/x/rusty_markdown@v0.4.1/mod.ts";
 
-import { process } from "jsr:@pd/pdpipe@0.1.1";
-import {$p} from "jsr:@pd/pointers@0.1.1";
+import { pd } from "./deps.ts";
+const { $p } = pd;
 
 const SUPPORTED_LANGUAGES = ["ts", "js", "javascript", "typescript"];
 const META_LANGUAGES = ["json", "yaml", "yml"];
@@ -99,5 +99,5 @@ const funcs = [
 ]
 
 export async function rangeFinder(input: RangeFinderInput): Promise<RangeFinderInput>{
-    return await process(funcs, input, {} as Pipe);
+    return await pd.process(funcs, input, {} as Pipe);
 }

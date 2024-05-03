@@ -4,7 +4,7 @@ async function executeScript(opts = {name:  '', id: ''}, inputs) {
     });
 
     const waitForWorker = new Promise((resolve) => {
-        pipeWorkerThread.onmessage = (event: MessageEvent) => {
+        pipeWorkerThread.onmessage = (event) => {
             resolve(event.data);
         };
     });

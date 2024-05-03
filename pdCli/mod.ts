@@ -1,14 +1,13 @@
-import { process } from "jsr:@pd/pdpipe@0.1.1";
+import type { WalkEntry } from "jsr:@std/fs@0.224.0/walk";
+import type { ParsedPath } from "jsr:@std/path@0.224.0/parse";
+
 import {
     PD_DIR,
     objectEmpty,
-    colors,
     pdRun,
 } from "./helpers.ts";
-import {parse} from "https://deno.land/std@0.202.0/flags/mod.ts";
-import {WalkEntry} from "https://deno.land/std@0.208.0/fs/mod.ts";
-import {walk} from "https://deno.land/std@0.206.0/fs/mod.ts";
-import {parse as parsePath, ParsedPath} from "https://deno.land/std@0.208.0/path/mod.ts";
+
+import {std, pd} from "../deps.ts";
 
 import {helpCommand} from "./helpCommand.ts";
 import {buildCommand} from "./buildCommand.ts";
@@ -23,8 +22,8 @@ import { replCommand } from "./replCommand.ts";
 async function pdInit(input: pdCliInput) {
     try {
         await Deno.mkdir(PD_DIR);
-        console.log(colors.brightCyan("First time here? Welcome to Pipe ↓!"));
-        console.log(colors.brightGreen("Creating ~/.pd"));
+        console.log(std.colors.brightCyan("First time here? Welcome to Pipe ↓!"));
+        console.log(std.colors.brightGreen("Creating ~/.pd"));
     } catch (e) {
         if (e.name !== "AlreadyExists") throw e;
     }
@@ -44,7 +43,7 @@ async function pdInit(input: pdCliInput) {
     }
 }
 
-export function checkFlags(flags: string[], func: (input: pdCliInput) => Promise<pdCliInput> | pdCliInput) {
+export function checkFlags(flags: string[], func: (input: pdCliInput) => Promise<pdCliInput> | pdCliInput): (input: pdCliInput) => Promise<pdCliInput> | pdCliInput {
     return (input: pdCliInput) => {
         if (input.flags._.length === 0 && flags[0] === "none") return func(input);
 
@@ -71,17 +70,17 @@ const runAsCommand = async (input: pdCliInput) => {
 const gatherProjectContext = async (input: pdCliInput) => {
     input.projectPipes = [];
     const opts = {exts: [".md"], skip: [/node_modules/, /\.pd/]};
-    for await (const entry of walk(".", opts)) {
+    for await (const entry of std.walk(".", opts)) {
         input.projectPipes.push({
             path: entry.path,
             entry,
-            ...parsePath(entry.path)
+            ...std.parsePath(entry.path)
         });
     }
     return input;
 }
 
-const startListeners = async (input: pdCliInput) => {
+const startListeners = (input: pdCliInput) => {
     input.globalConfig.on = input.globalConfig.on || {};
     for (const key in input.globalConfig.on) {
         const scripts = input.globalConfig.on[key];
@@ -89,7 +88,7 @@ const startListeners = async (input: pdCliInput) => {
             throw new Error(`Expected an array of scripts for the config key: on.${key}`);
         }
 
-        addEventListener(key, async (e) => {
+        addEventListener(key, async (_e) => {
             //console.log(`Running scripts for event: ${key}`);
             await Promise.all(scripts.map(async (script: (string | {[p: string]: Input})) => {
                 console.log(`Running script: ${script}`);
@@ -145,10 +144,15 @@ export type pdCliInput = {
     match?: string,
 }
 
-const flags = parse(Deno.args, {"--": true});
-const output = await process<pdCliInput>(funcs, {
+// @ts-ignore - this is a Deno specific API
+const flags: unknown = std.parseArgs(Deno.args, {"--": true});
+const output = await pd.process<pdCliInput>(funcs, {
     flags,
-    globalConfig: {},
+    globalConfig: {
+        on: {},
+        inputs: [],
+        build: [],
+    },
     projectPipes: [],
     errors: [],
     output: {errors: []},

@@ -1,32 +1,26 @@
 import {pdBuild} from "../pdBuild.ts";
-import {basename} from "https://deno.land/std@0.208.0/path/mod.ts";
-import {assert} from "https://deno.land/std@0.208.0/testing/asserts.ts";
-import {debounce} from "https://deno.land/std@0.208.0/async/debounce.ts";
-import * as colors from "https://deno.land/x/std@0.208.0/fmt/colors.ts";
+import {std} from "../deps.ts";
 
-export {colors};
-
-const HOME = Deno.env.get("HOME");
 export const PD_DIR = `./.pd`;
 
-export const lazyBuild = debounce(pdBuild, 100);
-const lazyRun = debounce(async (fileName) => {
-    console.log(colors.brightGreen(`Running... ${fileName}`));
-    await pdRun(basename(fileName, ".md"), "{}");
+export const lazyBuild = std.debounce(pdBuild, 100);
+export const lazyRun = std.debounce(async (fileName) => {
+    console.log(std.colors.brightGreen(`Running... ${fileName}`));
+    await pdRun(std.basename(fileName, ".md"), "{}");
 }, 100);
-export const lazyLint = debounce(async () => {
+export const lazyLint = std.debounce(async () => {
     const lint = new Deno.Command(Deno.execPath(), {
         args: ["lint", PD_DIR, "-q"],
     });
     await lint.output();
 }, 100);
-export const lazyFmt = debounce(async () => {
+export const lazyFmt = std.debounce(async () => {
     const fmt = new Deno.Command(Deno.execPath(), {
         args: ["fmt", PD_DIR, "-q"],
     });
     await fmt.output();
 }, 100);
-export const lazyTest = debounce(async () => {
+export const lazyTest = std.debounce(async () => {
     const test = new Deno.Command(Deno.execPath(), {
         args: ["test", "-A", `--config=${PD_DIR}/deno.json`, "--no-check"],
         stdout: "inherit",
@@ -35,15 +29,10 @@ export const lazyTest = debounce(async () => {
     await test.output();
 }, 100);
 
-const stashProcess = (process: AsyncDisposable) => {
-    globalThis.processes = globalThis.processes || []; // @ts-expect-error helper to close any running process
-    globalThis.processes.push(process);
-}
-
-export async function pdRun(scriptName: string, testInput: string) {
+export function pdRun(scriptName: string, testInput: string) {
     const pipeDir = `${PD_DIR}/${scriptName.replace(/\.md/, '')}`;
     const scriptPath = `${pipeDir}/cli.ts`;
-    console.log(colors.brightGreen(`Running... ${scriptName}`));
+    console.log(std.colors.brightGreen(`Running... ${scriptName}`));
     const command = new Deno.Command('deno', {
         args: [
             "run",
@@ -77,7 +66,6 @@ export async function pdServe(scriptName: string, testInput: string) {
         stderr: "inherit",
     });
     const process =  command.spawn();
-    stashProcess(process);
     await process.output();
 }
 

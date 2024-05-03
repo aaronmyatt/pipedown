@@ -2,20 +2,45 @@
   "version": "3",
   "packages": {
     "specifiers": {
+      "jsr:@cliffy/keycode@1.0.0-rc.4": "jsr:@cliffy/keycode@1.0.0-rc.4",
       "jsr:@luca/esbuild-deno-loader": "jsr:@luca/esbuild-deno-loader@0.10.3",
       "jsr:@pd/pdpipe@0.1.1": "jsr:@pd/pdpipe@0.1.1",
       "jsr:@pd/pointers": "jsr:@pd/pointers@0.1.0",
       "jsr:@pd/pointers@0.1.0": "jsr:@pd/pointers@0.1.0",
       "jsr:@pd/pointers@0.1.1": "jsr:@pd/pointers@0.1.1",
       "jsr:@std/assert@^0.213.1": "jsr:@std/assert@0.213.1",
+      "jsr:@std/assert@^0.224.0": "jsr:@std/assert@0.224.0",
+      "jsr:@std/async@0": "jsr:@std/async@0.224.0",
+      "jsr:@std/async@0.224.0": "jsr:@std/async@0.224.0",
+      "jsr:@std/async@^0.224.0": "jsr:@std/async@0.224.0",
+      "jsr:@std/cli@0.224.0": "jsr:@std/cli@0.224.0",
+      "jsr:@std/cli@^0.224.0": "jsr:@std/cli@0.224.0",
+      "jsr:@std/collections": "jsr:@std/collections@0.224.0",
+      "jsr:@std/collections@0.224.0": "jsr:@std/collections@0.224.0",
       "jsr:@std/encoding@0.213": "jsr:@std/encoding@0.213.1",
+      "jsr:@std/encoding@^0.224.0": "jsr:@std/encoding@0.224.0",
+      "jsr:@std/fmt": "jsr:@std/fmt@0.224.0",
+      "jsr:@std/fmt@0.224.0": "jsr:@std/fmt@0.224.0",
+      "jsr:@std/fmt@^0.224.0": "jsr:@std/fmt@0.224.0",
+      "jsr:@std/fs": "jsr:@std/fs@0.224.0",
+      "jsr:@std/fs@0.213.0": "jsr:@std/fs@0.213.0",
+      "jsr:@std/fs@0.224.0": "jsr:@std/fs@0.224.0",
+      "jsr:@std/http": "jsr:@std/http@0.224.0",
+      "jsr:@std/http@0.224.0": "jsr:@std/http@0.224.0",
       "jsr:@std/json@^0.213.1": "jsr:@std/json@0.213.1",
       "jsr:@std/jsonc@0.213": "jsr:@std/jsonc@0.213.1",
+      "jsr:@std/media-types@^0.224.0": "jsr:@std/media-types@0.224.0",
       "jsr:@std/path@0.213": "jsr:@std/path@0.213.1",
+      "jsr:@std/path@0.224.0": "jsr:@std/path@0.224.0",
+      "jsr:@std/path@^0.224.0": "jsr:@std/path@0.224.0",
+      "jsr:@std/streams@^0.224.0": "jsr:@std/streams@0.224.0",
       "npm:jsonpointer": "npm:jsonpointer@5.0.1",
       "npm:jsonpointer@5.0.1": "npm:jsonpointer@5.0.1"
     },
     "jsr": {
+      "@cliffy/keycode@1.0.0-rc.4": {
+        "integrity": "872ee86f6a438dc2c532408e542ee97ed19c91aedb8374c2eddc6e02e83c8ce4"
+      },
       "@luca/esbuild-deno-loader@0.10.3": {
         "integrity": "32fc93f7e7f78060234fd5929a740668aab1c742b808c6048b57f9aaea514921",
         "dependencies": [
@@ -45,8 +70,55 @@
       "@std/assert@0.213.1": {
         "integrity": "24c28178b30c8e0782c18e8e94ea72b16282207569cdd10ffb9d1d26f2edebfe"
       },
+      "@std/assert@0.224.0": {
+        "integrity": "8643233ec7aec38a940a8264a6e3eed9bfa44e7a71cc6b3c8874213ff401967f"
+      },
+      "@std/async@0.224.0": {
+        "integrity": "b6da423eeafbd0003fe88d950e069368c6a156f8b5293b7adbd9c8903a8f8d66",
+        "dependencies": [
+          "jsr:@std/assert@^0.224.0"
+        ]
+      },
+      "@std/cli@0.224.0": {
+        "integrity": "2612373d68984637bdad8b9c9dd160e9838ac2a6d463354d537d2897a7cc6d1c",
+        "dependencies": [
+          "jsr:@std/assert@^0.224.0"
+        ]
+      },
+      "@std/collections@0.224.0": {
+        "integrity": "d00201d1833c6e05371c7e9f0b178522597b1dda0b0a9ecf0c579414e1dd2770"
+      },
       "@std/encoding@0.213.1": {
         "integrity": "fcbb6928713dde941a18ca5db88ca1544d0755ec8fb20fe61e2dc8144b390c62"
+      },
+      "@std/encoding@0.224.0": {
+        "integrity": "efb6dca97d3e9c31392bd5c8cfd9f9fc9decf5a1f4d1f78af7900a493bcf89b5"
+      },
+      "@std/fmt@0.224.0": {
+        "integrity": "e20e9a2312a8b5393272c26191c0a68eda8d2c4b08b046bad1673148f1d69851"
+      },
+      "@std/fs@0.213.0": {
+        "integrity": "607ed7611e61e33179e2a6a7c60c086d6fef3b79438c403c51a336d0ca4e162d"
+      },
+      "@std/fs@0.224.0": {
+        "integrity": "52a5ec89731ac0ca8f971079339286f88c571a4d61686acf75833f03a89d8e69",
+        "dependencies": [
+          "jsr:@std/assert@^0.224.0",
+          "jsr:@std/path@^0.224.0"
+        ]
+      },
+      "@std/http@0.224.0": {
+        "integrity": "fde48c9133d1d7bb94c134d8f0f01c1a737e6e3879f52580e9ca92217a011e82",
+        "dependencies": [
+          "jsr:@std/assert@^0.224.0",
+          "jsr:@std/async@^0.224.0",
+          "jsr:@std/cli@^0.224.0",
+          "jsr:@std/encoding@^0.224.0",
+          "jsr:@std/fmt@^0.224.0",
+          "jsr:@std/media-types@^0.224.0",
+          "jsr:@std/path@^0.224.0",
+          "jsr:@std/streams@^0.224.0"
+        ]
       },
       "@std/json@0.213.1": {
         "integrity": "f572b1de605d07c4a5602445dac54bfc51b1fb87a3710a17aed2608bfca54e68"
@@ -58,11 +130,23 @@
           "jsr:@std/json@^0.213.1"
         ]
       },
+      "@std/media-types@0.224.0": {
+        "integrity": "5ac87989393f8cb1c81bee02aef6f5d4c8289b416deabc04f9ad25dff292d0b0"
+      },
       "@std/path@0.213.1": {
         "integrity": "f187bf278a172752e02fcbacf6bd78a335ed320d080a7ed3a5a59c3e88abc673",
         "dependencies": [
           "jsr:@std/assert@^0.213.1"
         ]
+      },
+      "@std/path@0.224.0": {
+        "integrity": "55bca6361e5a6d158b9380e82d4981d82d338ec587de02951e2b7c3a24910ee6",
+        "dependencies": [
+          "jsr:@std/assert@^0.224.0"
+        ]
+      },
+      "@std/streams@0.224.0": {
+        "integrity": "9c21feb45113abfc67dd536029624d1792d56dfbb029b8c1baf4ad5a2c35769e"
       }
     },
     "npm": {
@@ -74,6 +158,7 @@
   },
   "redirects": {
     "https://deno.land/std/http/file_server.ts": "https://deno.land/std@0.218.2/http/file_server.ts",
+    "https://deno.land/std@0.202.0/flags/": "https://deno.land/std@0.202.0/flags",
     "https://deno.land/x/rusty_markdown/mod.ts": "https://deno.land/x/rusty_markdown@v0.4.1/mod.ts",
     "https://deno.land/x/std/fmt/colors.ts": "https://deno.land/std@0.206.0/fmt/colors.ts",
     "https://deno.land/x/std@0.208.0/fmt/colors.ts": "https://deno.land/std@0.208.0/fmt/colors.ts",

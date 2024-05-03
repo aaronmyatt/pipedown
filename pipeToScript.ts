@@ -1,5 +1,5 @@
-import type {PipeToScriptInput} from "./pipedown.d.ts";
-import { process } from "jsr:@pd/pdpipe@0.1.1";
+import type {PipeToScriptInput, Step} from "./pipedown.d.ts";
+import { pd } from "./deps.ts";
 import {camelCaseString} from "./pdUtils.ts";
 
 const PD_IMPORTS = [`import Pipe from "jsr:@pd/pdpipe@0.1.1";`, `import $p from "jsr:@pd/pointers@0.1.1";`];
@@ -48,7 +48,7 @@ export const pipeToScript = async (input: PipeToScriptInput) => {
     };
 
     const stepsToFunctions = (input: PipeToScriptInput) => {
-        input.functions = input.pipe.steps.map((step: Step) => {
+        input.functions = input.pipe && input.pipe.steps.map((step: Step) => {
             return `async function ${step.funcName} (input, opts={$: {}, $p: {}}) {
             const {$, $p} = opts;
             ${step.code.replaceAll(detectImports, "")}
@@ -60,9 +60,9 @@ export const pipeToScript = async (input: PipeToScriptInput) => {
     const scriptTemplate = (input: PipeToScriptInput) => {
         input.script =
             `// deno-lint-ignore-file ban-unused-ignore no-unused-vars require-await
-${input.pipeImports.join("\n")}
-${input.functions.join("\n")}
-const funcSequence = [${input.pipe.steps.map((step: Step) => step.funcName).join(", ")}]
+${input.pipeImports && input.pipeImports.join("\n")}
+${input.functions && input.functions.join("\n")}
+const funcSequence = [${input.pipe && input.pipe.steps.map((step: Step) => step.funcName).join(", ")}]
 
 const rawPipe = ${JSON.stringify(input.pipe, null, 2)}
 const pipe = Pipe(funcSequence, rawPipe);
@@ -80,7 +80,7 @@ export { pipe, rawPipe }
         scriptTemplate,
     ];
 
-    const output = await process<PipeToScriptInput>(funcs, input, {});
+    const output = await pd.process<PipeToScriptInput>(funcs, input, {});
 
     if (
         Deno.env.get("DEBUG") || Deno.args.includes("--debug") ||
@@ -88,7 +88,7 @@ export { pipe, rawPipe }
         Deno.args.includes("-D")
     ) {
         if (output.errors && output.errors.length > 0) {
-            return {success: false, script: '', errors: output.errors, ...output}
+            return {success: false, script: '', ...output, errors: output.errors}
         } else {
             return {success: true, script: output.script, ...output};
         }

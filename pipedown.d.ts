@@ -1,38 +1,41 @@
-// import type {Token} from 'https://deno.land/x/rusty_markdown@v0.4.1/event.ts';
+
+export type { WalkOptions } from "https://deno.land/std@0.206.0/fs/mod.ts";
+import type {Token} from 'https://deno.land/x/rusty_markdown@v0.4.1/event.ts';
+export type { Token } from 'https://deno.land/x/rusty_markdown@v0.4.1/event.ts';
 // exclude TokenCommon<"start" | "end"> & TagCommon<SimpleTags> from Token
-type Token = {
-    tag: string,
-    type: "start" | "end" | "text",
-    content: string,
-    level: number,
-    language: string,
-} & object;
-type PDError = {
+// export type Token = {
+//     tag: string,
+//     type: "start" | "end" | "text",
+//     content: string,
+//     level: number,
+//     language: string,
+// } & object;
+export type PDError = {
     func: string,
 } & Error;
 
-type Input = {
+export type Input = {
     [key: string]: unknown;
     request?: Request;
     response?: Response;
     errors?: PDError[];
 } & object;
 
-type Stage<T> = (input: T, opts: Pipe) => Promise<T> | void;
-type Pipeline<T extends object> = {
+export type Stage<T> = (input: T, opts: Pipe) => Promise<T> | void;
+export type Pipeline<T extends object> = {
     stages: Stage<T>[],
     defaultArgs: T,
     pipe: (stage: Stage<T>) => Pipeline<T>,
     process: (args: T) => Promise<T>,
 };
-// type Pipe<T> = {
+// export type Pipe<T> = {
 //     name: string,
 //     steps: Step[],
 //     config: PipeConfig,
 //     dir: string,
 //     fileName: string,
 // };
-type mdToPipeInput = {
+export type mdToPipeInput = {
     markdown: string,
     tokens: Token[],
     headings: number[],
@@ -42,7 +45,7 @@ type mdToPipeInput = {
     pipe: Pipe,
 } & RangeFinderInput & Input;
 
-type Step =     {
+export type Step =     {
   code: string,
   range: number[],
   name: string|number,
@@ -54,9 +57,9 @@ type Step =     {
     flags?: string[],
   }
 };
-type Steps = Step[];
+export type Steps = Step[];
 
-type PipeConfig  = {
+export type PipeConfig  = {
     [key: string]: unknown;
     on?: {
         [key: string]: Array<string|{
@@ -69,7 +72,7 @@ type PipeConfig  = {
     build: string[],
 };
 
-type Pipe = {
+export type Pipe = {
     name: string,
     camelName: string,
     steps: Step[],
@@ -81,7 +84,7 @@ type Pipe = {
     },
 };
 
-type RangeFinderInput = {
+export type RangeFinderInput = {
     ranges: {
         token: Token,
         index: number,
@@ -92,9 +95,10 @@ type RangeFinderInput = {
     }
 };
 
-type PipeToScriptInput = {
-    pipe?: Pipe;
+export type PipeToScriptInput = {
+    pipe: Pipe;
     pipeImports?: string[];
     functions?: string[];
     script?: string;
+    errors: PDError[];    
 }

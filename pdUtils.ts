@@ -1,5 +1,5 @@
-import {Pipe, Input, Stage} from "./pipedown.d.ts";
-import {$p} from "jsr:@pd/pointers@0.1.1";
+import type {Pipe, Input, Stage} from "./pipedown.d.ts";
+import {pd} from "./deps.ts";
 
 const PD_PIPE_DIR = `/Users/aaronmyatt/WebstormProjects/pipedown`;
 const REMOTE_PDPIPE_PATH =
@@ -8,14 +8,14 @@ const REMOTE_PDPIPE_PATH =
 // const INPUT_DIR = `.pd/.input`;
 
 function funcWrapper<I extends Input>(funcs: Stage<I>[], opts: Pipe) {
-  opts.$p = $p;
+  opts.$p = pd.$p;
 
   return funcs.map((func, index: number) => async function(input: I) {
-    const funcConfig = $p.get(opts, '/steps/' + index + '/config')
+    const funcConfig = pd.$p.get(opts, '/steps/' + index + '/config')
 
     if(funcConfig && funcConfig.checks){
       const checks = funcConfig.checks.reduce((acc: Pipe['checks'], check: string) => {
-        acc[check] = $p.get(input, check)
+        acc[check] = pd.$p.get(input, check)
         return acc
       }, {} as Pipe['checks'])
       opts.checks = checks

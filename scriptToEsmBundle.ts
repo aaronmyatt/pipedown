@@ -1,6 +1,4 @@
-import { process } from "./pdPipe.ts";
-import * as esbuild from "https://deno.land/x/esbuild@v0.18.17/mod.js";
-//import { httpImports } from "https://deno.land/x/esbuild_plugin_http_imports/index.ts";
+import { pd, esbuild } from "./deps.ts";
 
 const RESOLVE_DIR = Deno.env.get("RESOLVE_DIR") ||
   new URL(".", import.meta.url).pathname;
@@ -42,7 +40,7 @@ export const scriptToEsmBundle = async (input: ScriptToEsmBundleInput) => {
     },
   ];
 
-  const output = await process(funcs, input, { save: false });
+  const output = await pd.process(funcs, input, { save: false });
   // if (Deno.env.get('DEBUG') || Deno.args.includes('--debug') || Deno.args.includes('-d') || Deno.args.includes('--DEBUG') || Deno.args.includes('-D')) {
   //     // keep tokens for debugging
   // } else {

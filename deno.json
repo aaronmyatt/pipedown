@@ -5,5 +5,16 @@
       ]
     },
   "tasks": {
+  },
+  "name": "@pd/pdcli",
+  "version": "0.1.0",
+  "exports": "./pdCli/mod.ts",
+  "lint": {
+    "exclude": [
+      "deps.ts",
+      "test.ts",
+      ".pd/",
+      "old/"
+    ]
   }
 }
