@@ -1,3 +1,4 @@
+import type { PDError } from "../pipedown.d.ts";
 import type {pdCliInput} from "./mod.ts";
 
 export function reportErrors(input: pdCliInput) {
@@ -12,7 +13,7 @@ export function reportErrors(input: pdCliInput) {
     console.log("");
   });
 
-  input.output && input.output.errors && input.output.errors.map((err) => {
+  input.output && input.output.errors && input.output.errors.map((err: PDError) => {
     console.error(err.stack);
     console.log("");
   });

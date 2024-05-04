@@ -1,5 +1,4 @@
-import type { pdCliInput } from "./pdCli/mod.ts";
-import type { WalkOptions } from "./pipedown.d.ts";
+import type { Input, WalkOptions, Pipe, PDError } from "./pipedown.d.ts";
 
 import { esbuild, std, pd } from "./deps.ts";
 import { denoPlugins } from "jsr:@luca/esbuild-deno-loader";
@@ -27,7 +26,7 @@ const respectGitIgnore = () => {
 async function parseMdFiles(input: pdBuildInput) {
   input.pipes = input.pipes || [];
   input.globalConfig = input.globalConfig || {};
-  input.errors = input.errors || [];
+  // input.errors = input.errors || [];
   const opts: WalkOptions = {
     exts: [".md"],
     skip: [
@@ -41,7 +40,7 @@ async function parseMdFiles(input: pdBuildInput) {
   for await (const entry of std.walk(".", opts)) {
     const markdown = await Deno.readTextFile(entry.path);
     const output = await mdToPipe({ markdown });
-    input = mergeErrors(input, output);
+    input.errors = input.errors?.concat(output.errors || [])
     if (output.pipe && output.pipe.steps.length > 0) {
       output.pipe.fileName = fileName(entry.path);
       output.pipe.dir = std.join(PD_DIR, fileDir(entry.path), output.pipe.fileName);
@@ -67,10 +66,11 @@ async function transformMdFiles(input: pdBuildInput) {
   for (const pipe of (input.pipes || [])) {
     const scriptPath = `${pipe.dir}/index.ts`;
     const output = await pipeToScript({ pipe });
-    if (output.success) {
+    if (output.success && output.script) {
       await Deno.writeTextFile(scriptPath, output.script);
     } else {
-      input = mergeErrors(input, output);
+      input.errors = input.errors || [];
+      input.errors.concat(output.errors || []);
     }
   }
   return input;
@@ -391,7 +391,7 @@ function report(input: pdBuildInput) {
   return input;
 }
 
-export interface pdBuildInput extends pdCliInput {
+export interface pdBuildInput extends Input {
   importMap?: {
     imports: {
       [key: string]: string;
@@ -403,6 +403,7 @@ export interface pdBuildInput extends pdCliInput {
   };
   pipes?: Pipe[];
   warning?: string[];
+  match?: string;
 }
 
 export const pdBuild = async (input: pdBuildInput) => {

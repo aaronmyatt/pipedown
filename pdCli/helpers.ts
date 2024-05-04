@@ -1,3 +1,4 @@
+import type {Input, PDError} from "../pipedown.d.ts";
 import {pdBuild} from "../pdBuild.ts";
 import {std} from "../deps.ts";
 
@@ -69,7 +70,10 @@ export async function pdServe(scriptName: string, testInput: string) {
     await process.output();
 }
 
-export function mergeErrors<I extends Input>(input: I, output: I) {
+interface ErrorObject {
+    errors: Array<PDError>
+}
+export function mergeErrors(input: ErrorObject, output: ErrorObject) {
     if (output.errors) {
         input.errors = input.errors || [];
         input.errors = input.errors.concat(output.errors);

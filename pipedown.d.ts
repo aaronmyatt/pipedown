@@ -15,10 +15,15 @@ export type PDError = {
 } & Error;
 
 export type Input = {
-    [key: string]: unknown;
+    // [key: string]: unknown;
+    globalConfig? : object;
     request?: Request;
     response?: Response;
     errors?: PDError[];
+
+    route?: object;
+    flags?: object;
+
 } & object;
 
 export type Stage<T> = (input: T, opts: Pipe) => Promise<T> | void;
@@ -48,13 +53,15 @@ export type mdToPipeInput = {
 export type Step =     {
   code: string,
   range: number[],
-  name: string|number,
+  name: string,
   funcName: string,
   inList: boolean,
   config?: {
-    check?: string[],
-    route?: string[],
+    checks?: string[],
+    routes?: string[],
     flags?: string[],
+    only?: number,
+    stop?: number,
   }
 };
 export type Steps = Step[];
@@ -69,7 +76,7 @@ export type PipeConfig  = {
     inputs?: Array<{
         [key: string]: Input,
     }>
-    build: string[],
+    build?: string[],
 };
 
 export type Pipe = {
@@ -100,5 +107,5 @@ export type PipeToScriptInput = {
     pipeImports?: string[];
     functions?: string[];
     script?: string;
-    errors: PDError[];    
-}
+    errors?: PDError[];    
+} & Input;

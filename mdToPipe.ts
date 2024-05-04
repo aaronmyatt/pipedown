@@ -1,6 +1,6 @@
 import { std, pd, md } from "./deps.ts";
 import { rangeFinder } from "./rangeFinder.ts";
-import type { mdToPipeInput, Pipe, Step, Steps } from "./pipedown.d.ts";
+import type { mdToPipeInput, PipeConfig, Step, Steps, Token } from "./pipedown.d.ts";
 
 const camelCaseString = (input: string) => {
   return input.replace(/(?:^\w|[A-Z]|\b\w)/g, function (word, index) {
@@ -9,11 +9,11 @@ const camelCaseString = (input: string) => {
 };
 
 const parseMarkdown = (input: mdToPipeInput) => {
-  input.tokens = md.tokens(input.markdown);
+  input.tokens = md.tokens(input.markdown || '');
 };
 
 const findRanges = async (input: mdToPipeInput) => {
-  const output = await rangeFinder({});
+  const output = await rangeFinder(input);
   input.ranges = output.ranges;
   for (const [index, token] of input.tokens.entries()) {
     input.ranges.token = token;
@@ -26,22 +26,28 @@ const findRanges = async (input: mdToPipeInput) => {
 const findPipeName = (input: mdToPipeInput) => {
   const headingRange = input.ranges.headings.find((hRange: number[]) => {
     const index = !hRange.length ? 0 : hRange[0];
-    return input.tokens.at(index)?.level === 1;
+    const level = pd.$p.get(input.tokens.at(index) || {}, '/level');
+    return level === 1;
   });
   if (!headingRange) {
     input.pipe.name = "anonymous";
   } else {
-    input.pipe.name = input.tokens.at(headingRange[0] + 1).content;
+    const block = input.tokens.at(headingRange[0] + 1) || {};
+    input.pipe.name = pd.$p.get(block, '/content') || "anonymous";
   }
   input.pipe.camelName = camelCaseString(input.pipe.name || "anonymous");
 };
 
 const findSteps = (input: mdToPipeInput) => {
-  input.pipe.steps = input.ranges.codeBlocks.map((codeBlockRange: number[]) => {
+  input.pipe.steps = input.ranges.codeBlocks.map((codeBlockRange: number[]): Step => {
+    const code = input.tokens.slice(codeBlockRange[0], codeBlockRange[1])
+        .reduce((acc: string, token: Token) => acc + (pd.$p.get(token, '/content') || ""), "")
     return {
-      code: input.tokens.slice(codeBlockRange[0], codeBlockRange[1])
-        .reduce((acc: string, token: Token) => acc + (token.content || ""), ""),
+      code,
       range: codeBlockRange,
+      name: "",
+      funcName: "",
+      inList: false,
     };
   })
     .map((step: Step, index: number, steps: Steps) => {
@@ -55,8 +61,8 @@ const findSteps = (input: mdToPipeInput) => {
         },
       );
       if (headingRange) {
-        step.name = input.tokens.at(headingRange[0] + 1).content ||
-          "anonymous" + step.range[0];
+        const block = input.tokens.at(headingRange[0] + 1) || {};
+        step.name = pd.$p.get(block, '/content') || "anonymous" + step.range[0];
       } else {
         step.name = "anonymous" + step.range[0];
       }
@@ -68,14 +74,16 @@ const findSteps = (input: mdToPipeInput) => {
 const mergeMetaConfig = (input: mdToPipeInput) => {
   input.pipe.config = input.ranges.metaBlocks.map(
     (metaBlockRange: number[]) => {
-      return JSON.parse(input.tokens.at(metaBlockRange[0] + 1).content);
+      const block = input.tokens.at(metaBlockRange[0] + 1);
+      if(!block) return {};
+      return JSON.parse(pd.$p.get(block, '/content') || "{}");
     },
   ).reduce((acc: PipeConfig, step: Step) => {
     return std.deepMerge(acc, step);
   }, {});
 };
 
-export const mdToPipe = async (input: mdToPipeInput) => {
+export const mdToPipe = async (input: object) => {
   const funcs = [
     parseMarkdown,
     findRanges,
@@ -88,7 +96,7 @@ export const mdToPipe = async (input: mdToPipeInput) => {
         const inList = input.ranges.lists.find((listRange: number[]) => {
           return listRange[0] < step.range[0] && listRange[1] > step.range[0];
         });
-        step.inList = inList || false;
+        step.inList = !!inList || false;
         return step;
       })
         .map((step: Step, stepIndex: number) => {
@@ -98,12 +106,14 @@ export const mdToPipe = async (input: mdToPipeInput) => {
               return listRange[0] < step.range[0] &&
                 listRange[1] > step.range[0];
             });
+
             // check list items preceeding codeblock for the following patterns
             // check|when|if:* - if true, add value to step config
             // route:* - if true, add value to step config
-            input.tokens.slice(listRange[0], step.range[0])
+           listRange && input.tokens.slice(listRange[0], step.range[0])
               .reduce((acc: Array<Array<Token>>, token: Token) => {
-                if (token.tag === "listItem" && token.type === "start") {
+                const tag = pd.$p.get(token, '/tag');
+                if (tag === "listItem" && token.type === "start") {
                   acc.push([]);
                 }
                 const lastList = acc.findLast((list: Array<Token>) => {
@@ -119,13 +129,10 @@ export const mdToPipe = async (input: mdToPipeInput) => {
                   return token.type === "text";
                 })
                   .reduce((acc: string, token: Token) => {
-                    return acc + token.content;
+                    return acc + pd.$p.get(token, '/content');
                   }, "");
               })
               .forEach((listItem: string) => {
-                step.config = step.config || {};
-                step.config.checks = step.config.checks || [];
-                step.config.routes = step.config.routes || [];
                 const pattern = /(?:check|when|if|route|stop|only):/g;
                 const match = listItem.match(pattern);
                 if (!match) {
@@ -135,22 +142,22 @@ export const mdToPipe = async (input: mdToPipeInput) => {
                 const actions: Record<string, () => void> = ({
                   "check": () => {
                     const check = listItem.replace('check:', '').trim()
-                    step.config.checks.push(check);
+                    pd.$p.set(step, `/config/checks/-`, check);
                   },
                   "if": () => {
                     const check = listItem.replace('if:', '').trim()
-                    step.config.checks.push(check);
+                    pd.$p.set(step, `/config/checks/-`, check);
                   },
                   "when": () => {
                     const check = listItem.replace('when:', '').trim()
-                    step.config.checks.push(check);
+                    pd.$p.set(step, `/config/checks/-`, check);
                   },
                   "route": () => {
                     const check = listItem.replace('route:', '').trim()
-                    step.config.routes.push(check);
+                    pd.$p.set(step, `/config/routes/-`, check);
                   },
-                  "stop": () => step.config.stop = stepIndex,
-                  "only": () => step.config.only = stepIndex,
+                  "stop": () => pd.$p.set(step, `/config/stop`, stepIndex),
+                  "only": () => pd.$p.set(step, `/config/only`, stepIndex),
                 })
 
                 match.forEach((match: string) => {
@@ -164,21 +171,30 @@ export const mdToPipe = async (input: mdToPipeInput) => {
     },
   ];
 
-  input.pipe = input.pipe || {};
-
-  const output = await pd.process(funcs, input, {} as Pipe);
-  if (output.debug) {
-    // keep tokens for debugging
-  } else {
-    return { pipe: output.pipe, errors: output.errors };
-  }
+  const output = await pd.process(funcs, Object.assign({}, {
+    markdown: "",
+    tokens: [],
+    headings: [],
+    codeBlocks: [],
+    steps: [],
+    pipeName: "",
+    pipe: {
+      name: "",
+      camelName: "",
+      steps: [],
+      config: {},
+      dir: "",
+      fileName: "",
+      checks: {},
+    },
+    ranges: {
+      token: {} as Token,
+      index: 0,
+      codeBlocks: [],
+      headings: [],
+      metaBlocks: [],
+      lists: [],
+    },
+  }, input), {});
   return output;
 };
-
-if (import.meta.main) {
-  const pipe = await mdToPipe({
-    markdown: await Deno.readTextFile(".pd/website/start/start.md"),
-    debug: true,
-  });
-  console.log(pipe);
-}
