@@ -14,6 +14,7 @@ import {parseArgs} from "jsr:@std/cli@0.224.0";
 
 import {parse as keycodeParse} from "jsr:@cliffy/keycode@1.0.0-rc.4";
 import { tokens } from "https://deno.land/x/rusty_markdown@v0.4.1/mod.ts";
+import { parse } from "jsr:@pd/pulldown-cmark";
 
 import { process } from "jsr:@pd/pdpipe@0.1.1";
 import {$p} from "jsr:@pd/pointers@0.1.1";
@@ -38,6 +39,7 @@ export const std = {
 };
 export const md = {
     tokens,
+    parse,
 };
 
 export const pd = {

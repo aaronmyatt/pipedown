@@ -9,7 +9,7 @@ const camelCaseString = (input: string) => {
 };
 
 const parseMarkdown = (input: mdToPipeInput) => {
-  input.tokens = md.tokens(input.markdown || '');
+  input.tokens = md.parse(input.markdown || '');
 };
 
 const findRanges = async (input: mdToPipeInput) => {

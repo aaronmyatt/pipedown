@@ -8,6 +8,7 @@
       "jsr:@pd/pointers": "jsr:@pd/pointers@0.1.0",
       "jsr:@pd/pointers@0.1.0": "jsr:@pd/pointers@0.1.0",
       "jsr:@pd/pointers@0.1.1": "jsr:@pd/pointers@0.1.1",
+      "jsr:@pd/pulldown-cmark": "jsr:@pd/pulldown-cmark@0.1.0",
       "jsr:@std/assert@^0.213.1": "jsr:@std/assert@0.213.1",
       "jsr:@std/assert@^0.224.0": "jsr:@std/assert@0.224.0",
       "jsr:@std/async@0": "jsr:@std/async@0.224.0",
@@ -66,6 +67,9 @@
         "dependencies": [
           "npm:jsonpointer@5.0.1"
         ]
+      },
+      "@pd/pulldown-cmark@0.1.0": {
+        "integrity": "c05551170f35ed5dd6193fe2904c32051ca0ababf64817cbc1429408980a9c2a"
       },
       "@std/assert@0.213.1": {
         "integrity": "24c28178b30c8e0782c18e8e94ea72b16282207569cdd10ffb9d1d26f2edebfe"
