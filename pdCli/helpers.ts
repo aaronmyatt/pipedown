@@ -1,4 +1,4 @@
-import type {Input, PDError} from "../pipedown.d.ts";
+import type {PDError} from "../pipedown.d.ts";
 import {pdBuild} from "../pdBuild.ts";
 import {std} from "../deps.ts";
 

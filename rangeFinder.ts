@@ -1,5 +1,4 @@
-import type { Pipe, RangeFinderInput } from "./pipedown.d.ts";
-import type {Token} from "https://deno.land/x/rusty_markdown@v0.4.1/mod.ts";
+import type { Pipe, RangeFinderInput, Token } from "./pipedown.d.ts";
 
 import { pd } from "./deps.ts";
 const { $p } = pd;

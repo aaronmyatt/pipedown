@@ -1,15 +1,23 @@
+export type { WalkOptions } from "jsr:@std/fs@0.224.0";
 
-export type { WalkOptions } from "https://deno.land/std@0.206.0/fs/mod.ts";
-import type {Token} from 'https://deno.land/x/rusty_markdown@v0.4.1/event.ts';
-export type { Token } from 'https://deno.land/x/rusty_markdown@v0.4.1/event.ts';
-// exclude TokenCommon<"start" | "end"> & TagCommon<SimpleTags> from Token
-// export type Token = {
-//     tag: string,
-//     type: "start" | "end" | "text",
-//     content: string,
-//     level: number,
-//     language: string,
-// } & object;
+export type Token = {
+    type: string,
+    tag: string,
+    content: string,
+    level: number,
+    kind: string,
+    fenced: boolean,
+    language: string,
+    start_number: number,
+    label: string,
+    alignments: Array<string>,
+    url: string,
+    title: string,
+    checked: boolean
+}
+
+export type Tokens = Token[];
+
 export type PDError = {
     func: string,
 } & Error;

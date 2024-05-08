@@ -1,11 +1,10 @@
-import type { Input, WalkOptions, Pipe, PDError } from "./pipedown.d.ts";
+import type { Input, WalkOptions, Pipe } from "./pipedown.d.ts";
 
 import { esbuild, std, pd } from "./deps.ts";
 import { denoPlugins } from "jsr:@luca/esbuild-deno-loader";
 
 import { mdToPipe } from "./mdToPipe.ts";
 import { pipeToScript } from "./pipeToScript.ts";
-import { mergeErrors } from "./pdCli/helpers.ts";
 import { camelCaseString } from "./pdUtils.ts";
 
 const PD_DIR = `./.pd`;

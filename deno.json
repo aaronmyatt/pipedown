@@ -1,9 +1,9 @@
 {
-    "compilerOptions": {
-      "types": [
-        "./pipedown.d.ts"
-      ]
-    },
+  "compilerOptions": {
+    "types": [
+      "./pipedown.d.ts"
+    ]
+  },
   "tasks": {
   },
   "name": "@pd/pdcli",
