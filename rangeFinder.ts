@@ -17,15 +17,17 @@ const tokenType = $p.compile('/ranges/token/type')
 const tokenLang = $p.compile('/ranges/token/language')
 const tokenIndex = $p.compile('/ranges/index')
 
-enum Tag {
+export enum Tag {
     codeBlock = "CODE_BLOCK",
     list = "LIST",
     heading = "HEADING",
+    item = "ITEM",
 }
 
-enum TokenType {
+export enum TokenType {
     start = "START",
     end = "END",
+    text = "TEXT",
 }
 
 

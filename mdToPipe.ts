@@ -1,5 +1,5 @@
 import { std, pd, md } from "./deps.ts";
-import { rangeFinder } from "./rangeFinder.ts";
+import { rangeFinder, TokenType, Tag as TokenTag, Tag } from "./rangeFinder.ts";
 import type { mdToPipeInput, PipeConfig, Step, Steps, Token } from "./pipedown.d.ts";
 
 const camelCaseString = (input: string) => {
@@ -107,26 +107,26 @@ export const mdToPipe = async (input: object) => {
                 listRange[1] > step.range[0];
             });
 
-            // check list items preceeding codeblock for the following patterns
+            // check list items preceding codeblock for the following patterns
             // check|when|if:* - if true, add value to step config
             // route:* - if true, add value to step config
            listRange && input.tokens.slice(listRange[0], step.range[0])
               .reduce((acc: Array<Array<Token>>, token: Token) => {
                 const tag = pd.$p.get(token, '/tag');
-                if (tag === "listItem" && token.type === "start") {
+                if (tag === TokenTag.item && token.type === TokenType.start) {
                   acc.push([]);
                 }
                 const lastList = acc.findLast((list: Array<Token>) => {
                   return list.length >= 0;
                 });
-                if (token.type === "text" && lastList) {
+                if (token.type === TokenType.text && lastList) {
                   lastList.push(token);
                 }
                 return acc;
               }, [])
               .map((list: Array<Token>): string => {
                 return list.filter((token: Token) => {
-                  return token.type === "text";
+                  return token.type === TokenType.text;
                 })
                   .reduce((acc: string, token: Token) => {
                     return acc + pd.$p.get(token, '/content');
