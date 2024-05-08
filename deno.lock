@@ -4,11 +4,13 @@
     "specifiers": {
       "jsr:@cliffy/keycode@1.0.0-rc.4": "jsr:@cliffy/keycode@1.0.0-rc.4",
       "jsr:@luca/esbuild-deno-loader": "jsr:@luca/esbuild-deno-loader@0.10.3",
+      "jsr:@luca/esbuild-deno-loader@0.10.3": "jsr:@luca/esbuild-deno-loader@0.10.3",
       "jsr:@pd/pdpipe@0.1.1": "jsr:@pd/pdpipe@0.1.1",
       "jsr:@pd/pointers": "jsr:@pd/pointers@0.1.0",
       "jsr:@pd/pointers@0.1.0": "jsr:@pd/pointers@0.1.0",
       "jsr:@pd/pointers@0.1.1": "jsr:@pd/pointers@0.1.1",
       "jsr:@pd/pulldown-cmark": "jsr:@pd/pulldown-cmark@0.1.0",
+      "jsr:@pd/pulldown-cmark@0.1.0": "jsr:@pd/pulldown-cmark@0.1.0",
       "jsr:@std/assert@^0.213.1": "jsr:@std/assert@0.213.1",
       "jsr:@std/assert@^0.224.0": "jsr:@std/assert@0.224.0",
       "jsr:@std/async@0": "jsr:@std/async@0.224.0",

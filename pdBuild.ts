@@ -1,7 +1,7 @@
 import type { Input, WalkOptions, Pipe } from "./pipedown.d.ts";
 
 import { esbuild, std, pd } from "./deps.ts";
-import { denoPlugins } from "jsr:@luca/esbuild-deno-loader";
+import { denoPlugins } from "jsr:@luca/esbuild-deno-loader@0.10.3";
 
 import { mdToPipe } from "./mdToPipe.ts";
 import { pipeToScript } from "./pipeToScript.ts";

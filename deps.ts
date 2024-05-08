@@ -13,7 +13,7 @@ import {firstNotNullishOf} from "jsr:@std/collections@0.224.0";
 import {parseArgs} from "jsr:@std/cli@0.224.0";
 
 import {parse as keycodeParse} from "jsr:@cliffy/keycode@1.0.0-rc.4";
-import { parse } from "jsr:@pd/pulldown-cmark";
+import { parse } from "jsr:@pd/pulldown-cmark@0.1.0";
 
 import { process } from "jsr:@pd/pdpipe@0.1.1";
 import {$p} from "jsr:@pd/pointers@0.1.1";
