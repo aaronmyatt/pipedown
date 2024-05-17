@@ -149,14 +149,10 @@ export interface pdCliInput extends Input {
 const flags: Args = std.parseArgs(Deno.args, {"--": true});
 const output = await pd.process<pdCliInput>(funcs, {
     flags,
-    globalConfig: {
-        on: {},
-        inputs: [],
-        build: [],
-    },
+    globalConfig: {} as PipeConfig,
     projectPipes: [],
     errors: [],
-    output: {errors: []},
+    output: {errors: []} as Input,
     debug: debugParamPresent,
 }, {});
 

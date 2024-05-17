@@ -4,7 +4,7 @@ import { mdToPipe } from "./mdToPipe.ts";
 import { pipeToScript } from "./pipeToScript.ts";
 import { camelCaseString } from "./pdUtils.ts";
 import * as templates from "./stringTemplates.ts";
-import type { Input, WalkOptions, Pipe } from "./pipedown.d.ts";  
+import type { Input, WalkOptions, Pipe, PipeConfig } from "./pipedown.d.ts";  
 
 const PD_DIR = `./.pd`;
 const fileName = (path: string) => camelCaseString(std.parsePath(path).name);
@@ -23,7 +23,6 @@ const respectGitIgnore = () => {
 
 async function parseMdFiles(input: pdBuildInput) {
   input.pipes = input.pipes || [];
-  input.globalConfig = input.globalConfig || {};
   // input.errors = input.errors || [];
   const opts: WalkOptions = {
     exts: [".md"],
@@ -32,7 +31,10 @@ async function parseMdFiles(input: pdBuildInput) {
       /\.pd/,
       /^readme\.md\/*$/,
       /^README\.md\/*$/,
-    ].concat(respectGitIgnore()),
+    ]
+    .concat(respectGitIgnore())
+    .concat((input.globalConfig.skip || []).map((glob) => std.globToRegExp(glob)))
+    .concat((input.globalConfig.exclude || []).map((glob) => std.globToRegExp(glob)))
   };
   if (input.match) opts.match = [new RegExp(input.match)];
   for await (const entry of std.walk(".", opts)) {
@@ -42,8 +44,7 @@ async function parseMdFiles(input: pdBuildInput) {
     if (output.pipe && output.pipe.steps.length > 0) {
       output.pipe.fileName = fileName(entry.path);
       output.pipe.dir = std.join(PD_DIR, fileDir(entry.path), output.pipe.fileName);
-      output.pipe.config = output.pipe.config || {};
-      output.pipe.config = std.deepMerge(input.globalConfig, output.pipe.config);
+      output.pipe.config = std.deepMerge(input.globalConfig, output.pipe.config || {});
 
       input.pipes && input.pipes.push(output.pipe);
 
@@ -219,6 +220,7 @@ export interface pdBuildInput extends Input {
   pipes?: Pipe[];
   warning?: string[];
   match?: string;
+  globalConfig: PipeConfig;
 }
 
 export const pdBuild = async (input: pdBuildInput) => {

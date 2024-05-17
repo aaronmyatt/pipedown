@@ -23,8 +23,7 @@ export type PDError = {
 } & Error;
 
 export type Input = {
-    // [key: string]: unknown;
-    globalConfig? : object;
+    globalConfig?: PipeConfig;
     request?: Request;
     response?: Response;
     errors?: PDError[];
@@ -85,6 +84,8 @@ export type PipeConfig  = {
         [key: string]: Input,
     }>
     build?: string[],
+    skip: string[],
+    exclude: string[],
 };
 
 export type Pipe = {
@@ -115,5 +116,5 @@ export type PipeToScriptInput = {
     pipeImports?: string[];
     functions?: string[];
     script?: string;
-    errors?: PDError[];    
+    errors?: PDError[];
 } & Input;

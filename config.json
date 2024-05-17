@@ -1,3 +1,6 @@
 {
-    "inGlobal": true
+    "inGlobal": true,
+    "exclude": [
+        "test/envTest.md"
+    ]
 }

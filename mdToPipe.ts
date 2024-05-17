@@ -182,10 +182,16 @@ export const mdToPipe = async (input: object) => {
       name: "",
       camelName: "",
       steps: [],
-      config: {},
       dir: "",
       fileName: "",
       checks: {},
+      config: {
+        on: {},
+        inputs: [],
+        build: [],
+        skip: [],
+        exclude: [],
+      },
     },
     ranges: {
       token: {} as Token,
