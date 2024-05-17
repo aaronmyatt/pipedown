@@ -2,23 +2,12 @@ import type {PipeToScriptInput, Step} from "./pipedown.d.ts";
 import { pd } from "./deps.ts";
 import {camelCaseString} from "./pdUtils.ts";
 
-const PD_IMPORTS = [`import Pipe from "jsr:@pd/pdpipe@0.1.1";`, `import $p from "jsr:@pd/pointers@0.1.1";`];
-
 const detectImports = /import.*from.*/gm;
-const detectZod = /z\./;
-const toggleZod = (code: string) => {
-    const zodImport = `import {z} from "https://deno.land/x/zod/mod.ts";`;
-    if (code.match(detectZod) && !PD_IMPORTS.includes(zodImport)) {
-        PD_IMPORTS.push(zodImport);
-    }
-    return code;
-};
 
 export const pipeToScript = async (input: PipeToScriptInput) => {
     const extractImportsFromSteps = (input: PipeToScriptInput) => {
         const pipeImports: string[] = input.pipe.steps.reduce((acc: string[], step: Step) => {
             const stepImports = step.code.matchAll(detectImports);
-            toggleZod(step.code);
             if (stepImports) {
                 for (const match of stepImports) {
                     acc.push(match[0]);
@@ -30,7 +19,7 @@ export const pipeToScript = async (input: PipeToScriptInput) => {
                 return !importStatement.startsWith("//");
             });
 
-        input.pipeImports = [...PD_IMPORTS, ...pipeImports];
+        input.pipeImports = pipeImports;
         return input;
     };
 
@@ -59,6 +48,8 @@ export const pipeToScript = async (input: PipeToScriptInput) => {
     const scriptTemplate = (input: PipeToScriptInput) => {
         input.script =
             `// deno-lint-ignore-file ban-unused-ignore no-unused-vars require-await
+import Pipe from "jsr:@pd/pdpipe@0.1.1";
+import $p from "jsr:@pd/pointers@0.1.1";
 ${input.pipeImports && input.pipeImports.join("\n")}
 ${input.functions && input.functions.join("\n")}
 const funcSequence = [${input.pipe && input.pipe.steps.map((step: Step) => step.funcName).join(", ")}]
