@@ -1,11 +1,10 @@
-import type { Input, WalkOptions, Pipe } from "./pipedown.d.ts";
-
 import { esbuild, std, pd } from "./deps.ts";
 import { denoPlugins } from "jsr:@luca/esbuild-deno-loader@0.10.3";
-
 import { mdToPipe } from "./mdToPipe.ts";
 import { pipeToScript } from "./pipeToScript.ts";
 import { camelCaseString } from "./pdUtils.ts";
+import * as templates from "./stringTemplates.ts";
+import type { Input, WalkOptions, Pipe } from "./pipedown.d.ts";  
 
 const PD_DIR = `./.pd`;
 const fileName = (path: string) => camelCaseString(std.parsePath(path).name);
@@ -81,32 +80,7 @@ async function writeTests(input: pdBuildInput) {
     if (await std.exists(testPath)) continue;
     await Deno.writeTextFile(
       testPath,
-      `import {assertEquals} from "jsr:@std/assert" 
-    import { assertSnapshot } from "jsr:@std/testing/snapshot";
-    import {pipe, rawPipe} from "./index.ts";
-
-    Deno.test("${pipe.name}", async (t) => {
-      rawPipe.config = rawPipe.config || {};
-      rawPipe.config.inputs = rawPipe.config.inputs || [];
-      
-      for(const pipeInput of rawPipe.config.inputs) {
-        const testName = pipeInput?._name || JSON.stringify(pipeInput)
-        pipeInput.mode = 'test';
-        await t.step({
-          name: testName,
-          fn: async () => {
-            pipeInput.test = true;
-            const output = await pipe.process(pipeInput);
-            try {
-              await assertSnapshot(t, output, {name: testName});
-            } catch (e) {
-              console.log(output);
-              throw e;
-            }
-          }
-        })
-      }
-    });`,
+      templates.denoTestFileTemplate(pipe.name),
     );
   }
   return input;
@@ -128,9 +102,7 @@ async function writeDenoImportMap(input: pdBuildInput) {
   };
 
   for await (const entry of std.walk("./.pd", { exts: [".ts"] })) {
-    // extract directory name from entry.path
     const dirName = std.dirname(entry.path).split("/").pop();
-    // exclude .pd directory
     if (dirName === ".pd") continue;
     const innerPath = std.dirname(entry.path).replace(/\.pd\//, "");
     input.importMap.imports[`${dirName}`] = `./${innerPath}/index.ts`;
@@ -147,95 +119,18 @@ async function writeReplEvalFile(input: pdBuildInput) {
   const replEvalPath = `${PD_DIR}/replEval.ts`;
 
   // assumes deno repl is run from .pd directory
-  const imports = 
+  const importNames = 
     (input.importMap ? Object.keys(input.importMap.imports) : [])
     .filter((key) => !key.includes('/'));
-  const pipeImports = imports
-    .map((key) => {
-      return `import ${key} from "${key}";`;
-    });
 
-  const evalContent = `${pipeImports.join("\n")}
-  import $p from "jsr:@pd/pointers@0.1.1";
-
-  function test(pipe, { exclude = [], test = true } = {}) {
-    pipe.json.config.inputs.forEach(i => {
-      const match = exclude.map(path => $p.get(i, path)).some(Boolean)
-      if(match) return;
-
-      i.test = test;
-      pipe.process(i).then(output => {
-        console.log('Input:: '+JSON.stringify(i))
-        output.errors && output.errors.map(e => console.error(e.message))
-        output.data && console.info(output.data)
-        console.log('')
-      })
-    })
-  }
-
-  async function step(pipe, { exclude = [], test = true } = {}) {
-    const wTestMode = pipe.json.config.inputs.map(i => { i.test = test; return i })
-    const inputIterable = wTestMode[Symbol.iterator]();
-    let notDone = true; 
-    let continueLoop = true; 
-    while(notDone && continueLoop) {
-      const { value, done } = inputIterable.next();
-      if(done) notDone = false;
-      if(notDone) {
-        const match = exclude.map(path => $p.get(value, path)).some(Boolean)
-        if(match) continue;
-        const output = await pipe.process(value)
-        console.log('Input:: ' + JSON.stringify(value))
-        continueLoop = confirm('Press Enter to continue');
-        output.errors && output.errors.map(e => console.error(e.message))
-        console.info(output)
-        console.log('')
-      }
-    }
-  }
-
-  ${
-    imports.map((key) =>
-      `const test${
-        key[0].toUpperCase() + key.substring(1)
-      } = () => test(${key});`
-    ).join("\n")
-  }
-  ${
-    imports.map((key) =>
-      `const step${
-        key[0].toUpperCase() + key.substring(1)
-      } = () => step(${key});`
-    ).join("\n")
-  }
-  `;
-
-  await Deno.writeTextFile(replEvalPath, evalContent);
+  await Deno.writeTextFile(replEvalPath, templates.denoReplEvalTemplate(importNames));
 }
 
 const writeCliFile = async (input: pdBuildInput) => {
   for (const pipe of (input.pipes || [])) {
     const cliPath = `${pipe.dir}/cli.ts`;
     if (await std.exists(cliPath)) continue;
-    await Deno.writeTextFile(
-      cliPath,
-      `import pipe from "./index.ts"
-import {parseArgs} from "jsr:@std/cli@0.224.0";
-
-const flags = parseArgs(Deno.args);
-const output = await pipe.process({ flags, mode: "cli" })
-if(output.errors){
-  console.error(output.errors)
-  Deno.exit(1);
-}
-if(flags.pretty || flags.p){
-  console.log(output);
-} else {
-  console.log(JSON.stringify(output));
-  Deno.exit(0);
-}
-`,
-    );
+    await Deno.writeTextFile(cliPath, templates.pdCliTemplate());
   }
 };
 
@@ -243,32 +138,7 @@ const writeServerFile = async (input: pdBuildInput) => {
   for (const pipe of (input.pipes || [])) {
     const serverPath = `${pipe.dir}/server.ts`;
     if (await std.exists(serverPath)) continue;
-    await Deno.writeTextFile(
-      serverPath,
-      `import pipe from "./index.ts"
-const server = Deno.serve({ handler: async (request: Request) => {
-        console.log(request.url);
-        const output = await pipe.process({request, body: {}, responseOptions: {
-                headers: {
-                    "content-type": "application/json"
-                },
-                status: 200,
-            },
-            mode: "server"
-        });
-        if(output.errors) {
-            console.error(output.errors);
-            return new Response(JSON.stringify(output.errors), {status: 500});
-        }
-        if(output.responseOptions.headers['content-type'] === 'application/json' && typeof output.body === 'object') {
-            output.body = JSON.stringify(output.body);
-        }
-        const response = output.response || new Response(output.body, output.responseOptions);
-        return response;
-    } });
-server.finished.then(() => console.log("Server closed"));
-`,
-    );
+    await Deno.writeTextFile(serverPath, templates.pdServerTemplate());
   }
   return input;
 };
@@ -277,61 +147,7 @@ const writeWorkerFile = async (input: pdBuildInput) => {
   for (const pipe of (input.pipes || [])) {
     const workerPath = `${pipe.dir}/worker.ts`;
     if (await std.exists(workerPath)) continue;
-    await Deno.writeTextFile(
-      workerPath,
-      `import pipe from "./index.ts"
-globalThis.addEventListener("install", async (event) => {
-    event.waitUntil(pipe.process({event, mode: 'worker', type: {install: true}}));
-})
-globalThis.addEventListener("activate", async (event) => {
-    event.waitUntil(pipe.process({event, mode: 'worker', type: {activate: true}}));
-})
-globalThis.addEventListener("fetch", async (event) => {
-    const detectCacheExceptions = [
-        event.request.headers.get("connection"),
-        event.request.headers.get('content-type'),
-        event.request.headers.get('accept')
-    ];
-    const skipCache = detectCacheExceptions.filter(Boolean)
-        .some(header => {
-            return ['upgrade', 'text/event-stream'].includes(header.toLowerCase())
-        })
-    if(skipCache) return;
-    
-
-    event.respondWith((async () => {
-        const output = await pipe.process({
-            event, 
-            type: {fetch: true},
-            request: event.request,
-            body: {},
-            responseOptions: {
-                headers: {
-                    "content-type": "application/json"
-                },
-                status: 200,
-            }
-        })
-        if(output.errors) {
-            console.error(output.errors);
-            return new Response(JSON.stringify(output.errors), {status: 500});
-        }
-        const response = output.response || new Response(output.body, output.responseOptions);
-        return response;
-    })());
-})
-
-globalThis.addEventListener("message", async (event) => {
-    const output = await pipe.process({event, mode: 'worker', type: {message: true}});
-    if(output.errors) {
-        console.error(output.errors);
-        return;
-    }
-    if(output.data) {
-        console.log(output.data);
-    }
-});`,
-    );
+    await Deno.writeTextFile( workerPath, templates.pdWorkerTemplate());
   }
   return input;
 };
