@@ -39,9 +39,9 @@ export const pipeToScript = async (input: PipeToScriptInput) => {
     const stepsToFunctions = (input: PipeToScriptInput) => {
         input.functions = input.pipe && input.pipe.steps.map((step: Step) => {
             return `async function ${step.funcName} (input, opts) {
-            ${step.code.replaceAll(detectImports, "")}
-        }`;
-        });
+    ${step.code.replaceAll(detectImports, "")}
+}`;
+});
         return input;
     };
 
@@ -51,11 +51,12 @@ export const pipeToScript = async (input: PipeToScriptInput) => {
 import Pipe from "jsr:@pd/pdpipe@0.1.1";
 import $p from "jsr:@pd/pointers@0.1.1";
 import "jsr:@std/dotenv/load";
+import rawPipe from "./${input.pipe.camelName}.json" with {type: "json"};
 ${input.pipeImports && input.pipeImports.join("\n")}
-${input.functions && input.functions.join("\n")}
-const funcSequence = [${input.pipe && input.pipe.steps.map((step: Step) => step.funcName).join(", ")}]
 
-const rawPipe = ${JSON.stringify(input.pipe, null, 2)}
+${input.functions && input.functions.join("\n")}
+
+const funcSequence = [${input.pipe && input.pipe.steps.map((step: Step) => step.funcName).join(", ")}]
 const pipe = Pipe(funcSequence, rawPipe);
 pipe.json = rawPipe;
 export default pipe;
