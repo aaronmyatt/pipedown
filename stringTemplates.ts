@@ -103,28 +103,48 @@ if(flags.pretty || flags.p){
 `;
 
 export const pdServerTemplate = () => `import pipe from "./index.ts"
-const server = Deno.serve({ handler: async (request: Request) => {
-        console.log(request.url);
-        const output = await pipe.process({request, body: {}, responseOptions: {
-                headers: {
-                    "content-type": "application/json"
-                },
-                status: 200,
-            },
-            mode: "server"
-        });
-        if(output.errors) {
-            console.error(output.errors);
-            return new Response(JSON.stringify(output.errors), {status: 500});
-        }
-        if(output.responseOptions.headers['content-type'] === 'application/json' && typeof output.body === 'object') {
-            output.body = JSON.stringify(output.body);
-        }
-        const response = output.response || new Response(output.body, output.responseOptions);
-        return response;
-    } });
-server.finished.then(() => console.log("Server closed"));
-`;
+import {parseArgs} from "jsr:@std/cli@0.224.0";
+
+function findOpenPort(defaultPort = 8000){
+  let port = defaultPort;
+  while(true){
+    try {
+      Deno.listen({port});
+    } catch (e) {
+      port += 1;
+      continue;
+    }
+    return port;
+  }
+}
+
+const flags = parseArgs(Deno.args);
+const hostname = flags.host || "127.0.0.1";
+const port = flags.port || findOpenPort();
+
+const handler = async (request: Request) => {
+  console.log(request.url);
+  const output = await pipe.process({request, body: {}, responseOptions: {
+          headers: {
+              "content-type": "application/json"
+          },
+          status: 200,
+      },
+      mode: "server"
+  });
+  if(output.errors) {
+      console.error(output.errors);
+      return new Response(JSON.stringify(output.errors), {status: 500});
+  }
+  if(output.responseOptions.headers['content-type'] === 'application/json' && typeof output.body === 'object') {
+      output.body = JSON.stringify(output.body);
+  }
+  const response = output.response || new Response(output.body, output.responseOptions);
+  return response;
+};
+
+const server = Deno.serve({ handler, port, hostname });
+server.finished.then(() => console.log("Server closed"));`;
 
 export const pdWorkerTemplate = () => `import pipe from "./index.ts"
 globalThis.addEventListener("install", async (event) => {
