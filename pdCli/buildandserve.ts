@@ -182,41 +182,57 @@ function tellClientToReload() {
   });
 }
 
+function findOpenPort(defaultPort = 8000){
+  let port = defaultPort;
+  while(true){
+    try {
+      Deno.listen({port});
+    } catch (e) {
+      port += 1;
+      continue;
+    }
+    return port;
+  }
+}
+
 export async function serve(input: pdBuildInput){
   pdBuild(input);
   watchFs(input);
 
-  const server = Deno.serve({
-    handler: async (request: Request) => {
-      const url = new URL(request.url);
-      if (url.pathname.endsWith(".js")) {
-        const pathname = url.pathname;
-        const response = await std.serveFile(request, "." + pathname);
-        response.headers.set("Access-Control-Allow-Origin", "*");
-        response.headers.set(
-          "Access-Control-Allow-Headers",
-          "Origin, X-Requested-With, Content-Type, Accept, Range",
-        );
-        return response;
+  const hostname = "127.0.0.1";
+  const port = findOpenPort(8888);
+
+  const handler = async (request: Request) => {
+    const url = new URL(request.url);
+    if (url.pathname.endsWith(".js")) {
+      const pathname = url.pathname;
+      const response = await std.serveFile(request, "." + pathname);
+      response.headers.set("Access-Control-Allow-Origin", "*");
+      response.headers.set(
+        "Access-Control-Allow-Headers",
+        "Origin, X-Requested-With, Content-Type, Accept, Range",
+      );
+      return response;
+    }
+
+    if (url.pathname === "/sse") {
+      return tellClientToReload();
+    }
+
+    const scriptsPaths = [];
+    for await (const entry of std.walk("./.pd")) {
+      if (entry.path.endsWith(".js")) {
+        scriptsPaths.push(entry.path);
       }
-  
-      if (url.pathname === "/sse") {
-        return tellClientToReload();
-      }
-  
-      const scriptsPaths = [];
-      for await (const entry of std.walk("./.pd")) {
-        if (entry.path.endsWith(".js")) {
-          scriptsPaths.push(entry.path);
-        }
-      }
-  
-      return new Response(page(scriptsPaths), {
-        headers: {
-          "content-type": "text/html",
-        },
-      });
-    },
-  });
+    }
+
+    return new Response(page(scriptsPaths), {
+      headers: {
+        "content-type": "text/html",
+      },
+    });
+  }
+
+  const server = Deno.serve({ handler, port, hostname });
   await server.finished.then(() => console.log("Server closed"));
 }
