@@ -1,5 +1,5 @@
 import { std, pd, md } from "./deps.ts";
-import { rangeFinder, TokenType, Tag as TokenTag, Tag } from "./rangeFinder.ts";
+import { rangeFinder, TokenType, Tag as TokenTag } from "./rangeFinder.ts";
 import type { mdToPipeInput, PipeConfig, Step, Steps, Token } from "./pipedown.d.ts";
 
 const camelCaseString = (input: string) => {
@@ -82,6 +82,82 @@ const mergeMetaConfig = (input: mdToPipeInput) => {
     return std.deepMerge(acc, step);
   }, {});
 };
+
+const wrapWithInteralSteps = (input: mdToPipeInput) => {
+  const preserveInput = (io='input') => {
+      return `
+      const kvAvailable = typeof Deno.openKv === 'function'
+      if(kvAvailable) {
+        try {
+          const db = await Deno.openKv()
+          const key = [opts.fileName, '${io}', Date.now()]
+          try {
+              await db.set(key, input)
+          } catch (e) {
+              if(e.message.includes('value too large')){
+                  // if value is too large (1000b), truncate
+                  const safe = {}
+                  for (const [k, v] of Object.entries(input)) {
+                      JSON.stringify(v).length > 1000 ? safe[k] = JSON.stringify(v).slice(0, 1000) : safe[k] = v
+                  }
+                  await db.set(key, safe)
+              }
+          }
+        } catch (e) {
+            console.error(e)
+        }
+      } else {
+        const key = opts.fileName + ':' + '${io}'
+        const inputJson = localStorage.getItem(key) || '[]'
+        const storedJson = JSON.parse(inputJson)
+        storedJson.push(JSON.stringify(input))
+        console.log(storedJson);
+        localStorage.setItem(key, JSON.stringify(storedJson))
+      }
+      `
+  }
+  const emitStartEvent = () => {
+      return `const event = new CustomEvent('pd:pipe:start', {detail: {input, opts}})
+          dispatchEvent(event)`
+  }
+
+  const emitEndEvent = () => {
+      return `const event = new CustomEvent('pd:pipe:end', {detail: {input, opts}})
+          dispatchEvent(event)`
+  }
+
+  input.pipe.steps = [
+      {
+          name: 'emitStartEvent',
+          code: emitStartEvent(),
+          funcName: 'emitStartEvent',
+          inList: false,
+          range: [0, 0],
+      },
+      {
+          name: 'preserveInput',
+          code: preserveInput(),
+          funcName: 'preserveInput',
+          inList: false,
+          range: [0, 0],
+      },
+      ...input.pipe.steps,
+      {
+          name: 'preserveOutput',
+          code: preserveInput('output'),
+          funcName: 'preserveOutput',
+          inList: false,
+          range: [0, 0],
+      },
+      {
+          name: 'emitEndEvent',
+          code: emitEndEvent(),
+          funcName: 'emitEndEvent',
+          inList: false,
+          range: [0, 0],
+      }
+  ]
+}
 
 export const mdToPipe = async (input: object) => {
   const funcs = [
@@ -169,6 +245,7 @@ export const mdToPipe = async (input: object) => {
           return step;
         });
     },
+    wrapWithInteralSteps
   ];
 
   const output = await pd.process(funcs, Object.assign({}, {
