@@ -122,14 +122,16 @@ async function writeReplEvalFile(input: pdBuildInput) {
   // assumes deno repl is run from .pd directory
   const importNames = 
     (input.importMap ? Object.keys(input.importMap.imports) : [])
-    .filter((key) => !key.includes('/'));
+    .filter(key => !key.includes('/'))
+    .filter(key => input.importMap?.imports[key].endsWith('index.ts'));
 
   await Deno.writeTextFile(replEvalPath, templates.denoReplEvalTemplate(importNames));
 }
 
 async function writeReplFile(input: pdBuildInput) {
-  const path = `${Deno.execPath()}/repl`;
+  const path = `./repl`;
   await Deno.writeTextFile(path, templates.denoReplTemplate());
+  await Deno.chmod(path, 0o755);
 }
 
 const writeCliFile = async (input: pdBuildInput) => {
