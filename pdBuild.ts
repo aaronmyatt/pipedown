@@ -75,6 +75,30 @@ async function transformMdFiles(input: pdBuildInput) {
   return input;
 }
 
+async function copyFiles(input: pdBuildInput) {
+  // copy js(x),json,ts(x) files to .pd directory, preserving directory structure
+  const opts: WalkOptions = {
+    exts: [".js", ".jsx", ".json", ".ts", ".tsx"],
+    skip: [
+      /node_modules/,
+      /\.pd/,
+      /^readme\.md\/*$/,
+      /^README\.md\/*$/,
+      /deno.*/,
+    ]
+    .concat(respectGitIgnore())
+    .concat((input.globalConfig.skip || []).map((glob) => std.globToRegExp(glob)))
+    .concat((input.globalConfig.exclude || []).map((glob) => std.globToRegExp(glob)))
+  };
+
+  if (input.match) opts.match = [new RegExp(input.match)];
+  for await (const entry of std.walk(".", opts)) {
+    const dest = std.join(PD_DIR, fileDir(entry.path), entry.name);
+    await Deno.mkdir(std.dirname(dest), { recursive: true });
+    await Deno.copyFile(entry.path, dest);
+  }
+}
+
 async function writeTests(input: pdBuildInput) {
   for (const pipe of (input.pipes || [])) {
     const testPath = `${pipe.dir}/test.ts`;
@@ -90,6 +114,8 @@ async function writeTests(input: pdBuildInput) {
 async function writeDenoImportMap(input: pdBuildInput) {
   input.importMap = {
     imports: {
+      "/": "./",
+      "./": "./"
     },
     lint: {
       include: [
@@ -104,10 +130,14 @@ async function writeDenoImportMap(input: pdBuildInput) {
 
   for await (const entry of std.walk("./.pd", { exts: [".ts"] })) {
     const dirName = std.dirname(entry.path).split("/").pop();
-    if (dirName === ".pd") continue;
     const innerPath = std.dirname(entry.path).replace(/\.pd\//, "");
-    input.importMap.imports[`${dirName}`] = `./${innerPath}/index.ts`;
-    input.importMap.imports['/'+innerPath] = `./${innerPath}/index.ts`;
+    if(entry.path.includes('index.ts')) {
+      // regex for '.pd' at start of path
+      const regex = new RegExp(`^\.pd`);
+      const path = entry.path.replace(regex, '.');  
+      input.importMap.imports[`${dirName}`] = path;
+      input.importMap.imports['/'+innerPath] = path;
+    }
   }
   await Deno.writeTextFile(
     `${PD_DIR}/deno.json`,
@@ -243,6 +273,7 @@ export const pdBuild = async (input: pdBuildInput) => {
     writeTests,
     writeDenoImportMap,
     writeReplEvalFile,
+    writeReplFile,
     writeCliFile,
     writeServerFile,
     writeWorkerFile,
