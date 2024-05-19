@@ -127,6 +127,11 @@ async function writeReplEvalFile(input: pdBuildInput) {
   await Deno.writeTextFile(replEvalPath, templates.denoReplEvalTemplate(importNames));
 }
 
+async function writeReplFile(input: pdBuildInput) {
+  const path = `${Deno.execPath()}/repl`;
+  await Deno.writeTextFile(path, templates.denoReplTemplate());
+}
+
 const writeCliFile = async (input: pdBuildInput) => {
   for (const pipe of (input.pipes || [])) {
     const cliPath = `${pipe.dir}/cli.ts`;
@@ -232,6 +237,7 @@ export const pdBuild = async (input: pdBuildInput) => {
   const funcs = [
     parseMdFiles,
     transformMdFiles,
+    copyFiles,
     writeTests,
     writeDenoImportMap,
     writeReplEvalFile,

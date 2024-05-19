@@ -25,6 +25,11 @@ Deno.test("${pipeName}", async (t) => {
   }
 });`
 
+export const denoReplTemplate = () => `#!/bin/sh
+deno run -A jsr:@pd/pdcli build
+deno repl -A -c ./.pd/deno.json --eval-file=./.pd/replEval.ts --unstable-kv
+`
+
 export const denoReplEvalTemplate = (importNames: string[]) => `${
     importNames
     .map((key: string) => {
