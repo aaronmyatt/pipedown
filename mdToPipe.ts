@@ -111,7 +111,6 @@ const wrapWithInteralSteps = (input: mdToPipeInput) => {
         const inputJson = localStorage.getItem(key) || '[]'
         const storedJson = JSON.parse(inputJson)
         storedJson.push(JSON.stringify(input))
-        console.log(storedJson);
         localStorage.setItem(key, JSON.stringify(storedJson))
       }
       `
