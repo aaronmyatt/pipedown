@@ -90,7 +90,7 @@ const wrapWithInteralSteps = (input: mdToPipeInput) => {
       if(kvAvailable) {
         try {
           const db = await Deno.openKv()
-          const key = ['pd', '${io}', opts.fileName, Date.now()]
+          const key = ['pd', '${io}', opts.fileName]
           try {
               await db.set(key, input)
           } catch (e) {
