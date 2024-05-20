@@ -37,6 +37,7 @@ export function pdRun(scriptName: string, testInput: string) {
     const command = new Deno.Command('deno', {
         args: [
             "run",
+            "--unstable-kv",
             "-A",
             "-c",
             ".pd/deno.json",
@@ -56,6 +57,7 @@ export async function pdServe(scriptName: string, testInput: string) {
         args: [
             "run",
             "-A",
+            "--unstable-kv",
             "-c",
             ".pd/deno.json",
             "--unstable",
