@@ -90,7 +90,7 @@ const wrapWithInteralSteps = (input: mdToPipeInput) => {
       if(kvAvailable) {
         try {
           const db = await Deno.openKv()
-          const key = [opts.fileName, '${io}', Date.now()]
+          const key = ['pd', '${io}', opts.fileName, Date.now()]
           try {
               await db.set(key, input)
           } catch (e) {
@@ -107,7 +107,7 @@ const wrapWithInteralSteps = (input: mdToPipeInput) => {
             console.error(e)
         }
       } else {
-        const key = opts.fileName + ':' + '${io}'
+        const key = 'pd:${io}:' + opts.fileName 
         const inputJson = localStorage.getItem(key) || '[]'
         const storedJson = JSON.parse(inputJson)
         storedJson.push(JSON.stringify(input))
