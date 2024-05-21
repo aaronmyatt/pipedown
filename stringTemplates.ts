@@ -35,6 +35,7 @@ export const denoReplEvalTemplate = (importNames: string[]) => `${
     .map((key: string) => {
       return `import ${key} from "${key}";`;
     })
+    .join("\n")
 }
 import $p from "jsr:@pd/pointers@0.1.1";
 
