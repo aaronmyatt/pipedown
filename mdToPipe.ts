@@ -92,18 +92,15 @@ const wrapWithInteralSteps = (input: mdToPipeInput) => {
           const db = await Deno.openKv()
           const key = ['pd', '${io}', opts.fileName]
           try {
-              await db.set(key, input)
+              await db.set(key, JSON.stringify(input))
           } catch (e) {
-              if(e.message.includes('value too large')){
-                  // if value is too large (1000b), truncate
-                  const safe = {}
-                  for (const [k, v] of Object.entries(input)) {
-                      if(typeof v === 'string' && v.length > 1000) safe[k] = v.slice(0, 1000)
-                      if(typeof v === 'function') safe[k] = v.toString().slice(0, 1000)
-                      if(typeof v === 'object') safe[k] = JSON.stringify(v).slice(0, 1000)
-                  }
-                  await db.set(key, safe)
-              }
+            const safe = {
+              error: e.message,
+            }
+            for (const [k, v] of Object.entries(input)) {
+                safe[k] = typeof v;
+            }
+            await db.set(key, safe)
           }
         } catch (e) {
             console.error(e)
