@@ -98,7 +98,9 @@ const wrapWithInteralSteps = (input: mdToPipeInput) => {
                   // if value is too large (1000b), truncate
                   const safe = {}
                   for (const [k, v] of Object.entries(input)) {
-                      JSON.stringify(v).length > 1000 ? safe[k] = JSON.stringify(v).slice(0, 1000) : safe[k] = v
+                      if(typeof v === 'string' && v.length > 1000) safe[k] = v.slice(0, 1000)
+                      if(typeof v === 'function') safe[k] = v.toString().slice(0, 1000)
+                      if(typeof v === 'object') safe[k] = JSON.stringify(v).slice(0, 1000)
                   }
                   await db.set(key, safe)
               }
