@@ -53,17 +53,15 @@ export const pipeToScript = async (input: PipeToScriptInput) => {
       `// deno-lint-ignore-file ban-unused-ignore no-unused-vars require-await
 import Pipe from "jsr:@pd/pdpipe@0.1.1";
 import $p from "jsr:@pd/pointers@0.1.1";
-import "jsr:@std/dotenv/load";
+${ !input.pipe.config?.build && 'import "jsr:@std/dotenv/load";' }
 import rawPipe from "./${input.pipe.camelName}.json" with {type: "json"};
 ${input.pipeImports && input.pipeImports.join("\n")}
 
 ${input.functions && input.functions.join("\n")}
 
-const funcSequence = [${
-        input.pipe && input.pipe.steps.map((step: Step) =>
-          step.funcName
-        ).join(", ")
-      }]
+const funcSequence = [
+${ input.pipe && input.pipe.steps.map((step: Step) => step.funcName).join(", ") }
+]
 const pipe = Pipe(funcSequence, rawPipe);
 pipe.json = rawPipe;
 export default pipe;
