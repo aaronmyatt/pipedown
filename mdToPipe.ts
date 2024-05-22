@@ -86,7 +86,7 @@ const mergeMetaConfig = (input: mdToPipeInput) => {
 const wrapWithInteralSteps = (input: mdToPipeInput) => {
   const preserveInput = (io='input') => {
       return `
-      const kvAvailable = typeof Deno.openKv === 'function'
+      const kvAvailable = typeof Deno !== 'undefined' && typeof Deno.openKv === 'function'
       if(kvAvailable) {
         try {
           const db = await Deno.openKv()
