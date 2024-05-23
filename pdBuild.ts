@@ -37,9 +37,16 @@ async function parseMdFiles(input: pdBuildInput) {
     .concat((input.globalConfig.exclude || []).map((glob) => std.globToRegExp(glob)))
   };
   if (input.match) opts.match = [new RegExp(input.match)];
-  for await (const entry of std.walk(".", opts)) {
+
+  for await (const entry of std.walk(Deno.cwd(), opts)) {
     const markdown = await Deno.readTextFile(entry.path);
-    const output = await mdToPipe({ markdown });
+    const output = await mdToPipe({ markdown,
+      pipe: {
+        fileName: fileName(entry.path),
+        dir: std.join(PD_DIR, fileDir(entry.path), fileName(entry.path)),
+        config: input.globalConfig,
+      } 
+    });
     input.errors = input.errors?.concat(output.errors || [])
     if (output.pipe && output.pipe.steps.length > 0) {
       output.pipe.fileName = fileName(entry.path);

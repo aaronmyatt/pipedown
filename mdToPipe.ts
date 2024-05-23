@@ -72,7 +72,7 @@ const findSteps = (input: mdToPipeInput) => {
 };
 
 const mergeMetaConfig = (input: mdToPipeInput) => {
-  input.pipe.config = input.ranges.metaBlocks.map(
+  const metaConfig = input.ranges.metaBlocks.map(
     (metaBlockRange: number[]) => {
       const block = input.tokens.at(metaBlockRange[0] + 1);
       if(!block) return {};
@@ -81,6 +81,7 @@ const mergeMetaConfig = (input: mdToPipeInput) => {
   ).reduce((acc: PipeConfig, step: Step) => {
     return std.deepMerge(acc, step);
   }, {});
+  input.pipe.config = Object.assign(input.pipe.config || {}, metaConfig);
 };
 
 const wrapWithInteralSteps = (input: mdToPipeInput) => {
@@ -157,7 +158,7 @@ const wrapWithInteralSteps = (input: mdToPipeInput) => {
   ]
 }
 
-export const mdToPipe = async (input: object) => {
+export const mdToPipe = async (input: Input) => {
   const funcs = [
     parseMarkdown,
     findRanges,
@@ -246,7 +247,7 @@ export const mdToPipe = async (input: object) => {
     wrapWithInteralSteps
   ];
 
-  const output = await pd.process(funcs, Object.assign({}, {
+  const output = await pd.process(funcs, Object.assign({
     markdown: "",
     tokens: [],
     headings: [],
