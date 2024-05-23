@@ -54,7 +54,7 @@ export const pipeToScript = async (input: PipeToScriptInput) => {
 import Pipe from "jsr:@pd/pdpipe@0.1.1";
 import $p from "jsr:@pd/pointers@0.1.1";
 ${ !input.pipe.config?.build && 'import "jsr:@std/dotenv/load";' }
-import rawPipe from "./${input.pipe.camelName}.json" with {type: "json"};
+import rawPipe from "./index.json" with {type: "json"};
 ${input.pipeImports && input.pipeImports.join("\n")}
 
 ${input.functions && input.functions.join("\n")}

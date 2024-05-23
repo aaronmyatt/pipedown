@@ -43,7 +43,7 @@ async function parseMdFiles(input: pdBuildInput) {
     input.errors = input.errors?.concat(output.errors || [])
     if (output.pipe && output.pipe.steps.length > 0) {
       output.pipe.fileName = fileName(entry.path);
-      output.pipe.dir = std.join(PD_DIR, fileDir(entry.path), output.pipe.fileName);
+      output.pipe.dir = std.join(PD_DIR, fileDir(entry.path), 'index.md');
       output.pipe.config = std.deepMerge(input.globalConfig, output.pipe.config || {});
 
       input.pipes && input.pipes.push(output.pipe);
@@ -53,7 +53,7 @@ async function parseMdFiles(input: pdBuildInput) {
       } catch (e) {
         if (e.name !== "AlreadyExists") throw e;
       }
-      const jsonPath = `${output.pipe.dir}/${output.pipe.camelName}.json`;
+      const jsonPath = `${output.pipe.dir}/index.json`;
       await Deno.writeTextFile(jsonPath, JSON.stringify(output.pipe, null, 2));
       await Deno.writeTextFile(`${output.pipe.dir}/${entry.name}`, markdown);
     }
