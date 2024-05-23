@@ -1,6 +1,12 @@
-import { std, pd, md } from "./deps.ts";
-import { rangeFinder, TokenType, Tag as TokenTag } from "./rangeFinder.ts";
-import type { mdToPipeInput, PipeConfig, Step, Steps, Token } from "./pipedown.d.ts";
+import { md, pd, std } from "./deps.ts";
+import { rangeFinder, Tag as TokenTag, TokenType } from "./rangeFinder.ts";
+import type {
+  mdToPipeInput,
+  PipeConfig,
+  Step,
+  Steps,
+  Token,
+} from "./pipedown.d.ts";
 
 const camelCaseString = (input: string) => {
   return input.replace(/(?:^\w|[A-Z]|\b\w)/g, function (word, index) {
@@ -9,7 +15,7 @@ const camelCaseString = (input: string) => {
 };
 
 const parseMarkdown = (input: mdToPipeInput) => {
-  input.tokens = md.parse(input.markdown || '');
+  input.tokens = md.parse(input.markdown || "");
 };
 
 const findRanges = async (input: mdToPipeInput) => {
@@ -26,30 +32,36 @@ const findRanges = async (input: mdToPipeInput) => {
 const findPipeName = (input: mdToPipeInput) => {
   const headingRange = input.ranges.headings.find((hRange: number[]) => {
     const index = !hRange.length ? 0 : hRange[0];
-    const level = pd.$p.get(input.tokens.at(index) || {}, '/level');
+    const level = pd.$p.get(input.tokens.at(index) || {}, "/level");
     return level === 1;
   });
   if (!headingRange) {
     input.pipe.name = "anonymous";
   } else {
     const block = input.tokens.at(headingRange[0] + 1) || {};
-    input.pipe.name = pd.$p.get(block, '/content') || "anonymous";
+    input.pipe.name = pd.$p.get(block, "/content") || "anonymous";
   }
   input.pipe.camelName = camelCaseString(input.pipe.name || "anonymous");
 };
 
 const findSteps = (input: mdToPipeInput) => {
-  input.pipe.steps = input.ranges.codeBlocks.map((codeBlockRange: number[]): Step => {
-    const code = input.tokens.slice(codeBlockRange[0], codeBlockRange[1])
-        .reduce((acc: string, token: Token) => acc + (pd.$p.get(token, '/content') || ""), "")
-    return {
-      code,
-      range: codeBlockRange,
-      name: "",
-      funcName: "",
-      inList: false,
-    };
-  })
+  input.pipe.steps = input.ranges.codeBlocks.map(
+    (codeBlockRange: number[]): Step => {
+      const code = input.tokens.slice(codeBlockRange[0], codeBlockRange[1])
+        .reduce(
+          (acc: string, token: Token) =>
+            acc + (pd.$p.get(token, "/content") || ""),
+          "",
+        );
+      return {
+        code,
+        range: codeBlockRange,
+        name: "",
+        funcName: "",
+        inList: false,
+      };
+    },
+  )
     .map((step: Step, index: number, steps: Steps) => {
       const headingRange = input.ranges.headings.findLast(
         (headingRange: number[]) => {
@@ -62,7 +74,7 @@ const findSteps = (input: mdToPipeInput) => {
       );
       if (headingRange) {
         const block = input.tokens.at(headingRange[0] + 1) || {};
-        step.name = pd.$p.get(block, '/content') || "anonymous" + step.range[0];
+        step.name = pd.$p.get(block, "/content") || "anonymous" + step.range[0];
       } else {
         step.name = "anonymous" + step.range[0];
       }
@@ -75,8 +87,8 @@ const mergeMetaConfig = (input: mdToPipeInput) => {
   const metaConfig = input.ranges.metaBlocks.map(
     (metaBlockRange: number[]) => {
       const block = input.tokens.at(metaBlockRange[0] + 1);
-      if(!block) return {};
-      return JSON.parse(pd.$p.get(block, '/content') || "{}");
+      if (!block) return {};
+      return JSON.parse(pd.$p.get(block, "/content") || "{}");
     },
   ).reduce((acc: PipeConfig, step: Step) => {
     return std.deepMerge(acc, step);
@@ -85,8 +97,8 @@ const mergeMetaConfig = (input: mdToPipeInput) => {
 };
 
 const wrapWithInteralSteps = (input: mdToPipeInput) => {
-  const preserveInput = (io='input') => {
-      return `
+  const persistInput = (io = "input") => {
+    return `
       const kvAvailable = typeof Deno !== 'undefined' && typeof Deno.openKv === 'function'
       if(kvAvailable) {
         try {
@@ -113,50 +125,62 @@ const wrapWithInteralSteps = (input: mdToPipeInput) => {
         storedJson.push(JSON.stringify(input))
         localStorage.setItem(key, JSON.stringify(storedJson))
       }
-      `
-  }
+      `;
+  };
   const emitStartEvent = () => {
-      return `const event = new CustomEvent('pd:pipe:start', {detail: {input, opts}})
-          dispatchEvent(event)`
-  }
+    return `const event = new CustomEvent('pd:pipe:start', {detail: {input, opts}})
+          dispatchEvent(event)`;
+  };
 
   const emitEndEvent = () => {
-      return `const event = new CustomEvent('pd:pipe:end', {detail: {input, opts}})
-          dispatchEvent(event)`
+    return `const event = new CustomEvent('pd:pipe:end', {detail: {input, opts}})
+          dispatchEvent(event)`;
+  };
+
+  function wrapWith(start: Step, end: Step, steps = input.pipe.steps) {
+    return [
+      start,
+      ...steps,
+      end,
+    ];
   }
 
-  input.pipe.steps = [
-      {
-          name: 'emitStartEvent',
-          code: emitStartEvent(),
-          funcName: 'emitStartEvent',
-          inList: false,
-          range: [0, 0],
-      },
-      {
-          name: 'preserveInput',
-          code: preserveInput(),
-          funcName: 'preserveInput',
-          inList: false,
-          range: [0, 0],
-      },
-      ...input.pipe.steps,
-      {
-          name: 'preserveOutput',
-          code: preserveInput('output'),
-          funcName: 'preserveOutput',
-          inList: false,
-          range: [0, 0],
-      },
-      {
-          name: 'emitEndEvent',
-          code: emitEndEvent(),
-          funcName: 'emitEndEvent',
-          inList: false,
-          range: [0, 0],
-      }
-  ]
-}
+  const wrapWithEvents = wrapWith.bind(this, {
+    name: "emitStartEvent",
+    code: emitStartEvent(),
+    funcName: "emitStartEvent",
+    inList: false,
+    range: [0, 0],
+  }, {
+    name: "emitEndEvent",
+    code: emitEndEvent(),
+    funcName: "emitEndEvent",
+    inList: false,
+    range: [0, 0],
+  });
+
+  const wrapWithPersistance = wrapWith.bind(this, {
+    name: "persistInput",
+    code: persistInput(),
+    funcName: "persistInput",
+    inList: false,
+    range: [0, 0],
+  }, {
+    name: "persistOutput",
+    code: persistInput("output"),
+    funcName: "persistOutput",
+    inList: false,
+    range: [0, 0],
+  });
+
+  if (pd.$p.get(input, "/pipe/config/persist")) {
+    input.pipe.steps = wrapWithPersistance(input.pipe.steps);
+  }
+
+  if (pd.$p.get(input, "/pipe/config/emit")) {
+    input.pipe.steps = wrapWithEvents(input.pipe.steps);
+  }
+};
 
 export const mdToPipe = async (input: Input) => {
   const funcs = [
@@ -185,9 +209,9 @@ export const mdToPipe = async (input: Input) => {
             // check list items preceding codeblock for the following patterns
             // check|when|if:* - if true, add value to step config
             // route:* - if true, add value to step config
-           listRange && input.tokens.slice(listRange[0], step.range[0])
+            listRange && input.tokens.slice(listRange[0], step.range[0])
               .reduce((acc: Array<Array<Token>>, token: Token) => {
-                const tag = pd.$p.get(token, '/tag');
+                const tag = pd.$p.get(token, "/tag");
                 if (tag === TokenTag.item && token.type === TokenType.start) {
                   acc.push([]);
                 }
@@ -204,7 +228,7 @@ export const mdToPipe = async (input: Input) => {
                   return token.type === TokenType.text;
                 })
                   .reduce((acc: string, token: Token) => {
-                    return acc + pd.$p.get(token, '/content');
+                    return acc + pd.$p.get(token, "/content");
                   }, "");
               })
               .forEach((listItem: string) => {
@@ -214,29 +238,29 @@ export const mdToPipe = async (input: Input) => {
                   return;
                 }
 
-                const actions: Record<string, () => void> = ({
+                const actions: Record<string, () => void> = {
                   "check": () => {
-                    const check = listItem.replace('check:', '').trim()
+                    const check = listItem.replace("check:", "").trim();
                     pd.$p.set(step, `/config/checks/-`, check);
                   },
                   "if": () => {
-                    const check = listItem.replace('if:', '').trim()
+                    const check = listItem.replace("if:", "").trim();
                     pd.$p.set(step, `/config/checks/-`, check);
                   },
                   "when": () => {
-                    const check = listItem.replace('when:', '').trim()
+                    const check = listItem.replace("when:", "").trim();
                     pd.$p.set(step, `/config/checks/-`, check);
                   },
                   "route": () => {
-                    const check = listItem.replace('route:', '').trim()
+                    const check = listItem.replace("route:", "").trim();
                     pd.$p.set(step, `/config/routes/-`, check);
                   },
                   "stop": () => pd.$p.set(step, `/config/stop`, stepIndex),
                   "only": () => pd.$p.set(step, `/config/only`, stepIndex),
-                })
+                };
 
                 match.forEach((match: string) => {
-                  const key = match.replace(':', '');
+                  const key = match.replace(":", "");
                   actions[key]();
                 });
               });
@@ -244,39 +268,43 @@ export const mdToPipe = async (input: Input) => {
           return step;
         });
     },
-    wrapWithInteralSteps
+    wrapWithInteralSteps,
   ];
 
-  const output = await pd.process(funcs, Object.assign({
-    markdown: "",
-    tokens: [],
-    headings: [],
-    codeBlocks: [],
-    steps: [],
-    pipeName: "",
-    pipe: {
-      name: "",
-      camelName: "",
-      steps: [],
-      dir: "",
-      fileName: "",
-      checks: {},
-      config: {
-        on: {},
-        inputs: [],
-        build: [],
-        skip: [],
-        exclude: [],
-      },
-    },
-    ranges: {
-      token: {} as Token,
-      index: 0,
-      codeBlocks: [],
+  const output = await pd.process(
+    funcs,
+    Object.assign({
+      markdown: "",
+      tokens: [],
       headings: [],
-      metaBlocks: [],
-      lists: [],
-    },
-  }, input), {});
+      codeBlocks: [],
+      steps: [],
+      pipeName: "",
+      pipe: {
+        name: "",
+        camelName: "",
+        steps: [],
+        dir: "",
+        fileName: "",
+        checks: {},
+        config: {
+          on: {},
+          inputs: [],
+          build: [],
+          skip: [],
+          exclude: [],
+        },
+      },
+      ranges: {
+        token: {} as Token,
+        index: 0,
+        codeBlocks: [],
+        headings: [],
+        metaBlocks: [],
+        lists: [],
+      },
+    }, input),
+    {},
+  );
   return output;
 };

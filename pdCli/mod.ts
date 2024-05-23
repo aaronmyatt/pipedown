@@ -35,6 +35,8 @@ async function pdInit(input: pdCliInput) {
     const configPath = std.join(Deno.cwd(), 'config.json');
     input.globalConfig = {
         on: {},
+        emit: true,
+        persist: true,
         ...input.globalConfig
     };
     try {
