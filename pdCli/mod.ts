@@ -32,14 +32,14 @@ async function pdInit(input: pdCliInput) {
 
     // read global config file, config.json, from the current directory,
     // if it exists
-    const configPath = `${Deno.cwd()}/config.json`;
+    const configPath = std.join(Deno.cwd(), 'config.json');
     input.globalConfig = {
         on: {},
         ...input.globalConfig
     };
     try {
         const config = JSON.parse(await Deno.readTextFile(configPath));
-        Object.assign(input, {globalConfig: config});
+        Object.assign(input.globalConfig, config);
     } catch (e) {
         if (e.name !== "NotFound") throw e;
     }

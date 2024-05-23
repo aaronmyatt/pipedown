@@ -2,13 +2,11 @@ import { esbuild, std, pd } from "./deps.ts";
 import { denoPlugins } from "jsr:@luca/esbuild-deno-loader@0.10.3";
 import { mdToPipe } from "./mdToPipe.ts";
 import { pipeToScript } from "./pipeToScript.ts";
-import { camelCaseString } from "./pdUtils.ts";
+import { fileDir, fileName } from "./pdUtils.ts";
 import * as templates from "./stringTemplates.ts";
 import type { Input, WalkOptions, Pipe, PipeConfig } from "./pipedown.d.ts";  
 
 const PD_DIR = `./.pd`;
-const fileName = (path: string) => camelCaseString(std.parsePath(path).name);
-const fileDir = (path: string) => std.parsePath(path).dir;
 
 const respectGitIgnore = () => {
   const gitIgnorePath = std.join(Deno.cwd(), ".gitignore");
@@ -49,10 +47,6 @@ async function parseMdFiles(input: pdBuildInput) {
     });
     input.errors = input.errors?.concat(output.errors || [])
     if (output.pipe && output.pipe.steps.length > 0) {
-      output.pipe.fileName = fileName(entry.path);
-      output.pipe.dir = std.join(PD_DIR, fileDir(entry.path), 'index.md');
-      output.pipe.config = std.deepMerge(input.globalConfig, output.pipe.config || {});
-
       input.pipes && input.pipes.push(output.pipe);
 
       try {
@@ -60,9 +54,10 @@ async function parseMdFiles(input: pdBuildInput) {
       } catch (e) {
         if (e.name !== "AlreadyExists") throw e;
       }
-      const jsonPath = `${output.pipe.dir}/index.json`;
+      const jsonPath = std.join(output.pipe.dir, 'index.json');
+      const markdownPath = std.join(output.pipe.dir, 'index.md')
       await Deno.writeTextFile(jsonPath, JSON.stringify(output.pipe, null, 2));
-      await Deno.writeTextFile(`${output.pipe.dir}/${entry.name}`, markdown);
+      await Deno.writeTextFile(markdownPath, markdown);
     }
   }
   return input;
@@ -70,7 +65,7 @@ async function parseMdFiles(input: pdBuildInput) {
 
 async function transformMdFiles(input: pdBuildInput) {
   for (const pipe of (input.pipes || [])) {
-    const scriptPath = `${pipe.dir}/index.ts`;
+    const scriptPath = std.join(pipe.dir, 'index.ts');
     const output = await pipeToScript({ pipe });
     if (output.success && output.script) {
       await Deno.writeTextFile(scriptPath, output.script);
@@ -108,7 +103,7 @@ async function copyFiles(input: pdBuildInput) {
 
 async function writeTests(input: pdBuildInput) {
   for (const pipe of (input.pipes || [])) {
-    const testPath = `${pipe.dir}/test.ts`;
+    const testPath = std.join(pipe.dir, 'test.ts');
     if (await std.exists(testPath)) continue;
     await Deno.writeTextFile(
       testPath,
@@ -147,14 +142,14 @@ async function writeDenoImportMap(input: pdBuildInput) {
     }
   }
   await Deno.writeTextFile(
-    `${PD_DIR}/deno.json`,
+    std.join(PD_DIR, 'deno.json'),
     JSON.stringify(input.importMap, null, 2),
   );
   return input;
 }
 
 async function writeReplEvalFile(input: pdBuildInput) {
-  const replEvalPath = `${PD_DIR}/replEval.ts`;
+  const replEvalPath = std.join(PD_DIR, 'replEval.ts');
 
   // assumes deno repl is run from .pd directory
   const importNames = 
@@ -173,7 +168,7 @@ async function writeReplFile(input: pdBuildInput) {
 
 const writeCliFile = async (input: pdBuildInput) => {
   for (const pipe of (input.pipes || [])) {
-    const cliPath = `${pipe.dir}/cli.ts`;
+    const cliPath = std.join(pipe.dir, 'cli.ts');
     if (await std.exists(cliPath)) continue;
     await Deno.writeTextFile(cliPath, templates.pdCliTemplate());
   }
@@ -181,7 +176,7 @@ const writeCliFile = async (input: pdBuildInput) => {
 
 const writeServerFile = async (input: pdBuildInput) => {
   for (const pipe of (input.pipes || [])) {
-    const serverPath = `${pipe.dir}/server.ts`;
+    const serverPath = std.join(pipe.dir, 'server.ts');
     if (await std.exists(serverPath)) continue;
     await Deno.writeTextFile(serverPath, templates.pdServerTemplate());
   }
@@ -190,7 +185,7 @@ const writeServerFile = async (input: pdBuildInput) => {
 
 const writeWorkerFile = async (input: pdBuildInput) => {
   for (const pipe of (input.pipes || [])) {
-    const workerPath = `${pipe.dir}/worker.ts`;
+    const workerPath = std.join(pipe.dir, 'worker.ts');
     if (await std.exists(workerPath)) continue;
     await Deno.writeTextFile( workerPath, templates.pdWorkerTemplate());
   }
@@ -198,11 +193,11 @@ const writeWorkerFile = async (input: pdBuildInput) => {
 };
 
 async function buildIIFE(input: pdBuildInput) {
-  const configPath = Deno.cwd() + "/.pd/deno.json";
+  const configPath = std.join(Deno.cwd(),'.pd', 'deno.json');
   const _denoPlugins = denoPlugins({ configPath, loader: "native" })
   const filteredPipes = input.pipes?.filter((pipe) => pipe.config?.build?.includes("iife")) || [];
   for (const pipe of filteredPipes) {
-    const scriptPath = `${pipe.dir}/index.ts`;
+    const scriptPath = std.join(pipe.dir, 'index.ts');
     await esbuild.build({
       bundle: true,
       entryPoints: [scriptPath],
@@ -210,7 +205,7 @@ async function buildIIFE(input: pdBuildInput) {
       format: "iife",
       treeShaking: true,
       // outdir: '.pd/public',
-      outfile: `${pipe.dir}/index.iife.js`,
+      outfile: std.join(pipe.dir, 'index.iife.js'),
       globalName: `PD.${pipe.fileName}`,
       plugins: _denoPlugins,
     })
@@ -222,11 +217,11 @@ async function buildIIFE(input: pdBuildInput) {
 }
 
 async function buildESM(input: pdBuildInput) {
-  const configPath = Deno.cwd() + "/.pd/deno.json";
+  const configPath = std.join(Deno.cwd(),'.pd', 'deno.json');
   const _denoPlugins = denoPlugins({ configPath })
   const filteredPipes = input.pipes?.filter((pipe) => pipe.config?.build?.includes("esm")) || [];
   for (const pipe of filteredPipes) {
-    const scriptPath = `${pipe.dir}/index.ts`;
+    const scriptPath = std.join(pipe.dir, 'index.ts');
     await esbuild.build({
       bundle: true,
       entryPoints: [scriptPath],
@@ -234,7 +229,7 @@ async function buildESM(input: pdBuildInput) {
       format: "esm",
       treeShaking: true,
       // outdir: '.pd/public',
-      outfile: `${pipe.dir}/index.esm.js`,
+      outfile: std.join(pipe.dir, 'index.esm.js'),
       globalName: `PD.${pipe.fileName}`,
       plugins: _denoPlugins,
     }).catch((e) => {
