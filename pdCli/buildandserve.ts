@@ -140,22 +140,21 @@ const page = (scriptsPaths: string[]) =>
 `;
 
 async function watchFs(input: pdBuildInput) {
-  for await (const event of Deno.watchFs(".", { recursive: true })) {
-    const notInProtectedDir = event.paths.every((path) =>
-      !path.match(
-        "\.pd|deno|dist|\.git|\.vscode|\.github|\.cache|\.history|\.log|\.lock|\.swp",
-      )
-    );
-
+  console.log({cwd: Deno.cwd()})
+  for await (const event of Deno.watchFs(Deno.cwd(), { recursive: true })) {
+    const pathRegex = new RegExp(/\.pd|deno|dist|\.git|\.vscode|\.github|\.cache|\.history|\.log|\.lock|\.swp/)
+    const notInProtectedDir = event.paths.every((path) => !path.match(pathRegex));
+    
     const extensions = [".md"];
     const hasValidExtension = event.paths.every((path) =>
       extensions.some((ext) => path.endsWith(ext))
-    );
-
-    if (
-      event.kind === "modify" && event.paths.length === 1 &&
-      notInProtectedDir && hasValidExtension
-    ) {
+  );
+  
+  console.log({ notInProtectedDir, hasValidExtension, event })
+  if (
+    event.kind === "modify" && event.paths.length === 1 &&
+    notInProtectedDir && hasValidExtension
+  ) {
       const fileName = std.basename(event.paths[0]);
       console.log(std.colors.brightGreen(`File changed: ${fileName}`));
       lazyIO(Object.assign(input, { match: fileName }));
