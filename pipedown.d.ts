@@ -34,19 +34,7 @@ export type Input = {
 } & object;
 
 export type Stage<T> = (input: T, opts: Pipe) => Promise<T> | void;
-export type Pipeline<T extends object> = {
-    stages: Stage<T>[],
-    defaultArgs: T,
-    pipe: (stage: Stage<T>) => Pipeline<T>,
-    process: (args: T) => Promise<T>,
-};
-// export type Pipe<T> = {
-//     name: string,
-//     steps: Step[],
-//     config: PipeConfig,
-//     dir: string,
-//     fileName: string,
-// };
+
 export type mdToPipeInput = {
     markdown: string,
     tokens: Token[],
@@ -63,6 +51,7 @@ export type Step =     {
   name: string,
   funcName: string,
   inList: boolean,
+  internal?: boolean,
   config?: {
     checks?: string[],
     routes?: string[],
