@@ -38,6 +38,8 @@ async function parseMdFiles(input: pdBuildInput) {
 
   for await (const entry of std.walk(Deno.cwd(), opts)) {
     const markdown = await Deno.readTextFile(entry.path);
+    if(markdown === '') continue;
+
     const output = await mdToPipe({ markdown,
       pipe: {
         fileName: fileName(entry.path),
@@ -46,7 +48,7 @@ async function parseMdFiles(input: pdBuildInput) {
       } 
     });
     input.errors = input.errors?.concat(output.errors || [])
-    if (output.pipe && output.pipe.steps.length > 0) {
+    if (output.pipe && output.pipe.steps.filter(step => !step.internal).length > 0) {
       input.pipes && input.pipes.push(output.pipe);
 
       try {

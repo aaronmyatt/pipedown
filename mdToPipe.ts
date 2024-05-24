@@ -151,12 +151,14 @@ const wrapWithInteralSteps = (input: mdToPipeInput) => {
     funcName: "emitStartEvent",
     inList: false,
     range: [0, 0],
+    internal: true,
   }, {
     name: "emitEndEvent",
     code: emitEndEvent(),
     funcName: "emitEndEvent",
     inList: false,
     range: [0, 0],
+    internal: true,
   });
 
   const wrapWithPersistance = wrapWith.bind(this, {
@@ -165,12 +167,14 @@ const wrapWithInteralSteps = (input: mdToPipeInput) => {
     funcName: "persistInput",
     inList: false,
     range: [0, 0],
+    internal: true,
   }, {
     name: "persistOutput",
     code: persistInput("output"),
     funcName: "persistOutput",
     inList: false,
     range: [0, 0],
+    internal: true,
   });
 
   if (pd.$p.get(input, "/pipe/config/persist")) {
