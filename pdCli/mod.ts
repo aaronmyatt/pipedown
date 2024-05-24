@@ -14,12 +14,10 @@ import {std, pd} from "../deps.ts";
 import {helpCommand} from "./helpCommand.ts";
 import {buildCommand} from "./buildCommand.ts";
 import {runCommand} from "./runCommand.ts";
-import {serveCommand} from "./serveCommand.ts";
 import {listCommand} from "./listCommand.ts";
 import {testCommand} from "./testCommand.ts";
 import {cleanCommand} from "./cleanCommand.ts";
 import {defaultCommand} from "./defaultCommand.ts";
-import { replCommand } from "./replCommand.ts";
 
 async function pdInit(input: pdCliInput) {
     try {
@@ -61,15 +59,6 @@ export function checkFlags(flags: string[], func: (input: pdCliInput) => Promise
         return input;
     };
 }
-
-const runAsCommand = async (input: pdCliInput) => {
-    if (input.flags._.length > 0) {
-        await runCommand(input);
-    } else {
-        console.error("Command not found: ", input.flags._[1]);
-    }
-    return input;
-};
 
 const gatherProjectContext = async (input: pdCliInput) => {
     input.projectPipes = [];
@@ -113,25 +102,15 @@ const funcs = [
     pdInit,
     gatherProjectContext,
     startListeners,
-    function dispatchProcessStartEvent(input: pdCliInput){
-        const event = new CustomEvent('pdstart', {detail: input})
-        dispatchEvent(event)
-    },
     checkFlags(["none"], defaultCommand),
+
     checkFlags(["help"], helpCommand),
+    checkFlags(["list"], listCommand),
+    checkFlags(["clean"], cleanCommand),
+
     checkFlags(["build"], buildCommand),
     checkFlags(["run", "*", "*"], runCommand),
-    checkFlags(["serve", "*", "*"], serveCommand),
-    checkFlags(["repl"], replCommand),
-    checkFlags(["list"], listCommand),
     checkFlags(["test"], testCommand),
-    checkFlags(["clean"], cleanCommand),
-    checkFlags(["c", '*'], runAsCommand),
-    checkFlags(["command", '*'], runAsCommand),
-    function dispatchProcessEndEvent(input: pdCliInput){
-        const event = new CustomEvent('pdend', {detail: input})
-        dispatchEvent(event)
-    }
 ];
 
 const debugParamPresent = Deno.env.get("DEBUG") || Deno.args.includes("--debug") ||
