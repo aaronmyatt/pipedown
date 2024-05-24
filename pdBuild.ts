@@ -4,7 +4,7 @@ import { mdToPipe } from "./mdToPipe.ts";
 import { pipeToScript } from "./pipeToScript.ts";
 import { fileDir, fileName } from "./pdUtils.ts";
 import * as templates from "./stringTemplates.ts";
-import type { Input, WalkOptions, Pipe, PipeConfig } from "./pipedown.d.ts";  
+import type { Input, WalkOptions, Pipe, Step } from "./pipedown.d.ts";  
 
 const PD_DIR = `./.pd`;
 
@@ -31,8 +31,8 @@ async function parseMdFiles(input: pdBuildInput) {
       /^README\.md\/*$/,
     ]
     .concat(respectGitIgnore())
-    .concat((input.globalConfig.skip || []).map((glob) => std.globToRegExp(glob)))
-    .concat((input.globalConfig.exclude || []).map((glob) => std.globToRegExp(glob)))
+    .concat((input.globalConfig?.skip || []).map((glob) => std.globToRegExp(glob)))
+    .concat((input.globalConfig?.exclude || []).map((glob) => std.globToRegExp(glob)))
   };
   if (input.match) opts.match = [new RegExp(input.match)];
 
@@ -45,10 +45,13 @@ async function parseMdFiles(input: pdBuildInput) {
         fileName: fileName(entry.path),
         dir: std.join(PD_DIR, fileDir(entry.path), fileName(entry.path)),
         config: input.globalConfig,
+        name: "",
+        camelName: "",
+        steps: [],
       } 
     });
     input.errors = input.errors?.concat(output.errors || [])
-    if (output.pipe && output.pipe.steps.filter(step => !step.internal).length > 0) {
+    if (output.pipe && output.pipe.steps.filter((step: Step) => !step.internal).length > 0) {
       input.pipes && input.pipes.push(output.pipe);
 
       try {
@@ -91,8 +94,8 @@ async function copyFiles(input: pdBuildInput) {
       /deno.*/,
     ]
     .concat(respectGitIgnore())
-    .concat((input.globalConfig.skip || []).map((glob) => std.globToRegExp(glob)))
-    .concat((input.globalConfig.exclude || []).map((glob) => std.globToRegExp(glob)))
+    .concat((input.globalConfig?.skip || []).map((glob) => std.globToRegExp(glob)))
+    .concat((input.globalConfig?.exclude || []).map((glob) => std.globToRegExp(glob)))
   };
 
   if (input.match) opts.match = [new RegExp(input.match)];
@@ -261,7 +264,6 @@ export interface pdBuildInput extends Input {
   pipes?: Pipe[];
   warning?: string[];
   match?: string;
-  globalConfig: PipeConfig;
 }
 
 export const pdBuild = async (input: pdBuildInput) => {

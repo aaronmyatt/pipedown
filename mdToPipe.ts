@@ -6,6 +6,8 @@ import type {
   Step,
   Steps,
   Token,
+  Input,
+  Pipe,
 } from "./pipedown.d.ts";
 
 const camelCaseString = (input: string) => {
@@ -186,7 +188,7 @@ const wrapWithInteralSteps = (input: mdToPipeInput) => {
   }
 };
 
-export const mdToPipe = async (input: Input) => {
+export const mdToPipe = async (input: {markdown:string, pipe: Pipe}&Input) => {
   const funcs = [
     parseMarkdown,
     findRanges,
