@@ -150,7 +150,6 @@ async function watchFs(input: pdBuildInput) {
       extensions.some((ext) => path.endsWith(ext))
   );
   
-  console.log({ notInProtectedDir, hasValidExtension, event })
   if (
     event.kind === "modify" && event.paths.length === 1 &&
     notInProtectedDir && hasValidExtension
