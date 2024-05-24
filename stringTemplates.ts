@@ -1,4 +1,7 @@
-export const denoTestFileTemplate = (pipeName: string) => `import {assertEquals} from "jsr:@std/assert" 
+import { std } from "./deps.ts";
+
+export const denoTestFileTemplate = (pipeName: string) =>
+  `import {assertEquals} from "jsr:@std/assert" 
 import { assertSnapshot } from "jsr:@std/testing/snapshot";
 import {pipe, rawPipe} from "./index.ts";
 
@@ -23,20 +26,22 @@ Deno.test("${pipeName}", async (t) => {
       }
     })
   }
-});`
+});`;
 
-export const denoReplTemplate = () => `#!/bin/sh
+export const denoReplTemplate = () =>
+  `#!/bin/sh
 deno run -A jsr:@pd/pdcli build
 deno repl -A -c ./.pd/deno.json --eval-file=./.pd/replEval.ts --unstable-kv
-`
+`;
 
-export const denoReplEvalTemplate = (importNames: string[]) => `${
+export const denoReplEvalTemplate = (importNames: string[]) =>
+  `${
     importNames
-    .map((key: string) => {
-      return `import ${key} from "${key}";`;
-    })
-    .join("\n")
-}
+      .map((key: string) => {
+        return `import ${key} from "${key}";`;
+      })
+      .join("\n")
+  }
 import $p from "jsr:@pd/pointers@0.1.1";
 
 function test(pipe, { exclude = [], test = true } = {}) {
@@ -76,22 +81,23 @@ async function step(pipe, { exclude = [], test = true } = {}) {
 }
 
 ${
-  importNames.map((key) =>
-    `const test${
-      key[0].toUpperCase() + key.substring(1)
-    } = () => test(${key});`
-  ).join("\n")
-}
+    importNames.map((key) =>
+      `const test${
+        key[0].toUpperCase() + key.substring(1)
+      } = () => test(${key});`
+    ).join("\n")
+  }
 ${
-  importNames.map((key) =>
-    `const step${
-      key[0].toUpperCase() + key.substring(1)
-    } = () => step(${key});`
-  ).join("\n")
-}
+    importNames.map((key) =>
+      `const step${
+        key[0].toUpperCase() + key.substring(1)
+      } = () => step(${key});`
+    ).join("\n")
+  }
 `;
 
-export const pdCliTemplate = () => `import pipe from "./index.ts"
+export const pdCliTemplate = () =>
+  `import pipe from "./index.ts"
 import {parseArgs} from "jsr:@std/cli@0.224.0";
 
 const flags = parseArgs(Deno.args);
@@ -108,7 +114,8 @@ if(flags.pretty || flags.p){
 }
 `;
 
-export const pdServerTemplate = () => `import pipe from "./index.ts"
+export const pdServerTemplate = () =>
+  `import pipe from "./index.ts"
 import {parseArgs} from "jsr:@std/cli@0.224.0";
 
 function findOpenPort(defaultPort = 8000){
@@ -152,7 +159,8 @@ const handler = async (request: Request) => {
 const server = Deno.serve({ handler, port, hostname });
 server.finished.then(() => console.log("Server closed"));`;
 
-export const pdWorkerTemplate = () => `import pipe from "./index.ts"
+export const pdWorkerTemplate = () =>
+  `import pipe from "./index.ts"
 globalThis.addEventListener("install", async (event) => {
     event.waitUntil(pipe.process({event, mode: 'worker', type: {install: true}}));
 })
@@ -204,3 +212,14 @@ globalThis.addEventListener("message", async (event) => {
         console.log(output.data);
     }
 });`;
+
+export const cliHelpTemplate = ({ title, command, sections }: {
+  title: string;
+  command: string;
+  sections: string[];
+}) =>
+  `${std.colors.bold(title)}
+Usage: ${std.colors.green(command)}
+
+${sections.join("\n\n")}
+`;
