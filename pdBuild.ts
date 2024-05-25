@@ -44,7 +44,7 @@ async function parseMdFiles(input: pdBuildInput) {
       pipe: {
         fileName: fileName(entry.path),
         dir: std.join(PD_DIR, fileDir(entry.path), fileName(entry.path)),
-        config: input.globalConfig,
+        config: Object.assign({}, input.globalConfig),
         name: "",
         camelName: "",
         steps: [],
