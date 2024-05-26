@@ -2,7 +2,7 @@ import { esbuild, std, pd } from "./deps.ts";
 import { denoPlugins } from "jsr:@luca/esbuild-deno-loader@0.10.3";
 import { mdToPipe } from "./mdToPipe.ts";
 import { pipeToScript } from "./pipeToScript.ts";
-import { fileDir, fileName } from "./pdUtils.ts";
+import * as utils from "./pdUtils.ts";
 import * as templates from "./stringTemplates.ts";
 import type { Input, WalkOptions, Pipe, Step } from "./pipedown.d.ts";  
 
@@ -40,15 +40,19 @@ async function parseMdFiles(input: pdBuildInput) {
     const markdown = await Deno.readTextFile(entry.path);
     if(markdown === '') continue;
 
+    // the "executable markdown" will live in a directory with the same name as the file.
+    // We will use the {dir}/index.ts convention for the entry point.
+    const fileName = utils.fileName(entry.path);
+    const dir = std.join(PD_DIR, std.parsePath(std.relative(Deno.cwd(), entry.path)).dir, fileName)
     const output = await mdToPipe({ markdown,
       pipe: {
-        fileName: fileName(entry.path),
-        dir: std.join(PD_DIR, fileDir(entry.path), fileName(entry.path)),
+        fileName,
+        dir,
         config: Object.assign({}, input.globalConfig),
         name: "",
         camelName: "",
         steps: [],
-      } 
+      }
     });
     input.errors = input.errors?.concat(output.errors || [])
     if (output.pipe && output.pipe.steps.filter((step: Step) => !step.internal).length > 0) {
@@ -100,7 +104,7 @@ async function copyFiles(input: pdBuildInput) {
 
   if (input.match) opts.match = [new RegExp(input.match)];
   for await (const entry of std.walk(".", opts)) {
-    const dest = std.join(PD_DIR, fileDir(entry.path), entry.name);
+    const dest = std.join(PD_DIR, utils.fileDir(entry.path), entry.name);
     await Deno.mkdir(std.dirname(dest), { recursive: true });
     await Deno.copyFile(entry.path, dest);
   }
