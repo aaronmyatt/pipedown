@@ -101,7 +101,7 @@ export const pdCliTemplate = () =>
 import {parseArgs} from "jsr:@std/cli@0.224.0";
 
 const flags = parseArgs(Deno.args);
-const output = await pipe.process({ flags, mode: "cli" })
+const output = await pipe.process({ flags, mode: { cli: true } })
 if(output.errors){
   console.error(output.errors)
   Deno.exit(1);
@@ -118,8 +118,11 @@ export const pdServerTemplate = () =>
   `import pipe from "./index.ts"
 import {parseArgs} from "jsr:@std/cli@0.224.0";
 
+const isDenoDeploy = Deno.env.has('DENO_DEPLOYMENT_ID');
+
 function findOpenPort(defaultPort = 8000){
   let port = defaultPort;
+  if(isDenoDeploy) return port;
   while(true){
     try {
       Deno.listen({port});
@@ -143,7 +146,10 @@ const handler = async (request: Request) => {
           },
           status: 200,
       },
-      mode: "server"
+      mode: {
+          server: true
+          deploy: isDenoDeploy
+      }
   });
   if(output.errors) {
       console.error(output.errors);
@@ -162,10 +168,10 @@ server.finished.then(() => console.log("Server closed"));`;
 export const pdWorkerTemplate = () =>
   `import pipe from "./index.ts"
 globalThis.addEventListener("install", async (event) => {
-    event.waitUntil(pipe.process({event, mode: 'worker', type: {install: true}}));
+    event.waitUntil(pipe.process({event, mode: { worker: true }, type: {install: true}}));
 })
 globalThis.addEventListener("activate", async (event) => {
-    event.waitUntil(pipe.process({event, mode: 'worker', type: {activate: true}}));
+    event.waitUntil(pipe.process({event, mode: { worker: true }, type: {activate: true}}));
 })
 globalThis.addEventListener("fetch", async (event) => {
     const detectCacheExceptions = [
@@ -203,7 +209,7 @@ globalThis.addEventListener("fetch", async (event) => {
 })
 
 globalThis.addEventListener("message", async (event) => {
-    const output = await pipe.process({event, mode: 'worker', type: {message: true}});
+    const output = await pipe.process({event, mode: { worker: true }, type: {message: true}});
     if(output.errors) {
         console.error(output.errors);
         return;
