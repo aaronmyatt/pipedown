@@ -147,7 +147,7 @@ const handler = async (request: Request) => {
           status: 200,
       },
       mode: {
-          server: true
+          server: true,
           deploy: isDenoDeploy
       }
   });
