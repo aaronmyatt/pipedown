@@ -30,7 +30,7 @@ Deno.test("${pipeName}", async (t) => {
 
 export const denoReplTemplate = () =>
   `#!/bin/sh
-deno run -A jsr:@pd/pdcli build
+pd build
 deno repl -A -c ./.pd/deno.json --eval-file=./.pd/replEval.ts --unstable-kv
 `;
 
@@ -38,7 +38,7 @@ export const denoReplEvalTemplate = (importNames: string[]) =>
   `${
     importNames
       .map((key: string) => {
-        return `import ${key} from "${key}";`;
+        return `import ${key.replace(/^\d+/, '')} from "${key}";`;
       })
       .join("\n")
   }
@@ -84,14 +84,14 @@ ${
     importNames.map((key) =>
       `const test${
         key[0].toUpperCase() + key.substring(1)
-      } = () => test(${key});`
+      } = () => test(${key.replace(/^\d+/, '')});`
     ).join("\n")
   }
 ${
     importNames.map((key) =>
       `const step${
         key[0].toUpperCase() + key.substring(1)
-      } = () => step(${key});`
+      } = () => step(${key.replace(/^\d+/, '')});`
     ).join("\n")
   }
 `;
