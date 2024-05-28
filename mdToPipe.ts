@@ -17,6 +17,22 @@ const camelCaseString = (input: string) => {
 };
 
 const parseMarkdown = (input: mdToPipeInput) => {
+  // we get a big long list of objects like this:
+  // {
+  //     "type": "START",
+  //     "tag": "LIST",
+  //     "content": "",
+  //     "level": 0,
+  //     "kind": "",
+  //     "fenced": false,
+  //     "language": "",
+  //     "start_number": 0,
+  //     "label": "",
+  //     "alignments": [],
+  //     "url": "",
+  //     "title": "",
+  //     "checked": false
+  // }
   input.tokens = md.parse(input.markdown || "");
 };
 
@@ -188,6 +204,58 @@ const wrapWithInteralSteps = (input: mdToPipeInput) => {
   }
 };
 
+const setupChecks = (input: mdToPipeInput) => {
+  const inRange = (ranges: Array<number[]>, index: number) => {
+    return ranges.find(([start, stop]: number[]) => {
+      return start < index && stop > index;
+    });
+  }
+
+  // flag which codeblocks are within a ranges.list block
+  // we don't want to filter as we need to preserve the order
+  input.pipe.steps = input.pipe.steps.map((step: Step) => {
+    step.inList = !!inRange(input.ranges.lists, step.range[0]);
+    return step;
+  })
+    .map((step: Step, stepIndex: number) => {
+      if (step.inList) {
+        // slice from start of list to start of codeblock
+        const listRange = inRange(input.ranges.lists, step.range[0]);
+
+        // check list items preceding codeblock for the following patterns
+        // check|when|if:* - if true, add value to step config
+        // route:* - if true, add value to step config
+        listRange && input.tokens.slice(listRange[0], step.range[0])
+          .filter((token: Token) => pd.$p.get(token, "/type") === TokenType.text)
+          .map((token: Token) => pd.$p.get(token, "/content").trim())
+          .filter(text => !!text.match(/(?:check|when|if|flags|route|stop|only|or|and|not):/g))
+          .map((text: string) => {
+            const [type, pointer] = text.split(":");
+            return { type, pointer };
+          })
+          .forEach((check: {type: string, pointer: string}) => {
+            const appendCheck = pd.$p.compile('/config/checks/-')
+
+            const actions: Record<string, () => void> = {
+              "check": () => appendCheck.set(step, check.pointer),
+              "if": () => appendCheck.set(step, check.pointer),
+              "when": () => appendCheck.set(step, check.pointer),
+              "flags": () => appendCheck.set(step, '/flags'+check.pointer),
+              "or": () => pd.$p.set(step, `/config/or/-`, check.pointer),
+              "and": () => pd.$p.set(step, `/config/and/-`, check.pointer),
+              "not": () => pd.$p.set(step, `/config/not/-`, check.pointer),
+              "route": () => pd.$p.set(step, `/config/routes/-`, check.pointer),
+              "stop": () => pd.$p.set(step, `/config/stop`, stepIndex),
+              "only": () => pd.$p.set(step, `/config/only`, stepIndex),
+            };
+
+            actions[check.type]();
+          });
+      }
+      return step;
+    });
+}
+
 export const mdToPipe = async (input: {markdown:string, pipe: Pipe}&Input) => {
   const funcs = [
     parseMarkdown,
@@ -195,85 +263,7 @@ export const mdToPipe = async (input: {markdown:string, pipe: Pipe}&Input) => {
     findPipeName,
     findSteps,
     mergeMetaConfig,
-    (input: mdToPipeInput) => {
-      // flag which codeblocks are within a ranges.list block
-      input.pipe.steps = input.pipe.steps.map((step: Step) => {
-        const inList = input.ranges.lists.find((listRange: number[]) => {
-          return listRange[0] < step.range[0] && listRange[1] > step.range[0];
-        });
-        step.inList = !!inList || false;
-        return step;
-      })
-        .map((step: Step, stepIndex: number) => {
-          if (step.inList) {
-            // slice from start of list to start of codeblock
-            const listRange = input.ranges.lists.find((listRange: number[]) => {
-              return listRange[0] < step.range[0] &&
-                listRange[1] > step.range[0];
-            });
-
-            // check list items preceding codeblock for the following patterns
-            // check|when|if:* - if true, add value to step config
-            // route:* - if true, add value to step config
-            listRange && input.tokens.slice(listRange[0], step.range[0])
-              .reduce((acc: Array<Array<Token>>, token: Token) => {
-                const tag = pd.$p.get(token, "/tag");
-                if (tag === TokenTag.item && token.type === TokenType.start) {
-                  acc.push([]);
-                }
-                const lastList = acc.findLast((list: Array<Token>) => {
-                  return list.length >= 0;
-                });
-                if (token.type === TokenType.text && lastList) {
-                  lastList.push(token);
-                }
-                return acc;
-              }, [])
-              .map((list: Array<Token>): string => {
-                return list.filter((token: Token) => {
-                  return token.type === TokenType.text;
-                })
-                  .reduce((acc: string, token: Token) => {
-                    return acc + pd.$p.get(token, "/content");
-                  }, "");
-              })
-              .forEach((listItem: string) => {
-                const pattern = /(?:check|when|if|route|stop|only):/g;
-                const match = listItem.match(pattern);
-                if (!match) {
-                  return;
-                }
-
-                const actions: Record<string, () => void> = {
-                  "check": () => {
-                    const check = listItem.replace("check:", "").trim();
-                    pd.$p.set(step, `/config/checks/-`, check);
-                  },
-                  "if": () => {
-                    const check = listItem.replace("if:", "").trim();
-                    pd.$p.set(step, `/config/checks/-`, check);
-                  },
-                  "when": () => {
-                    const check = listItem.replace("when:", "").trim();
-                    pd.$p.set(step, `/config/checks/-`, check);
-                  },
-                  "route": () => {
-                    const check = listItem.replace("route:", "").trim();
-                    pd.$p.set(step, `/config/routes/-`, check);
-                  },
-                  "stop": () => pd.$p.set(step, `/config/stop`, stepIndex),
-                  "only": () => pd.$p.set(step, `/config/only`, stepIndex),
-                };
-
-                match.forEach((match: string) => {
-                  const key = match.replace(":", "");
-                  actions[key]();
-                });
-              });
-          }
-          return step;
-        });
-    },
+    setupChecks,
     wrapWithInteralSteps,
   ];
 

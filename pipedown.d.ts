@@ -54,6 +54,9 @@ export type Step =     {
   internal?: boolean,
   config?: {
     checks?: string[],
+    or?: string[],
+    and?: string[],
+    not?: string[],
     routes?: string[],
     flags?: string[],
     only?: number,

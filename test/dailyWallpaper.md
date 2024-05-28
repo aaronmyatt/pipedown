@@ -68,11 +68,19 @@ input.osaout =
 
 ### Example conditional check
 - check: /wat
+  or: /watwat
+  and: /andwat
+  not: /notwat
 - ```ts
   console.log('wat')
   ```
 
+## WithRoute
 - route: /wat/:id
+- check: /wat
+- or: /watwat
+- and: /andwat
+- not: /notwat
 - ```ts
   console.log('route')
   ```
