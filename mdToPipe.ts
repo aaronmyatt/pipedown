@@ -225,12 +225,17 @@ const setupChecks = (input: mdToPipeInput) => {
         // check list items preceding codeblock for the following patterns
         // check|when|if:* - if true, add value to step config
         // route:* - if true, add value to step config
+
         listRange && input.tokens.slice(listRange[0], step.range[0])
-          .filter((token: Token) => pd.$p.get(token, "/type") === TokenType.text)
-          .map((token: Token) => pd.$p.get(token, "/content").trim())
+          .reduce((acc: string[], entry) => {
+            if(entry.type === TokenType.start && entry.tag === TokenTag.item) acc.push('')
+            if(entry.type == TokenType.text) (acc[acc.length-1] = acc[acc.length-1] + entry.content)
+            return acc;
+          }, [])
+          .map((text: string) => text.trim())
           .filter(text => !!text.match(/(?:check|when|if|flags|route|stop|only|or|and|not):/g))
           .map((text: string) => {
-            const [type, pointer] = text.split(":");
+            const [type, pointer] = text.replace(' ', '').split(":");
             return { type, pointer };
           })
           .forEach((check: {type: string, pointer: string}) => {
