@@ -78,6 +78,14 @@ export type PipeConfig  = {
     build?: string[],
     skip: string[],
     exclude: string[],
+    checks?: string[],
+    or?: string[],
+    and?: string[],
+    not?: string[],
+    routes?: string[],
+    flags?: string[],
+    only?: number,
+    stop?: number,
 };
 
 export type Pipe = {
