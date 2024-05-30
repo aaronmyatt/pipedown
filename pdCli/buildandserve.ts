@@ -140,7 +140,6 @@ const page = (scriptsPaths: string[]) =>
 `;
 
 async function watchFs(input: pdBuildInput) {
-  console.log({cwd: Deno.cwd()})
   for await (const event of Deno.watchFs(Deno.cwd(), { recursive: true })) {
     const pathRegex = new RegExp(/\.pd|deno|dist|\.git|\.vscode|\.github|\.cache|\.history|\.log|\.lock|\.swp/)
     const notInProtectedDir = event.paths.every((path) => !path.match(pathRegex));
