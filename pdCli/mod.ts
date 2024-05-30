@@ -137,16 +137,26 @@ const output = await pd.process<pdCliInput>(funcs, {
     debug: debugParamPresent,
 }, {});
 
-if (output.errors && output.errors.filter((err: PDError) => err).length > 0) {
-    console.error(output);
+if(output.errors && output.errors.filter((err: PDError) => err).length > 0)  {
+
+}
+
+if (output.errors && output.errors.length > 0) {
+    output.errors.forEach((error: PDError) => {
+        console.log(error.name)
+        console.log('function: ', error.func)
+        console.log(error.message)
+        console.log(error.stack)
+        console.log('---')
+    })
     Deno.exit(1);
 } else {
     if (output.debug) {
         console.log(output);
-    } else {
-        delete output.errors;
-        delete output.output.errors;
-        !objectEmpty(output.output) && console.log(output.output);
+    } else if(flags.json) {
+        console.log(JSON.stringify(output.output, null, 2));
+    } else if (flags.pretty) {
+        console.log(output.output);
     }
     Deno.exit(0);
 }
