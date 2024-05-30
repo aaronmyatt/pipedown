@@ -30,10 +30,11 @@ export const lazyTest = std.debounce(async () => {
     await test.output();
 }, 100);
 
-export function pdRun(scriptName: string, testInput: string) {
+export async function pdRun(scriptName: string, testInput: string) {
     const pipeDir = `${PD_DIR}/${scriptName.replace(/\.md/, '')}`;
     const scriptPath = `${pipeDir}/cli.ts`;
-    console.log(std.colors.brightGreen(`Running... ${scriptName}`));
+
+    const scriptArgs = Deno.args.slice(Deno.args.findIndex((arg) => arg === "--") + 1)
     const command = new Deno.Command('deno', {
         args: [
             "run",
@@ -42,12 +43,15 @@ export function pdRun(scriptName: string, testInput: string) {
             "-c",
             ".pd/deno.json",
             scriptPath,
+            "--input",
             testInput || "{}",
+            ...scriptArgs
         ],
         stdout: "inherit",
         stderr: "inherit",
+        stdin: 'inherit',
     });
-    command.outputSync();
+    await command.output();
 }
 
 export async function pdServe(scriptName: string, testInput: string) {
