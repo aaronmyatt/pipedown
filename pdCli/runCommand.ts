@@ -23,13 +23,13 @@ const helpText = cliHelpTemplate({
   ],
 });
 
+
 export async function runCommand(input: pdCliInput) {
   if (pd.$p.get(input, "/flags/help") || pd.$p.get(input, "/flags/h")) {
     console.log(helpText);
   } else {
     const command = commandName.get(input);
     const testInput = inputRaw.get(input) || inputParam.get(input) || "{}";
-    input.match = command;
     await pdBuild(input);
     await pdRun(command, testInput);
   }
