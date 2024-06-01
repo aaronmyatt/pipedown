@@ -225,22 +225,20 @@ const setupChecks = (input: mdToPipeInput) => {
         // check list items preceding codeblock for the following patterns
         // check|when|if:* - if true, add value to step config
         // route:* - if true, add value to step config
+        const checkRegex = new RegExp('(?<type>check|when|if|flags|or|and|not|route|stop|only):\\s*(?<pointer>\\S*)');
 
         listRange && input.tokens.slice(listRange[0], step.range[0])
           .reduce((acc: string[], entry) => {
             if(entry.type === TokenType.start && entry.tag === TokenTag.item) acc.push('')
-            if(entry.type == TokenType.text) (acc[acc.length-1] = acc[acc.length-1] + entry.content)
+            if(entry.type == TokenType.text) (acc[acc.length-1] = acc[acc.length-1] + entry.content);
             return acc;
           }, [])
           .map((text: string) => text.trim())
-          .filter(text => !!text.match(/(?:check|when|if|flags|route|stop|only|or|and|not):/g))
-          .map((text: string) => {
-            const [type, pointer] = text.replace(' ', '').split(":");
-            return { type, pointer };
-          })
-          .forEach((check: {type: string, pointer: string}) => {
+          .map((text: string) => checkRegex.exec(text))
+          .filter(match => match)
+          .map(match => (match?.groups || {type: '', pointer: ''}))
+          .forEach((check) => {
             const appendCheck = pd.$p.compile('/config/checks/-')
-
             const actions: Record<string, () => void> = {
               "check": () => appendCheck.set(step, check.pointer),
               "if": () => appendCheck.set(step, check.pointer),
