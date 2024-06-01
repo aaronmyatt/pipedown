@@ -7,6 +7,7 @@
       "jsr:@luca/esbuild-deno-loader@0.10.3": "jsr:@luca/esbuild-deno-loader@0.10.3",
       "jsr:@pd/pdpipe@0.1.1": "jsr:@pd/pdpipe@0.1.1",
       "jsr:@pd/pdpipe@0.2.0": "jsr:@pd/pdpipe@0.2.0",
+      "jsr:@pd/pdpipe@0.2.1": "jsr:@pd/pdpipe@0.2.1",
       "jsr:@pd/pointers": "jsr:@pd/pointers@0.1.0",
       "jsr:@pd/pointers@0.1.0": "jsr:@pd/pointers@0.1.0",
       "jsr:@pd/pointers@0.1.1": "jsr:@pd/pointers@0.1.1",
@@ -66,6 +67,12 @@
       },
       "@pd/pdpipe@0.2.0": {
         "integrity": "e7ea1ba938842e2ab7134c7a506336e3e405959d2e15828c3e2c6f4762a01132",
+        "dependencies": [
+          "jsr:@pd/pointers@0.1.0"
+        ]
+      },
+      "@pd/pdpipe@0.2.1": {
+        "integrity": "f549d9bc090ef515c8cb2e5c5728896ffc17d33ac1c2c000711358e07698347a",
         "dependencies": [
           "jsr:@pd/pointers@0.1.0"
         ]
