@@ -132,8 +132,8 @@ export interface pdCliInput extends Input {
 };
 
 // @ts-ignore - this is a Deno specific API
-const flags: Args = std.parseArgs(Deno.args, {"--": true});
-const output = await pd.process<pdCliInput>(funcs, {
+const flags: Args = std.parseArgs(Deno.args, {"--": true, boolean: ["json", "pretty", "j", "p", "debug", "d", "DEBUG", "D"]});
+const output = await process<pdCliInput>(funcs, {
     flags,
     globalConfig: {} as PipeConfig,
     projectPipes: [],
@@ -141,10 +141,6 @@ const output = await pd.process<pdCliInput>(funcs, {
     output: {errors: []} as Input,
     debug: debugParamPresent,
 }, {});
-
-if(output.errors && output.errors.filter((err: PDError) => err).length > 0)  {
-
-}
 
 if (output.errors && output.errors.length > 0) {
     output.errors.forEach((error: PDError) => {
@@ -158,9 +154,9 @@ if (output.errors && output.errors.length > 0) {
 } else {
     if (output.debug) {
         console.log(output);
-    } else if(flags.json) {
+    } else if(flags.json || flags.j) {
         console.log(JSON.stringify(output.output, null, 2));
-    } else if (flags.pretty) {
+    } else if (flags.pretty || flags.p) {
         console.log(output.output);
     }
     Deno.exit(0);
