@@ -11,6 +11,8 @@ import {
 
 import {std, pd} from "../deps.ts";
 
+const {$p, process} = pd;
+
 import {helpCommand} from "./helpCommand.ts";
 import {buildCommand} from "./buildCommand.ts";
 import {runCommand} from "./runCommand.ts";
@@ -53,9 +55,7 @@ export function checkFlags(flags: string[], func: (input: pdCliInput) => Promise
             input.flags._.every((flag, index) => {
                 return flags[index] === "*" || flags[index] === flag;
             });
-        if (flagsMatch) {
-            return func(input);
-        }
+        if (flagsMatch) return func(input);
         return input;
     };
 }
@@ -111,6 +111,11 @@ const funcs = [
     checkFlags(["build"], buildCommand),
     checkFlags(["run", "*", "*"], runCommand),
     checkFlags(["test"], testCommand),
+    checkFlags(["version"], async (input: pdCliInput) => {
+        const response = await (await fetch("https://jsr.io/@pd/pdcli/meta.json")).json();
+        console.log($p.get(response, '/latest'));
+        return input;
+    })
 ];
 
 const debugParamPresent = Deno.env.get("DEBUG") || Deno.args.includes("--debug") ||
