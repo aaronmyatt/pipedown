@@ -41,7 +41,7 @@ export const pipeToScript = async (input: PipeToScriptInput) => {
 
   const stepsToFunctions = (input: PipeToScriptInput) => {
     input.functions = input.pipe && input.pipe.steps.map((step: Step) => {
-      return `async function ${step.funcName} (input, opts) {
+      return `export async function ${step.funcName} (input, opts) {
     ${step.code.replaceAll(detectImports, "")}
 }`;
     });
