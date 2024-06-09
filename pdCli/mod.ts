@@ -17,6 +17,7 @@ const version = projectMetadata.version;
 import {helpCommand} from "./helpCommand.ts";
 import {buildCommand} from "./buildCommand.ts";
 import {runCommand} from "./runCommand.ts";
+import {runWithCommand} from "./runWithCommand.ts";
 import {listCommand} from "./listCommand.ts";
 import {testCommand} from "./testCommand.ts";
 import {cleanCommand} from "./cleanCommand.ts";
@@ -144,6 +145,7 @@ const funcs = [
 
     checkFlags(["build"], buildCommand),
     checkFlags(["run", "*", "*"], runCommand),
+    checkFlags(["runWith", "*", "*", "*"], runWithCommand),
     checkFlags(["test"], testCommand),
     checkFlags(["version"], versionCommand)
 ];

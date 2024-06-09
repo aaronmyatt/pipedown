@@ -54,6 +54,30 @@ export async function pdRun(scriptName: string, testInput: string) {
     await command.output();
 }
 
+export async function pdRunWith(wrapperName: string, scriptName: string, testInput: string) {
+    const pipeDir = `${PD_DIR}/${scriptName.replace(/\.md/, '')}`;
+    const scriptPath = `${pipeDir}/${wrapperName}.ts`;
+
+    const scriptArgs = Deno.args.slice(Deno.args.findIndex((arg) => arg === "--") + 1)
+    const command = new Deno.Command('deno', {
+        args: [
+            "run",
+            "--unstable-kv",
+            "-A",
+            "-c",
+            ".pd/deno.json",
+            scriptPath,
+            "--input",
+            testInput || "{}",
+            ...scriptArgs
+        ],
+        stdout: "inherit",
+        stderr: "inherit",
+        stdin: 'inherit',
+    });
+    await command.output();
+}
+
 export async function pdServe(scriptName: string, testInput: string) {
     const pipeDir = `${PD_DIR}/${scriptName.replace(/\.md/, '')}`;
     const scriptPath = `${pipeDir}/server.ts`;
@@ -71,6 +95,7 @@ export async function pdServe(scriptName: string, testInput: string) {
         ],
         stdout: "inherit",
         stderr: "inherit",
+        stdin: 'inherit',
     });
     const process =  command.spawn();
     await process.output();
