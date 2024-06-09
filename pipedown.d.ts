@@ -74,7 +74,10 @@ export type PipeConfig  = {
     },
     inputs?: Array<{
         [key: string]: Input,
-    }>
+    }>,
+    templates: {
+        [key: string]: string,
+    },
     build?: string[],
     skip: string[],
     exclude: string[],

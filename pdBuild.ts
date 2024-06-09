@@ -211,6 +211,16 @@ const writeWorkerFile = async (input: pdBuildInput) => {
   return input;
 };
 
+const writeUserTemplates = async (input: pdBuildInput) => {
+  for (const pipe of (input.pipes || [])) {
+    for(const path of pd.$p.get(input, '/globalConfig/templates') || [] as string[]){
+      const pipePath = std.join(pipe.dir, utils.fileName(path)+'.ts');
+      await Deno.copyFile(path, pipePath);
+    }
+  }
+  return input;
+}
+
 async function buildIIFE(input: pdBuildInput) {
   const configPath = std.join(Deno.cwd(),'.pd', 'deno.json');
   const _denoPlugins = denoPlugins({ configPath, loader: "native" })
@@ -298,6 +308,7 @@ export const pdBuild = async (input: pdBuildInput) => {
     writeCliFile,
     writeServerFile,
     writeWorkerFile,
+    writeUserTemplates,
     buildIIFE,
     buildESM,
     report,
