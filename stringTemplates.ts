@@ -38,7 +38,7 @@ export const denoReplEvalTemplate = (importNames: string[]) =>
   `${
     importNames
       .map((key: string) => {
-        return `import ${key.replace(/^\d+/, '')} from "${key}";`;
+        return `import { default as ${key.replace(/^\d+/, '')}, process as ${key.replace(/^\d+/, '')}Process } from "${key}";`;
       })
       .join("\n")
   }

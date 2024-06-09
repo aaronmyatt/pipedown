@@ -63,9 +63,10 @@ const funcSequence = [
 ${ input.pipe && input.pipe.steps.map((step: Step) => step.funcName).join(", ") }
 ]
 const pipe = Pipe(funcSequence, rawPipe);
+const process = (input={}) => pipe.process(input);
 pipe.json = rawPipe;
 export default pipe;
-export { pipe, rawPipe }
+export { pipe, rawPipe, process };
 `;
     return input;
   };
