@@ -2,16 +2,17 @@ import type { PDError, Input, PipeConfig } from "../pipedown.d.ts";
 import type { Args } from "jsr:@std/cli@0.224.0";
 import type { WalkEntry } from "jsr:@std/fs@0.224.0/walk";
 import type { ParsedPath } from "jsr:@std/path@0.224.0/parse";
+import projectMetadata from "./../deno.json" with { type: "json" };
 
 import {
     PD_DIR,
-    objectEmpty,
     pdRun,
 } from "./helpers.ts";
 
 import {std, pd} from "../deps.ts";
 
-const {$p, process} = pd;
+const {process} = pd;
+const version = projectMetadata.version;
 
 import {helpCommand} from "./helpCommand.ts";
 import {buildCommand} from "./buildCommand.ts";
@@ -98,6 +99,11 @@ const startListeners = (input: pdCliInput) => {
     }
 }
 
+const versionCommand = (input: pdCliInput) => {
+    console.log(version);
+    return input;
+}
+
 const funcs = [
     pdInit,
     gatherProjectContext,
@@ -111,11 +117,7 @@ const funcs = [
     checkFlags(["build"], buildCommand),
     checkFlags(["run", "*", "*"], runCommand),
     checkFlags(["test"], testCommand),
-    checkFlags(["version"], async (input: pdCliInput) => {
-        const response = await (await fetch("https://jsr.io/@pd/pdcli/meta.json")).json();
-        console.log($p.get(response, '/latest'));
-        return input;
-    })
+    checkFlags(["version"], versionCommand)
 ];
 
 const debugParamPresent = Deno.env.get("DEBUG") || Deno.args.includes("--debug") ||
@@ -132,7 +134,13 @@ export interface pdCliInput extends Input {
 };
 
 // @ts-ignore - this is a Deno specific API
-const flags: Args = std.parseArgs(Deno.args, {"--": true, boolean: ["json", "pretty", "j", "p", "debug", "d", "DEBUG", "D"]});
+const flags: Args = std.parseArgs(Deno.args, {"--": true, boolean: ["json", "pretty", "j", "p", "debug", "d", "DEBUG", "D", "version", "v"]});
+
+if(flags.version || flags.v) {
+    console.log(version);
+    Deno.exit(0);
+}
+
 const output = await process<pdCliInput>(funcs, {
     flags,
     globalConfig: {} as PipeConfig,
