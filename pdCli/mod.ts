@@ -48,6 +48,32 @@ async function pdInit(input: pdCliInput) {
     }
 }
 
+async function registerProject(input: pdCliInput) {
+    const project = {
+        name: input.globalConfig.name || std.parsePath(Deno.cwd()).name,
+        path: Deno.cwd()
+    };
+
+    const home = Deno.env.get("HOME");
+    if(home){
+        try {
+            await Deno.mkdir(std.join(home, '.pipedown'), { recursive: true });
+        } catch (e) {
+            if (e.name !== "AlreadyExists") throw e;
+        }
+
+        const projectsPath = std.join(home, '.pipedown', "projects.json");
+        let projects = [];
+        try {
+            projects = JSON.parse(projectsPath);
+        } catch (_e) {
+            // probably the first project
+        }
+        projects.push(project);
+        await Deno.writeTextFile(projectsPath, JSON.stringify(projects, null, 2), { create: true });
+    }
+}
+
 export function checkFlags(flags: string[], func: (input: pdCliInput) => Promise<pdCliInput> | pdCliInput): (input: pdCliInput) => Promise<pdCliInput> | pdCliInput {
     return (input: pdCliInput) => {
         if (input.flags._.length === 0 && flags[0] === "none") return func(input);
@@ -106,6 +132,7 @@ const versionCommand = (input: pdCliInput) => {
 
 const funcs = [
     pdInit,
+    registerProject,
     gatherProjectContext,
     startListeners,
     checkFlags(["none"], defaultCommand),
