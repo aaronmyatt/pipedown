@@ -17,9 +17,11 @@ const helpText = cliHelpTemplate({
     pd run file.md
     pd run file.md --input '{"key": "value"}'`,
     `Options:
-  -h, --help    Display this message.
-  -d, --debug   Display debug information.
-      --input   Initial input for the pipedown file. Needs to be a JSON string.`,
+    -j, --json    Output the build information as JSON.
+    -p, --pretty  Pretty print the JSON output.
+    -h, --help    Display this message.
+    -d, --debug   Display debug information.
+    --input       Initial input for the pipedown file. Needs to be a JSON string.`,
   ],
 });
 

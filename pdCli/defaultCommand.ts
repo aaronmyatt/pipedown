@@ -1,7 +1,6 @@
 import type { pdCliInput } from "./mod.ts";
-import { pd, std } from "../deps.ts";
+import { std } from "../deps.ts";
 import { serve } from "./buildandserve.ts";
-import { helpCommand } from "./helpCommand.ts";
 
 // const listenForKeypresses = async () => {
 //   addEventListener("keypress", async (e) => {
@@ -37,11 +36,7 @@ import { helpCommand } from "./helpCommand.ts";
 // }
 
 export async function defaultCommand(input: pdCliInput) {
-  if (pd.$p.get(input, "/flags/help") || pd.$p.get(input, "/flags/h")) {
-    await helpCommand(input);
-  } else {
-    console.log(std.colors.brightGreen("Watching for changes..."));
-    await serve(input);
-  }
+  console.log(std.colors.brightGreen("Watching for changes..."));
+  await serve(input);
   return input;
 }

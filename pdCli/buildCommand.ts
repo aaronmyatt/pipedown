@@ -9,6 +9,8 @@ const helpText = cliHelpTemplate({
   sections: [
     "The build command reads all markdown files in the current directory and generates corresponding executable files in the .pd directory.",
     `Options:
+    -j, --json    Output the build information as JSON.
+    -p, --pretty  Pretty print the JSON output.
     -d, --debug   Display debug information.
     -h, --help    Display this message.`,
   ],

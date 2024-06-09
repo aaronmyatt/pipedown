@@ -21,6 +21,7 @@ import {listCommand} from "./listCommand.ts";
 import {testCommand} from "./testCommand.ts";
 import {cleanCommand} from "./cleanCommand.ts";
 import {defaultCommand} from "./defaultCommand.ts";
+import {helpText} from "../stringTemplates.ts";
 
 async function pdInit(input: pdCliInput) {
     try {
@@ -161,10 +162,14 @@ export interface pdCliInput extends Input {
 };
 
 // @ts-ignore - this is a Deno specific API
-const flags: Args = std.parseArgs(Deno.args, {"--": true, boolean: ["json", "pretty", "j", "p", "debug", "d", "DEBUG", "D", "version", "v"]});
-
+const flags: Args = std.parseArgs(Deno.args, {"--": true, boolean: ["json", "pretty", "j", "p", "debug", "d", "DEBUG", "D", "version", "v", "help", "h"]});
 if(flags.version || flags.v) {
     console.log(version);
+    Deno.exit(0);
+}
+
+if(flags.help || flags.h) {
+    console.log(helpText);
     Deno.exit(0);
 }
 
