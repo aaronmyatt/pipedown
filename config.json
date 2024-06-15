@@ -1,7 +1,7 @@
 {
     "inGlobal": true,
     "exclude": [
-        "test/envTest.md"
+        "envTest.md"
     ],
-    "templates": ["./test/denoflare.ts", "./test/server.ts"]
+    "templates": ["./test/denoflare.ts"]
 }

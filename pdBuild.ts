@@ -31,8 +31,8 @@ async function parseMdFiles(input: pdBuildInput) {
       /^README\.md\/*$/,
     ]
     .concat(respectGitIgnore())
-    .concat((input.globalConfig?.skip || []).map((glob) => std.globToRegExp(glob)))
-    .concat((input.globalConfig?.exclude || []).map((glob) => std.globToRegExp(glob)))
+    .concat(input.globalConfig?.skip || [])
+    .concat(input.globalConfig?.exclude || [])
   };
   if (input.match) opts.match = [new RegExp(input.match)];
 
