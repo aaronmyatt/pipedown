@@ -153,7 +153,7 @@ async function watchFs(input: pdBuildInput) {
     event.kind === "modify" && event.paths.length === 1 &&
     notInProtectedDir && hasValidExtension
   ) {
-      const fileName = std.basename(event.paths[0]);
+      const fileName = event.paths[0];
       console.log(std.colors.brightGreen(`File changed: ${fileName}`));
       lazyIO(Object.assign(input, { match: fileName }));
     }
