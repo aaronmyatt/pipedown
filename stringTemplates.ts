@@ -38,7 +38,9 @@ export const denoReplEvalTemplate = (importNames: string[]) =>
   `${
     importNames
       .map((key: string) => {
-        return `import { default as ${key.replace(/^\d+/, '')}, process as ${key.replace(/^\d+/, '')}Process } from "${key}";`;
+        return `import { default as ${key.replace(/^\d+/, "")}, process as ${
+          key.replace(/^\d+/, "")
+        }Process } from "${key}";`;
       })
       .join("\n")
   }
@@ -82,23 +84,23 @@ async function step(pipe, { exclude = [], test = true } = {}) {
 
 ${
     importNames.map((key) =>
-      `const test${
-        key[0].toUpperCase() + key.substring(1)
-      } = () => test(${key.replace(/^\d+/, '')});`
+      `const test${key[0].toUpperCase() + key.substring(1)} = () => test(${
+        key.replace(/^\d+/, "")
+      });`
     ).join("\n")
   }
 ${
     importNames.map((key) =>
-      `const step${
-        key[0].toUpperCase() + key.substring(1)
-      } = () => step(${key.replace(/^\d+/, '')});`
+      `const step${key[0].toUpperCase() + key.substring(1)} = () => step(${
+        key.replace(/^\d+/, "")
+      });`
     ).join("\n")
   }
 `;
 
 export const pdCliTemplate = () =>
   `import pipe from "./index.ts"
-import {parseArgs} from "jsr:@std/cli@0.224.0";
+import {parseArgs} from "jsr:@std/cli@1.0.5";
 import $p from "jsr:@pd/pointers@0.1.1";
 
 const flags = parseArgs(Deno.args);
@@ -121,7 +123,7 @@ Deno.exit(0);
 
 export const pdServerTemplate = () =>
   `import pipe from "./index.ts"
-import {parseArgs} from "jsr:@std/cli@0.224.0";
+import {parseArgs} from "jsr:@std/1.0.5";
 
 const isDenoDeploy = Deno.env.has('DENO_DEPLOYMENT_ID');
 

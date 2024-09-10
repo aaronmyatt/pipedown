@@ -1,4 +1,4 @@
-export type { WalkOptions } from "jsr:@std/fs@0.224.0";
+export type { WalkOptions } from "jsr:@std/fs@1.0.3";
 
 export type Token = {
     type: string,

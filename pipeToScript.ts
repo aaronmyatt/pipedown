@@ -51,9 +51,9 @@ export const pipeToScript = async (input: PipeToScriptInput) => {
   const scriptTemplate = (input: PipeToScriptInput) => {
     input.script =
       `// deno-lint-ignore-file ban-unused-ignore no-unused-vars require-await
-import Pipe from "jsr:@pd/pdpipe@0.2.1";
+import Pipe from "jsr:@pd/pdpipe@0.2.2";
 import $p from "jsr:@pd/pointers@0.1.1";
-${ !input.pipe.config?.build && 'import "jsr:@std/dotenv/load";' }
+${!input.pipe.config?.build && 'import "jsr:@std/dotenv/load";'}
 import rawPipe from "./index.json" with {type: "json"};
 import * as deps from "/deps.ts";
 ${input.pipeImports && input.pipeImports.join("\n")}
@@ -61,7 +61,7 @@ ${input.pipeImports && input.pipeImports.join("\n")}
 ${input.functions && input.functions.join("\n")}
 
 const funcSequence = [
-${ input.pipe && input.pipe.steps.map((step: Step) => step.funcName).join(", ") }
+${input.pipe && input.pipe.steps.map((step: Step) => step.funcName).join(", ")}
 ]
 const pipe = Pipe(funcSequence, rawPipe);
 const process = (input={}) => pipe.process(input);

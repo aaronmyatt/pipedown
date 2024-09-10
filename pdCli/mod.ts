@@ -1,7 +1,7 @@
 import type { PDError, Input, PipeConfig } from "../pipedown.d.ts";
-import type { Args } from "jsr:@std/cli@0.224.0";
-import type { WalkEntry } from "jsr:@std/fs@0.224.0/walk";
-import type { ParsedPath } from "jsr:@std/path@0.224.0/parse";
+import type { Args } from "jsr:@std/cli@1.0.5";
+import type { WalkEntry } from "jsr:@std/fs@1.0.3/walk";
+import type { ParsedPath } from "jsr:@std/path@1.0.4/parse";
 import projectMetadata from "./../deno.json" with { type: "json" };
 
 import {
