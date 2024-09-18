@@ -100,7 +100,7 @@ ${
 
 export const pdCliTemplate = () =>
   `import pipe from "./index.ts"
-import {parseArgs} from "jsr:@std/cli@1.0.5";
+import {parseArgs} from "jsr:@std/cli@1.0.6";
 import $p from "jsr:@pd/pointers@0.1.1";
 
 const flags = parseArgs(Deno.args);
@@ -123,7 +123,7 @@ Deno.exit(0);
 
 export const pdServerTemplate = () =>
   `import pipe from "./index.ts"
-import {parseArgs} from "jsr:@std/1.0.5";
+import {parseArgs} from "jsr:@std/cli@1.0.6";
 
 const isDenoDeploy = Deno.env.has('DENO_DEPLOYMENT_ID');
 

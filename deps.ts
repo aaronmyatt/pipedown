@@ -12,7 +12,7 @@ import {
 import { serveFile } from "jsr:@std/http@1.0.5";
 import { debounce } from "jsr:@std/async@1.0.5";
 import { firstNotNullishOf } from "jsr:@std/collections@1.0.5";
-import { parseArgs } from "jsr:@std/cli@1.0.5";
+import { parseArgs } from "jsr:@std/cli@1.0.6";
 
 import { parse as keycodeParse } from "jsr:@cliffy/keycode@1.0.0-rc.5";
 import { parse } from "jsr:@pd/pulldown-cmark@0.1.0";

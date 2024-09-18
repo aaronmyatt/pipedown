@@ -1,5 +1,5 @@
 import type { PDError, Input, PipeConfig } from "../pipedown.d.ts";
-import type { Args } from "jsr:@std/cli@1.0.5";
+import type { Args } from "jsr:@std/cli@1.0.6";
 import type { WalkEntry } from "jsr:@std/fs@1.0.3/walk";
 import type { ParsedPath } from "jsr:@std/path@1.0.4/parse";
 import projectMetadata from "./../deno.json" with { type: "json" };
@@ -161,7 +161,7 @@ export interface pdCliInput extends Input {
     output: Input,
     debug: boolean | string,
     match?: string,
-};
+}
 
 // @ts-ignore - this is a Deno specific API
 const flags: Args = std.parseArgs(Deno.args, {"--": true, boolean: ["json", "pretty", "j", "p", "debug", "d", "DEBUG", "D", "version", "v", "help", "h"]});

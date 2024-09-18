@@ -1,10 +1,10 @@
-import { esbuild, pd, std } from "./deps.ts";
-import { denoPlugins } from "jsr:@luca/esbuild-deno-loader@0.10.3";
-import { mdToPipe } from "./mdToPipe.ts";
-import { pipeToScript } from "./pipeToScript.ts";
+import {esbuild, pd, std} from "./deps.ts";
+import {denoPlugins} from "jsr:@luca/esbuild-deno-loader@0.10.3";
+import {mdToPipe} from "./mdToPipe.ts";
+import {pipeToScript} from "./pipeToScript.ts";
 import * as utils from "./pdUtils.ts";
 import * as templates from "./stringTemplates.ts";
-import type { Input, Pipe, Step, WalkOptions } from "./pipedown.d.ts";
+import type {Input, Pipe, Step, WalkOptions} from "./pipedown.d.ts";
 
 const PD_DIR = `./.pd`;
 
