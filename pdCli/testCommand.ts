@@ -17,13 +17,20 @@ const helpText = cliHelpTemplate({
   ],
 });
 
+const args = [
+  "test",
+  "-A",
+  "--unstable-kv",
+  `--config=${PD_DIR}/deno.json`,
+  "--no-check",
+];
+
 export async function testCommand(input: pdCliInput) {
   if (pd.$p.get(input, "/flags/help") || pd.$p.get(input, "/flags/h")) {
     console.log(helpText);
   } else {
     await pdBuild(input);
 
-    const args = ["test", "-A", `--config=${PD_DIR}/deno.json`, "--no-check"];
     if (input.flags["--"].length > 0) {
       args.push("--");
       args.push(...input.flags["--"]);
@@ -38,30 +45,16 @@ export async function testCommand(input: pdCliInput) {
     const output = await test.output();
     const error = decoder.decode(output.stderr);
     const out = decoder.decode(output.stdout);
-    if (out) {
-      if (out.includes("Missing snapshot file")) {
-        console.error("Re-running with '-- --update' to write snapshots");
-        const test = new Deno.Command(Deno.execPath(), {
-          args: [
-            "test",
-            "-A",
-            `--config=${PD_DIR}/deno.json`,
-            "--no-check",
-            "--",
-            "--update",
-          ],
-          stdout: "inherit",
-          stderr: "inherit",
-        });
-        await test.output();
-      } else {
-        console.log(out);
-      }
-    }
+    console.log(out);
     if (error) {
       console.error(error);
     }
   }
 
   return input;
+}
+
+export function updateTestCommand(input: pdCliInput) {
+  input.flags["--"].push("--update");
+  return testCommand(input);
 }
