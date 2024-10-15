@@ -114,96 +114,6 @@ const mergeMetaConfig = (input: mdToPipeInput) => {
   input.pipe.config = Object.assign(input.pipe.config || {}, metaConfig);
 };
 
-const wrapWithInteralSteps = (input: mdToPipeInput) => {
-  const persistInput = (io = "input") => {
-    return `
-      const kvAvailable = typeof Deno !== 'undefined' && typeof Deno.openKv === 'function'
-      if(kvAvailable) {
-        try {
-          const db = await Deno.openKv()
-          const key = ['pd', '${io}', opts.fileName]
-          try {
-              await db.set(key, JSON.stringify(input))
-          } catch (e) {
-            const safe = {
-              error: e.message,
-            }
-            for (const [k, v] of Object.entries(input)) {
-                safe[k] = typeof v;
-            }
-            await db.set(key, safe)
-          }
-        } catch (e) {
-            console.error(e)
-        }
-      } else {
-        const key = 'pd:${io}:' + opts.fileName 
-        const inputJson = localStorage.getItem(key) || '[]'
-        const storedJson = JSON.parse(inputJson)
-        storedJson.push(JSON.stringify(input))
-        localStorage.setItem(key, JSON.stringify(storedJson))
-      }
-      `;
-  };
-  const emitStartEvent = () => {
-    return `const event = new CustomEvent('pd:pipe:start', {detail: {input, opts}})
-          dispatchEvent(event)`;
-  };
-
-  const emitEndEvent = () => {
-    return `const event = new CustomEvent('pd:pipe:end', {detail: {input, opts}})
-          dispatchEvent(event)`;
-  };
-
-  function wrapWith(start: Step, end: Step, steps = input.pipe.steps) {
-    return [
-      start,
-      ...steps,
-      end,
-    ];
-  }
-
-  const wrapWithEvents = wrapWith.bind(this, {
-    name: "emitStartEvent",
-    code: emitStartEvent(),
-    funcName: "emitStartEvent",
-    inList: false,
-    range: [0, 0],
-    internal: true,
-  }, {
-    name: "emitEndEvent",
-    code: emitEndEvent(),
-    funcName: "emitEndEvent",
-    inList: false,
-    range: [0, 0],
-    internal: true,
-  });
-
-  const wrapWithPersistance = wrapWith.bind(this, {
-    name: "persistInput",
-    code: persistInput(),
-    funcName: "persistInput",
-    inList: false,
-    range: [0, 0],
-    internal: true,
-  }, {
-    name: "persistOutput",
-    code: persistInput("output"),
-    funcName: "persistOutput",
-    inList: false,
-    range: [0, 0],
-    internal: true,
-  });
-
-  if (pd.$p.get(input, "/pipe/config/persist")) {
-    input.pipe.steps = wrapWithPersistance(input.pipe.steps);
-  }
-
-  if (pd.$p.get(input, "/pipe/config/emit")) {
-    input.pipe.steps = wrapWithEvents(input.pipe.steps);
-  }
-};
-
 const setupChecks = (input: mdToPipeInput) => {
   const inRange = (ranges: Array<number[]>, index: number) => {
     return ranges.find(([start, stop]: number[]) => {
@@ -267,10 +177,9 @@ export const mdToPipe = async (input: {markdown:string, pipe: Pipe}&Input) => {
     findSteps,
     mergeMetaConfig,
     setupChecks,
-    wrapWithInteralSteps,
   ];
 
-  const output = await pd.process(
+  return await pd.process(
     funcs,
     Object.assign({
       markdown: "",
@@ -305,5 +214,4 @@ export const mdToPipe = async (input: {markdown:string, pipe: Pipe}&Input) => {
     }, input),
     {},
   );
-  return output;
 };
