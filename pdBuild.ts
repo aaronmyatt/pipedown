@@ -118,15 +118,6 @@ async function copyFiles(input: pdBuildInput) {
   }
 }
 
-async function writeDeps(input: pdBuildInput) {
-  // write empty deps.ts file if it doesn't exist
-
-  const depsPath = std.join(PD_DIR, "deps.ts");
-  if (await std.exists(depsPath)) return input;
-  await Deno.writeTextFile(depsPath, "");
-  return input;
-}
-
 async function writeTests(input: pdBuildInput) {
   for (const pipe of (input.pipes || [])) {
     const testPath = std.join(pipe.dir, "test.ts");
@@ -315,7 +306,6 @@ export const pdBuild = async (input: pdBuildInput) => {
     parseMdFiles,
     transformMdFiles,
     copyFiles,
-    writeDeps,
     writeTests,
     writeDenoImportMap,
     writeReplEvalFile,
