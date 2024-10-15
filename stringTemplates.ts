@@ -26,13 +26,8 @@ Deno.test("${pipeName}", async (t) => {
       }
     })
   }
-});`;
-
-export const denoReplTemplate = () =>
-  `#!/bin/sh
-pd build
-deno repl -A -c ./.pd/deno.json --eval-file=./.pd/replEval.ts --unstable-kv
-`;
+});`
+}
 
 export const denoReplEvalTemplate = (importNames: string[]) =>
   `${

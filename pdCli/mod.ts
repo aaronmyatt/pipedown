@@ -21,6 +21,7 @@ import { testCommand, updateTestCommand } from "./testCommand.ts";
 import { cleanCommand } from "./cleanCommand.ts";
 import { defaultCommand } from "./defaultCommand.ts";
 import { helpText } from "../stringTemplates.ts";
+import {replCommand} from "./replCommand.ts";
 
 async function pdInit(input: pdCliInput) {
     try {
@@ -157,6 +158,7 @@ const funcs = [
 
     checkFlags(["build"], buildCommand),
     checkFlags(["serve", "*", "*"], serveCommand),
+    checkFlags(["repl"], replCommand),
     checkFlags(["run", "*", "*"], runCommand),
     checkFlags(["runWith", "*", "*", "*"], runWithCommand),
     checkFlags(["test"], testCommand),

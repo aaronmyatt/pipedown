@@ -180,12 +180,6 @@ async function writeReplEvalFile(input: pdBuildInput) {
   );
 }
 
-async function writeReplFile(input: pdBuildInput) {
-  const path = `./repl`;
-  await Deno.writeTextFile(path, templates.denoReplTemplate());
-  await Deno.chmod(path, 0o755);
-}
-
 const writeCliFile = async (input: pdBuildInput) => {
   for (const pipe of (input.pipes || [])) {
     const cliPath = std.join(pipe.dir, "cli.ts");
@@ -309,7 +303,6 @@ export const pdBuild = async (input: pdBuildInput) => {
     writeTests,
     writeDenoImportMap,
     writeReplEvalFile,
-    writeReplFile,
     writeCliFile,
     writeServerFile,
     writeWorkerFile,

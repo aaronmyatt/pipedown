@@ -78,6 +78,21 @@ export async function pdServe(scriptName: string, testInput: string) {
     await process.output();
 }
 
+export async function pdRepl() {
+    const command = new Deno.Command(Deno.execPath(), {
+        args: [
+            "repl",
+            ...commonArgs,
+            "--eval-file=./.pd/replEval.ts"
+        ],
+        stdout: "inherit",
+        stderr: "inherit",
+        stdin: "inherit",
+    });
+    const process = command.spawn();
+    await process.output();
+}
+
 interface ErrorObject {
     errors: Array<PDError>;
 }
