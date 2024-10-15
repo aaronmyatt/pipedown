@@ -69,7 +69,7 @@ async function parseMdFiles(input: pdBuildInput) {
       try {
         await Deno.mkdir(output.pipe.dir, { recursive: true });
       } catch (e) {
-        if (e.name !== "AlreadyExists") throw e;
+        if (!(e instanceof Deno.errors.AlreadyExists)) throw e;
       }
       const jsonPath = std.join(output.pipe.dir, "index.json");
       const markdownPath = std.join(output.pipe.dir, "index.md");
