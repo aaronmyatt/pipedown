@@ -97,6 +97,7 @@ export type Pipe = {
     steps: Step[],
     config?: PipeConfig,
     dir: string,
+    absoluteDir: string,
     fileName: string,
     checks?: {
         [key: string]: unknown;

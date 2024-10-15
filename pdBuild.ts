@@ -48,11 +48,18 @@ async function parseMdFiles(input: pdBuildInput) {
       std.parsePath(std.relative(Deno.cwd(), entry.path)).dir,
       fileName,
     );
+    const absoluteDir = std.join(
+      Deno.cwd(),
+      PD_DIR,
+      std.parsePath(std.relative(Deno.cwd(), entry.path)).dir,
+      fileName,
+    );
     const output = await mdToPipe({
       markdown,
       pipe: {
         fileName,
         dir,
+        absoluteDir,
         config: Object.assign({}, input.globalConfig),
         name: "",
         camelName: "",
