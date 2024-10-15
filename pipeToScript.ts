@@ -6,7 +6,7 @@ const detectImports = /import.*from.*/gm;
 
 export const pipeToScript = async (input: PipeToScriptInput) => {
   const extractImportsFromSteps = (input: PipeToScriptInput) => {
-    const pipeImports: string[] = input.pipe.steps.reduce(
+    input.pipeImports = input.pipe.steps.reduce(
       (acc: string[], step: Step) => {
         const stepImports = step.code.matchAll(detectImports);
         if (stepImports) {
@@ -21,8 +21,6 @@ export const pipeToScript = async (input: PipeToScriptInput) => {
       .filter((importStatement: string) => {
         return !importStatement.startsWith("//");
       });
-
-    input.pipeImports = pipeImports;
     return input;
   };
 

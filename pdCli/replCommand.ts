@@ -1,12 +1,8 @@
 import type { pdCliInput } from "./mod.ts";
-import { pdRepl, pdRun } from "./helpers.ts";
-import { pd, std } from "../deps.ts";
+import { pdRepl } from "./helpers.ts";
+import { pd } from "../deps.ts";
 import { pdBuild } from "../pdBuild.ts";
 import { cliHelpTemplate } from "../stringTemplates.ts";
-
-const commandName = pd.$p.compile("/flags/_/1");
-const inputRaw = pd.$p.compile("/flags/_/2");
-const inputParam = pd.$p.compile("/flags/input");
 
 const helpText = cliHelpTemplate({
   title: "REPL",
