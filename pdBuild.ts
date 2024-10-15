@@ -8,6 +8,16 @@ import {exportPipe} from "./exportPipe.ts";
 
 const PD_DIR = `./.pd`;
 
+const walkOpts: WalkOptions = {
+  exts: [".md"],
+  skip: [
+    /node_modules/,
+    /\.pd/,
+    /^readme\.md\/*$/,
+    /^README\.md\/*$/,
+  ]
+}
+
 const respectGitIgnore = () => {
   const gitIgnorePath = std.join(Deno.cwd(), ".gitignore");
   try {
@@ -22,27 +32,20 @@ const respectGitIgnore = () => {
 async function parseMdFiles(input: pdBuildInput) {
   input.pipes = input.pipes || [];
   // input.errors = input.errors || [];
-  const opts: WalkOptions = {
-    exts: [".md"],
-    skip: [
-      /node_modules/,
-      /\.pd/,
-      /^readme\.md\/*$/,
-      /^README\.md\/*$/,
-    ]
+  walkOpts.skip && walkOpts.skip
       .concat(respectGitIgnore())
       .concat(input.globalConfig?.skip || [])
-      .concat(input.globalConfig?.exclude || []),
-  };
-  if (input.match) opts.match = [new RegExp(input.match)];
+      .concat(input.globalConfig?.exclude || [])
+  if (input.match) walkOpts.match = [new RegExp(input.match)];
 
-  for await (const entry of std.walk(Deno.cwd(), opts)) {
+  for await (const entry of std.walk(Deno.cwd(), walkOpts)) {
     const markdown = await Deno.readTextFile(entry.path);
     if (markdown === "") continue;
 
     // the "executable markdown" will live in a directory with the same name as the file.
     // We will use the {dir}/index.ts convention for the entry point.
     const fileName = utils.fileName(entry.path);
+    pd.$p.set(input, '/markdown/'+fileName, markdown);
     const dir = std.join(
       PD_DIR,
       std.parsePath(std.relative(Deno.cwd(), entry.path)).dir,
@@ -72,19 +75,29 @@ async function parseMdFiles(input: pdBuildInput) {
       output.pipe.steps.filter((step: Step) => !step.internal).length > 0
     ) {
       input.pipes && input.pipes.push(output.pipe);
-
-      try {
-        await Deno.mkdir(output.pipe.dir, { recursive: true });
-      } catch (e) {
-        if (!(e instanceof Deno.errors.AlreadyExists)) throw e;
-      }
-      const jsonPath = std.join(output.pipe.dir, "index.json");
-      const markdownPath = std.join(output.pipe.dir, "index.md");
-      await Deno.writeTextFile(jsonPath, JSON.stringify(output.pipe, null, 2));
-      await Deno.writeTextFile(markdownPath, markdown);
     }
   }
   return input;
+}
+
+async function writePipeDir(input: pdBuildInput) {
+  for (const pipe of (input.pipes || [])) {
+    await Deno.mkdir(pipe.dir, { recursive: true  });
+  }
+}
+
+async function writePipeJson(input: pdBuildInput) {
+  for (const pipe of (input.pipes || [])) {
+    const path = std.join(pipe.dir, "index.json");
+    await Deno.writeTextFile(path, JSON.stringify(pipe, null, 2));
+  }
+}
+
+async function writePipeMd(input: pdBuildInput) {
+  for (const pipe of (input.pipes || [])) {
+    const path = std.join(pipe.dir, "index.md");
+    input.markdown && pipe.fileName in input.markdown && await Deno.writeTextFile(path, input.markdown[pipe.fileName]);
+  }
 }
 
 async function transformMdFiles(input: pdBuildInput) {
@@ -154,6 +167,9 @@ function report(input: pdBuildInput) {
 }
 
 export interface pdBuildInput extends Input {
+  markdown: {
+    [key: string]: string;
+  },
   importMap?: {
     imports: {
       [key: string]: string;
@@ -176,6 +192,9 @@ export const pdBuild = async (input: pdBuildInput) => {
 
   const funcs = [
     parseMdFiles,
+    writePipeDir,
+    writePipeJson,
+    writePipeMd,
     transformMdFiles,
     copyFiles,
     writeDefaultGeneratedTemplates,
