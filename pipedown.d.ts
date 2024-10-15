@@ -67,20 +67,15 @@ export type Steps = Step[];
 
 export type PipeConfig  = {
     [key: string]: unknown;
-    on?: {
-        [key: string]: Array<string|{
-            [key: string]: Input,
-        }>
-    },
     inputs?: Array<{
         [key: string]: Input,
     }>,
-    templates: {
+    templates?: {
         [key: string]: string,
     },
     build?: string[],
-    skip: RegExp[],
-    exclude: RegExp[],
+    skip?: RegExp[],
+    exclude?: RegExp[],
     checks?: string[],
     or?: string[],
     and?: string[],

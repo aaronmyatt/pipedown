@@ -4,7 +4,7 @@ import type { WalkEntry } from "jsr:@std/fs@1.0.3/walk";
 import type { ParsedPath } from "jsr:@std/path@1.0.4/parse";
 import projectMetadata from "./../deno.json" with { type: "json" };
 
-import { PD_DIR, pdRun } from "./helpers.ts";
+import { PD_DIR } from "./helpers.ts";
 
 import { pd, std } from "../deps.ts";
 
@@ -37,12 +37,7 @@ async function pdInit(input: pdCliInput) {
     // read global config file, config.json, from the current directory,
     // if it exists
     const configPath = std.join(Deno.cwd(), "config.json");
-    input.globalConfig = {
-        on: {},
-        emit: true,
-        persist: true,
-        ...input.globalConfig,
-    };
+    input.globalConfig = input.globalConfig || {};
     try {
         const config = JSON.parse(await Deno.readTextFile(configPath));
         Object.assign(input.globalConfig, config);
@@ -112,34 +107,6 @@ const gatherProjectContext = async (input: pdCliInput) => {
     return input;
 };
 
-const startListeners = (input: pdCliInput) => {
-    input.globalConfig.on = input.globalConfig.on || {};
-    for (const key in input.globalConfig.on) {
-        const scripts = input.globalConfig.on[key];
-        if (!Array.isArray(scripts)) {
-            throw new Error(
-                `Expected an array of scripts for the config key: on.${key}`,
-            );
-        }
-
-        addEventListener(key, async (_e) => {
-            //console.log(`Running scripts for event: ${key}`);
-            await Promise.all(
-                scripts.map(async (script: string | { [p: string]: Input }) => {
-                    console.log(`Running script: ${script}`);
-                    if (typeof script === "string") {
-                        await pdRun(script, "{}");
-                    } else {
-                        for (const key in script) {
-                            await pdRun(key, JSON.stringify(script[key]));
-                        }
-                    }
-                }),
-            );
-        });
-    }
-};
-
 const versionCommand = (input: pdCliInput) => {
     console.log(version);
     return input;
@@ -149,13 +116,10 @@ const funcs = [
     pdInit,
     registerProject,
     gatherProjectContext,
-    startListeners,
     checkFlags(["none"], defaultCommand),
-
     checkFlags(["help"], helpCommand),
     checkFlags(["list"], listCommand),
     checkFlags(["clean"], cleanCommand),
-
     checkFlags(["build"], buildCommand),
     checkFlags(["serve", "*", "*"], serveCommand),
     checkFlags(["repl"], replCommand),
