@@ -31,7 +31,7 @@ async function pdInit(input: pdCliInput) {
         );
         console.log(std.colors.brightGreen("Creating ~/.pd"));
     } catch (e) {
-        if (e.name !== "AlreadyExists") throw e;
+        if (!(e instanceof Deno.errors.AlreadyExists)) throw e;
     }
 
     // read global config file, config.json, from the current directory,
@@ -47,7 +47,7 @@ async function pdInit(input: pdCliInput) {
         const config = JSON.parse(await Deno.readTextFile(configPath));
         Object.assign(input.globalConfig, config);
     } catch (e) {
-        if (e.name !== "NotFound") throw e;
+        if (!(e instanceof Deno.errors.NotFound)) throw e;
     }
 }
 
@@ -62,7 +62,7 @@ async function registerProject(input: pdCliInput) {
         try {
             await Deno.mkdir(std.join(home, ".pipedown"), { recursive: true });
         } catch (e) {
-            if (e.name !== "AlreadyExists") throw e;
+            if (!(e instanceof Deno.errors.AlreadyExists)) throw e;
         }
 
         const projectsPath = std.join(home, ".pipedown", "projects.json");

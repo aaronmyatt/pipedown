@@ -1,7 +1,7 @@
 import { std } from "./deps.ts";
 
-export const denoTestFileTemplate = (pipeName: string) =>
-  `import {assertEquals} from "jsr:@std/assert" 
+export function denoTestFileTemplate (pipeName: string){
+  return `import {assertEquals} from "jsr:@std/assert" 
 import { assertSnapshot } from "jsr:@std/testing/snapshot";
 import {pipe, rawPipe} from "./index.ts";
 
