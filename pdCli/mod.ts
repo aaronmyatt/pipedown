@@ -183,22 +183,6 @@ const output = await process<pdCliInput>(funcs, {
     debug: debugParamPresent,
 }, {});
 
-if (output.errors && output.errors.length > 0) {
-    output.errors.forEach((error: PDError) => {
-        console.log(error.name);
-        console.log("function: ", error.func);
-        console.log(error.message);
-        console.log(error.stack);
-        console.log("---");
-    });
-    Deno.exit(1);
-} else {
-    if (output.debug) {
+if(output.debug){
         console.log(output);
-    } else if (flags.json || flags.j) {
-        console.log(JSON.stringify(output.output, null, 2));
-    } else if (flags.pretty || flags.p) {
-        console.log(output.output);
-    }
-    Deno.exit(0);
 }

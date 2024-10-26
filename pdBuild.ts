@@ -159,10 +159,10 @@ const maybeExportPipe = async (input: pdBuildInput) =>{
   await exportPipe(input);
 }
 
-function report(input: pdBuildInput) {
-  console.log(
-    std.colors.brightGreen(`Markdown files processed: ${input.pipes?.length}`),
-  );
+function report(input: BuildInput) {
+  if(input.debug) {
+    input.markdownFilesProcesses = input.pipes?.length;
+  }
   return input;
 }
 
