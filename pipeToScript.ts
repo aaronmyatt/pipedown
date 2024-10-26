@@ -1,6 +1,6 @@
 import type { PipeToScriptInput, Step } from "./pipedown.d.ts";
 import { pd } from "./deps.ts";
-import { camelCaseString } from "./pdUtils.ts";
+import { sanitizeString } from "./pdUtils.ts";
 
 const detectImports = /import.*from.*/gm;
 
@@ -24,14 +24,14 @@ export const pipeToScript = async (input: PipeToScriptInput) => {
     return input;
   };
 
-  const camelCaseStepNames = (input: PipeToScriptInput) => {
+  const sanitizeStepNames = (input: PipeToScriptInput) => {
     input.pipe.steps = input.pipe.steps.map((step: Step) => {
       // if step.name is a number, prepend 'anonymous' and use as funcName
       if (typeof step.name === "number") {
         step.funcName = `anonymous${step.name}`;
         return step;
       }
-      step.funcName = camelCaseString(step.name);
+      step.funcName = sanitizeString(step.name);
       return step;
     });
     return input;
@@ -71,7 +71,7 @@ export { pipe, rawPipe, process };
 
   const funcs = [
     extractImportsFromSteps,
-    camelCaseStepNames,
+    sanitizeStepNames,
     stepsToFunctions,
     scriptTemplate,
   ];

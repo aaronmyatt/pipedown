@@ -9,12 +9,7 @@ import type {
   Input,
   Pipe,
 } from "./pipedown.d.ts";
-
-function camelCaseString (input: string) {
-  return input.replace(/(?:^\w|[A-Z]|\b\w)/g, function (word, index) {
-    return index === 0 ? word.toLowerCase() : word.toUpperCase();
-  }).replace(/\s+/g, "");
-}
+import { sanitizeString } from "./pdUtils.ts";
 
 const parseMarkdown = (input: mdToPipeInput) => {
   // we get a big long list of objects like this:
@@ -59,7 +54,7 @@ const findPipeName = (input: mdToPipeInput) => {
     const block = input.tokens.at(headingRange[0] + 1) || {};
     input.pipe.name = pd.$p.get(block, "/content") || "anonymous";
   }
-  input.pipe.camelName = camelCaseString(input.pipe.name || "anonymous");
+  input.pipe.cleanName = sanitizeString(input.pipe.name || "anonymous");
 };
 
 const findSteps = (input: mdToPipeInput) => {
@@ -96,7 +91,7 @@ const findSteps = (input: mdToPipeInput) => {
       } else {
         step.name = "anonymous" + step.range[0];
       }
-      step.funcName = camelCaseString(step.name);
+      step.funcName = sanitizeString(step.name);
       return step;
     });
 };
@@ -190,7 +185,7 @@ export const mdToPipe = async (input: {markdown:string, pipe: Pipe}&Input) => {
       pipeName: "",
       pipe: {
         name: "",
-        camelName: "",
+        cleanName: "",
         steps: [],
         dir: "",
         fileName: "",

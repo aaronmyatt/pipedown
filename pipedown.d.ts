@@ -91,7 +91,7 @@ export type PipeConfig  = {
 
 export type Pipe = {
     name: string,
-    camelName: string,
+    cleanName: string,
     steps: Step[],
     config?: PipeConfig,
     dir: string,

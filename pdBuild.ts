@@ -65,7 +65,7 @@ async function parseMdFiles(input: BuildInput) {
         absoluteDir,
         config: Object.assign({}, input.globalConfig),
         name: "",
-        camelName: "",
+        cleanName: "",
         steps: [],
       },
     });
