@@ -1,8 +1,8 @@
 import {esbuild, pd, std} from "./deps.ts";
-import type {pdBuildInput} from "./pdBuild.ts";
+import type { BuildInput } from "./pipedown.d.ts";
 import {denoPlugins} from "jsr:@luca/esbuild-deno-loader@0.10.3";
 
-async function buildIIFE(input: pdBuildInput) {
+async function buildIIFE(input: BuildInput) {
   const configPath = std.join(Deno.cwd(), ".pd", "deno.json");
   const _denoPlugins = denoPlugins({ configPath, loader: "native" });
   const filteredPipes =
@@ -27,7 +27,7 @@ async function buildIIFE(input: pdBuildInput) {
   }
 }
 
-async function buildESM(input: pdBuildInput) {
+async function buildESM(input: BuildInput) {
   const configPath = std.join(Deno.cwd(), ".pd", "deno.json");
   const _denoPlugins = denoPlugins({ configPath });
   const filteredPipes =
@@ -51,7 +51,7 @@ async function buildESM(input: pdBuildInput) {
   }
 }
 
-export async function exportPipe(input: pdBuildInput){
+export async function exportPipe(input: BuildInput){
   const funcs = [
     buildIIFE,
     buildESM,

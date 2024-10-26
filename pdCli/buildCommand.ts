@@ -1,7 +1,7 @@
-import { pd, std } from "../deps.ts";
+import { pd } from "../deps.ts";
 import { pdBuild } from "../pdBuild.ts";
 import { cliHelpTemplate } from "../stringTemplates.ts";
-import type { pdCliInput } from "./mod.ts";
+import type { CliInput } from "../pipedown.d.ts";
 
 const helpText = cliHelpTemplate({
   title: "Build",
@@ -16,7 +16,7 @@ const helpText = cliHelpTemplate({
   ],
 });
 
-export async function buildCommand(input: pdCliInput) {
+export async function buildCommand(input: CliInput) {
   if (pd.$p.get(input, "/flags/help") || pd.$p.get(input, "/flags/h")) {
     console.log(helpText);
   } else {

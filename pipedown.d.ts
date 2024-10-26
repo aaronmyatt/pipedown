@@ -1,4 +1,7 @@
 export type { WalkOptions } from "jsr:@std/fs@1.0.3";
+import type { Args } from "jsr:@std/cli@1.0.6";
+import type { WalkEntry } from "jsr:@std/fs@1.0.3/walk";
+import type { ParsedPath } from "jsr:@std/path@1.0.4/parse";
 
 export type Token = {
     type: string,
@@ -117,3 +120,33 @@ export type PipeToScriptInput = {
     script?: string;
     errors?: PDError[];
 } & Input;
+
+
+export interface CliInput extends Input {
+    flags: Args;
+    globalConfig: PipeConfig;
+    projectPipes: Array<{ path: string; entry: WalkEntry } & ParsedPath>;
+    errors?: Array<PDError>;
+    output: Input;
+    debug: boolean | string;
+    match?: string;
+}
+
+export interface BuildInput extends CliInput {
+    markdown?: {
+      [key: string]: string;
+    },
+    importMap?: {
+      imports: {
+        [key: string]: string;
+      };
+      lint: {
+        include: string[];
+        exclude: string[];
+      };
+    };
+    pipes?: Pipe[];
+    warning?: string[];
+    match?: string;
+    markdownFilesProcesses?: number;
+  }

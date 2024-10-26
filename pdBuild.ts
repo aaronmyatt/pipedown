@@ -2,7 +2,7 @@ import {pd, std} from "./deps.ts";
 import {mdToPipe} from "./mdToPipe.ts";
 import {pipeToScript} from "./pipeToScript.ts";
 import * as utils from "./pdUtils.ts";
-import type {Input, Pipe, Step, WalkOptions} from "./pipedown.d.ts";
+import type {Step, WalkOptions, BuildInput} from "./pipedown.d.ts";
 import {defaultTemplateFiles} from "./defaultTemplateFiles.ts";
 import {exportPipe} from "./exportPipe.ts";
 
@@ -29,7 +29,7 @@ const respectGitIgnore = () => {
   }
 };
 
-async function parseMdFiles(input: pdBuildInput) {
+async function parseMdFiles(input: BuildInput) {
   input.pipes = input.pipes || [];
   // input.errors = input.errors || [];
   walkOpts.skip && walkOpts.skip
@@ -80,27 +80,27 @@ async function parseMdFiles(input: pdBuildInput) {
   return input;
 }
 
-async function writePipeDir(input: pdBuildInput) {
+async function writePipeDir(input: BuildInput) {
   for (const pipe of (input.pipes || [])) {
     await Deno.mkdir(pipe.dir, { recursive: true  });
   }
 }
 
-async function writePipeJson(input: pdBuildInput) {
+async function writePipeJson(input: BuildInput) {
   for (const pipe of (input.pipes || [])) {
     const path = std.join(pipe.dir, "index.json");
     await Deno.writeTextFile(path, JSON.stringify(pipe, null, 2));
   }
 }
 
-async function writePipeMd(input: pdBuildInput) {
+async function writePipeMd(input: BuildInput) {
   for (const pipe of (input.pipes || [])) {
     const path = std.join(pipe.dir, "index.md");
     input.markdown && pipe.fileName in input.markdown && await Deno.writeTextFile(path, input.markdown[pipe.fileName]);
   }
 }
 
-async function transformMdFiles(input: pdBuildInput) {
+async function transformMdFiles(input: BuildInput) {
   for (const pipe of (input.pipes || [])) {
     const scriptPath = std.join(pipe.dir, "index.ts");
     const output = await pipeToScript({ pipe });
@@ -114,7 +114,7 @@ async function transformMdFiles(input: pdBuildInput) {
   return input;
 }
 
-async function copyFiles(input: pdBuildInput) {
+async function copyFiles(input: BuildInput) {
   // copy js(x),json,ts(x) files to .pd directory, preserving directory structure
   const opts: WalkOptions = {
     exts: [".js", ".jsx", ".json", ".ts", ".tsx"],
@@ -138,11 +138,11 @@ async function copyFiles(input: pdBuildInput) {
   }
 }
 
-const writeDefaultGeneratedTemplates = async (input: pdBuildInput) => {
+const writeDefaultGeneratedTemplates = async (input: BuildInput) => {
   await defaultTemplateFiles(input);
 }
 
-const writeUserTemplates = async (input: pdBuildInput) => {
+const writeUserTemplates = async (input: BuildInput) => {
   for (const pipe of (input.pipes || [])) {
     for (
       const path of pd.$p.get(input, "/globalConfig/templates") ||
@@ -155,7 +155,7 @@ const writeUserTemplates = async (input: pdBuildInput) => {
   return input;
 };
 
-const maybeExportPipe = async (input: pdBuildInput) =>{
+const maybeExportPipe = async (input: BuildInput) =>{
   await exportPipe(input);
 }
 
@@ -166,25 +166,7 @@ function report(input: BuildInput) {
   return input;
 }
 
-export interface pdBuildInput extends Input {
-  markdown: {
-    [key: string]: string;
-  },
-  importMap?: {
-    imports: {
-      [key: string]: string;
-    };
-    lint: {
-      include: string[];
-      exclude: string[];
-    };
-  };
-  pipes?: Pipe[];
-  warning?: string[];
-  match?: string;
-}
-
-export const pdBuild = async (input: pdBuildInput) => {
+export const pdBuild = async (input: BuildInput) => {
   input = Object.assign(input, {
     importMap: { imports: {} },
     pipes: [],
@@ -200,8 +182,8 @@ export const pdBuild = async (input: pdBuildInput) => {
     writeDefaultGeneratedTemplates,
     writeUserTemplates,
     maybeExportPipe,
-    report,
+    report
   ];
-
+  
   return await pd.process(funcs, input, {});
 };

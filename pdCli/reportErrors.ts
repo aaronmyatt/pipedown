@@ -1,7 +1,6 @@
-import type { PDError } from "../pipedown.d.ts";
-import type {pdCliInput} from "./mod.ts";
+import type { CliInput, PDError } from "../pipedown.d.ts";
 
-export function reportErrors(input: pdCliInput) {
+export function reportErrors(input: CliInput) {
   input.errors && input.errors.map((err) => {
     if (typeof err === "string"){
       console.error(err);

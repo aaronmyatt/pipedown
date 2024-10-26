@@ -2,7 +2,7 @@ import { pd } from "../deps.ts";
 import { pdBuild } from "../pdBuild.ts";
 import { cliHelpTemplate } from "../stringTemplates.ts";
 import { PD_DIR } from "./helpers.ts";
-import type { pdCliInput } from "./mod.ts";
+import type { CliInput } from "../pipedown.d.ts";
 
 const helpText = cliHelpTemplate({
   title: "Test",
@@ -25,7 +25,7 @@ const args = [
   "--no-check",
 ];
 
-export async function testCommand(input: pdCliInput) {
+export async function testCommand(input: CliInput) {
   if (pd.$p.get(input, "/flags/help") || pd.$p.get(input, "/flags/h")) {
     console.log(helpText);
   } else {
@@ -54,7 +54,7 @@ export async function testCommand(input: pdCliInput) {
   return input;
 }
 
-export function updateTestCommand(input: pdCliInput) {
+export function updateTestCommand(input: CliInput) {
   input.flags["--"].push("--update");
   return testCommand(input);
 }

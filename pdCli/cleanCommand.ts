@@ -1,4 +1,4 @@
-import type { pdCliInput } from "./mod.ts";
+import type { CliInput } from "../pipedown.d.ts";
 import { pd, std } from "../deps.ts";
 import { PD_DIR } from "./helpers.ts";
 import { cliHelpTemplate } from "../stringTemplates.ts";
@@ -16,7 +16,7 @@ const helpText = cliHelpTemplate({
   ],
 });
 
-export async function cleanCommand(input: pdCliInput) {
+export async function cleanCommand(input: CliInput) {
   if (pd.$p.get(input, "/flags/help") || pd.$p.get(input, "/flags/h")) {
     console.log(helpText);
   } else {

@@ -1,4 +1,4 @@
-import type { pdCliInput } from "./mod.ts";
+import type { CliInput } from "../pipedown.d.ts";
 import { std } from "../deps.ts";
 import { serve } from "./buildandserve.ts";
 
@@ -35,7 +35,7 @@ import { serve } from "./buildandserve.ts";
 //   }
 // }
 
-export async function defaultCommand(input: pdCliInput) {
+export async function defaultCommand(input: CliInput) {
   console.log(std.colors.brightGreen("Watching for changes..."));
   await serve(input);
   return input;

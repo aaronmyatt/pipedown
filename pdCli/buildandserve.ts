@@ -1,4 +1,4 @@
-import type { pdBuildInput } from "../pdBuild.ts";
+import type { BuildInput } from "../pipedown.d.ts";
 import { std } from "../deps.ts";
 
 import { pdBuild } from "../pdBuild.ts";
@@ -139,7 +139,7 @@ const page = (scriptsPaths: string[]) =>
 </html>
 `;
 
-async function watchFs(input: pdBuildInput) {
+async function watchFs(input: BuildInput) {
   for await (const event of Deno.watchFs(Deno.cwd(), { recursive: true })) {
     const pathRegex = new RegExp(/\.pd|deno|dist|\.git|\.vscode|\.github|\.cache|\.history|\.log|\.lock|\.swp/)
     const notInProtectedDir = event.paths.every((path) => !path.match(pathRegex));
@@ -192,7 +192,7 @@ function findOpenPort(defaultPort = 8000){
   }
 }
 
-export async function serve(input: pdBuildInput){
+export async function serve(input: BuildInput){
   pdBuild(input);
   watchFs(input);
 

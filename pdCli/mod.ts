@@ -1,7 +1,5 @@
-import type { Input, PDError, PipeConfig } from "../pipedown.d.ts";
-import type { Args } from "jsr:@std/cli@1.0.6";
-import type { WalkEntry } from "jsr:@std/fs@1.0.3/walk";
-import type { ParsedPath } from "jsr:@std/path@1.0.4/parse";
+import type { CliInput, Input, PipeConfig} from "../pipedown.d.ts";
+
 import projectMetadata from "./../deno.json" with { type: "json" };
 
 import { PD_DIR } from "./helpers.ts";
@@ -23,7 +21,7 @@ import { defaultCommand } from "./defaultCommand.ts";
 import { helpText } from "../stringTemplates.ts";
 import {replCommand} from "./replCommand.ts";
 
-async function pdInit(input: pdCliInput) {
+async function pdInit(input: CliInput) {
     try {
         await Deno.mkdir(PD_DIR);
         console.log(
@@ -46,7 +44,7 @@ async function pdInit(input: pdCliInput) {
     }
 }
 
-async function registerProject(input: pdCliInput) {
+async function registerProject(input: CliInput) {
     const project = {
         name: input.globalConfig.name || std.parsePath(Deno.cwd()).name,
         path: Deno.cwd(),
@@ -78,9 +76,9 @@ async function registerProject(input: pdCliInput) {
 
 export function checkFlags(
     flags: string[],
-    func: (input: pdCliInput) => Promise<pdCliInput> | pdCliInput,
-): (input: pdCliInput) => Promise<pdCliInput> | pdCliInput {
-    return (input: pdCliInput) => {
+    func: (input: CliInput) => Promise<CliInput> | CliInput,
+): (input: CliInput) => Promise<CliInput> | CliInput {
+    return (input: CliInput) => {
         if (input.flags._.length === 0 && flags[0] === "none") {
             return func(input);
         }
@@ -94,7 +92,7 @@ export function checkFlags(
     };
 }
 
-const gatherProjectContext = async (input: pdCliInput) => {
+const gatherProjectContext = async (input: CliInput) => {
     input.projectPipes = [];
     const opts = { exts: [".md"], skip: [/node_modules/, /\.pd/] };
     for await (const entry of std.walk(".", opts)) {
@@ -107,7 +105,7 @@ const gatherProjectContext = async (input: pdCliInput) => {
     return input;
 };
 
-const versionCommand = (input: pdCliInput) => {
+const versionCommand = (input: CliInput) => {
     console.log(version);
     return input;
 };
@@ -136,15 +134,6 @@ const debugParamPresent = Deno.env.get("DEBUG") ||
     Deno.args.includes("--debug") ||
     Deno.args.includes("-d") || Deno.args.includes("--DEBUG") ||
     Deno.args.includes("-D");
-export interface pdCliInput extends Input {
-    flags: Args;
-    globalConfig: PipeConfig;
-    projectPipes: Array<{ path: string; entry: WalkEntry } & ParsedPath>;
-    errors?: Array<PDError>;
-    output: Input;
-    debug: boolean | string;
-    match?: string;
-}
 
 // @ts-ignore - this is a Deno specific API
 const flags: Args = std.parseArgs(Deno.args, {
@@ -174,7 +163,7 @@ if (flags.help || flags.h) {
     Deno.exit(0);
 }
 
-const output = await process<pdCliInput>(funcs, {
+const output = await process<CliInput>(funcs, {
     flags,
     globalConfig: {} as PipeConfig,
     projectPipes: [],
@@ -184,5 +173,5 @@ const output = await process<pdCliInput>(funcs, {
 }, {});
 
 if(output.debug){
-        console.log(output);
+    console.log(output);
 }

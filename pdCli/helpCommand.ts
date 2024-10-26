@@ -1,4 +1,4 @@
-import type { pdCliInput } from "./mod.ts";
+import type { CliInput } from "../pipedown.d.ts";
 
 import { cliHelpTemplate } from "../stringTemplates.ts";
 
@@ -19,7 +19,7 @@ const helpText = cliHelpTemplate({
   ],
 });
 
-export function helpCommand(input: pdCliInput) {
+export function helpCommand(input: CliInput) {
   console.log(helpText);
   return input;
 }

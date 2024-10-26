@@ -1,9 +1,9 @@
 import {pd, std} from "./deps.ts";
 import * as templates from "./stringTemplates.ts";
-import type {pdBuildInput} from "./pdBuild.ts";
+import type { BuildInput } from "./pipedown.d.ts";
 import { PD_DIR } from "./pdCli/helpers.ts";
 
-async function writeTests(input: pdBuildInput) {
+async function writeTests(input: BuildInput) {
   for (const pipe of (input.pipes || [])) {
     const testPath = std.join(pipe.dir, "test.ts");
     if (await std.exists(testPath)) continue;
@@ -15,7 +15,7 @@ async function writeTests(input: pdBuildInput) {
   return input;
 }
 
-async function writeDenoImportMap(input: pdBuildInput) {
+async function writeDenoImportMap(input: BuildInput) {
   input.importMap = {
     imports: {
       "/": "./",
@@ -50,7 +50,7 @@ async function writeDenoImportMap(input: pdBuildInput) {
   return input;
 }
 
-async function writeReplEvalFile(input: pdBuildInput) {
+async function writeReplEvalFile(input: BuildInput) {
   const replEvalPath = std.join(PD_DIR, "replEval.ts");
 
   // assumes deno repl is run from .pd directory
@@ -65,7 +65,7 @@ async function writeReplEvalFile(input: pdBuildInput) {
   );
 }
 
-const writeCliFile = async (input: pdBuildInput) => {
+const writeCliFile = async (input: BuildInput) => {
   for (const pipe of (input.pipes || [])) {
     const cliPath = std.join(pipe.dir, "cli.ts");
     if (await std.exists(cliPath)) continue;
@@ -73,7 +73,7 @@ const writeCliFile = async (input: pdBuildInput) => {
   }
 };
 
-const writeServerFile = async (input: pdBuildInput) => {
+const writeServerFile = async (input: BuildInput) => {
   for (const pipe of (input.pipes || [])) {
     const serverPath = std.join(pipe.dir, "server.ts");
     if (await std.exists(serverPath)) continue;
@@ -82,7 +82,7 @@ const writeServerFile = async (input: pdBuildInput) => {
   return input;
 };
 
-const writeWorkerFile = async (input: pdBuildInput) => {
+const writeWorkerFile = async (input: BuildInput) => {
   for (const pipe of (input.pipes || [])) {
     const workerPath = std.join(pipe.dir, "worker.ts");
     if (await std.exists(workerPath)) continue;
@@ -91,7 +91,7 @@ const writeWorkerFile = async (input: pdBuildInput) => {
   return input;
 };
 
-export async function defaultTemplateFiles(input: pdBuildInput){
+export async function defaultTemplateFiles(input: BuildInput){
   const funcs = [
     writeTests,
     writeDenoImportMap,

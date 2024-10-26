@@ -108,6 +108,8 @@ const output = await pipe.process(input)
 
 if(flags.json || flags.j) {
   console.log(JSON.stringify(output));
+} else {
+ console.log(output);
 }
 Deno.exit(0);
 `;
