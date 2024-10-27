@@ -8,14 +8,25 @@ import {exportPipe} from "./exportPipe.ts";
 
 const PD_DIR = `./.pd`;
 
-const walkOpts: WalkOptions = {
+const _walkOpts: WalkOptions = {
   exts: [".md"],
   skip: [
     /node_modules/,
     /\.pd/,
     /^readme\.md\/*$/,
     /^README\.md\/*$/,
+    /deno.*/,
   ]
+}
+
+function walkOptions(input: BuildInput, override: WalkOptions = {}) {
+  const walkOpts = Object.assign({}, _walkOpts, override);
+  walkOpts.skip && walkOpts.skip
+  .concat(respectGitIgnore())
+  .concat(input.globalConfig?.skip || [])
+  .concat(input.globalConfig?.exclude || [])
+  if (input.match) walkOpts.match = [new RegExp(input.match)];
+  return walkOpts;
 }
 
 const respectGitIgnore = () => {
@@ -31,19 +42,13 @@ const respectGitIgnore = () => {
 
 async function parseMdFiles(input: BuildInput) {
   input.pipes = input.pipes || [];
-  // input.errors = input.errors || [];
-  walkOpts.skip && walkOpts.skip
-      .concat(respectGitIgnore())
-      .concat(input.globalConfig?.skip || [])
-      .concat(input.globalConfig?.exclude || [])
-  if (input.match) walkOpts.match = [new RegExp(input.match)];
 
-  for await (const entry of std.walk(Deno.cwd(), walkOpts)) {
+  for await (const entry of std.walk(Deno.cwd(), walkOptions(input))) {
     const markdown = await Deno.readTextFile(entry.path);
     if (markdown === "") continue;
 
     // the "executable markdown" will live in a directory with the same name as the file.
-    // We will use the {dir}/index.ts convention for the entry point.
+    // We will use {pipe.dir}/index.ts for the entry point.
     const fileName = utils.fileName(entry.path);
     pd.$p.set(input, '/markdown/'+fileName, markdown);
     const dir = std.join(
@@ -60,6 +65,7 @@ async function parseMdFiles(input: BuildInput) {
     const output = await mdToPipe({
       markdown,
       pipe: {
+        mdPath: entry.path,
         fileName,
         dir,
         absoluteDir,
@@ -78,6 +84,29 @@ async function parseMdFiles(input: BuildInput) {
     }
   }
   return input;
+}
+
+
+// merge parent directory config.json files into the pipe config
+async function mergeParentDirConfig(input: BuildInput) {
+  for (const pipe of (input.pipes || [])) {
+    const parts = pipe.mdPath.split("/");
+    let config = pipe.config;
+    
+    for (let i = parts.length - 1; i > 0; i--) {
+      const parentDir = '/' + std.join(...parts.slice(0, i));
+      const maybeConfigFilePath = std.join(parentDir, "config.json")
+     try {
+        const parentConfig = await Deno.readTextFile(maybeConfigFilePath);
+        config = Object.assign(config || {}, JSON.parse(parentConfig));
+      } catch (_e) {
+        // probably no config file
+      }
+      const topOfProject = await std.exists(std.join(parentDir, '.pd', 'deno.json'));
+      if(topOfProject) break;
+    }
+    pipe.config = config;
+  }
 }
 
 async function writePipeDir(input: BuildInput) {
@@ -116,22 +145,7 @@ async function transformMdFiles(input: BuildInput) {
 
 async function copyFiles(input: BuildInput) {
   // copy js(x),json,ts(x) files to .pd directory, preserving directory structure
-  const opts: WalkOptions = {
-    exts: [".js", ".jsx", ".json", ".ts", ".tsx"],
-    skip: [
-      /node_modules/,
-      /\.pd/,
-      /^readme\.md\/*$/,
-      /^README\.md\/*$/,
-      /deno.*/,
-    ]
-      .concat(respectGitIgnore())
-      .concat(input.globalConfig?.skip || [])
-      .concat(input.globalConfig?.exclude || []),
-  };
-
-  if (input.match) opts.match = [new RegExp(input.match)];
-  for await (const entry of std.walk(".", opts)) {
+  for await (const entry of std.walk(".", walkOptions(input, { exts: [".js", ".jsx", ".json", ".ts", ".tsx"] }))) {
     const dest = std.join(PD_DIR, utils.fileDir(entry.path), entry.name);
     await Deno.mkdir(std.dirname(dest), { recursive: true });
     await Deno.copyFile(entry.path, dest);
@@ -145,7 +159,7 @@ const writeDefaultGeneratedTemplates = async (input: BuildInput) => {
 const writeUserTemplates = async (input: BuildInput) => {
   for (const pipe of (input.pipes || [])) {
     for (
-      const path of pd.$p.get(input, "/globalConfig/templates") ||
+      const path of pd.$p.get(pipe, "/config/templates") ||
         [] as string[]
     ) {
       const pipePath = std.join(pipe.dir, utils.fileName(path) + ".ts");
@@ -173,12 +187,13 @@ export const pdBuild = async (input: BuildInput) => {
   });
 
   const funcs = [
+    copyFiles,
     parseMdFiles,
+    mergeParentDirConfig,
     writePipeDir,
     writePipeJson,
     writePipeMd,
     transformMdFiles,
-    copyFiles,
     writeDefaultGeneratedTemplates,
     writeUserTemplates,
     maybeExportPipe,
