@@ -93,6 +93,7 @@ export type Pipe = {
     name: string,
     cleanName: string,
     steps: Step[],
+    mdPath: string,
     config?: PipeConfig,
     dir: string,
     absoluteDir: string,
