@@ -1,6 +1,6 @@
-import { deepMerge } from "jsr:@std/collections@1.0.5";
-import { exists, walk } from "jsr:@std/fs@1.0.3";
-import * as colors from "jsr:@std/fmt@1.0.2/colors";
+import { deepMerge } from "jsr:@std/collections@1.0.9";
+import { exists, walk } from "jsr:@std/fs@1.0.5";
+import * as colors from "jsr:@std/fmt@1.0.3/colors";
 import {
   basename,
   dirname,
@@ -8,13 +8,13 @@ import {
   join,
   parse as parsePath,
   relative,
-} from "jsr:@std/path@1.0.4";
-import { serveFile } from "jsr:@std/http@1.0.5";
-import { debounce } from "jsr:@std/async@1.0.5";
-import { firstNotNullishOf } from "jsr:@std/collections@1.0.5";
+} from "jsr:@std/path@1.0.7";
+import { serveFile } from "jsr:@std/http@1.0.9";
+import { debounce } from "jsr:@std/async@1.0.7";
+import { firstNotNullishOf } from "jsr:@std/collections@1.0.9";
 import { parseArgs } from "jsr:@std/cli@1.0.6";
 
-import { parse as keycodeParse } from "jsr:@cliffy/keycode@1.0.0-rc.5";
+import { parse as keycodeParse } from "jsr:@cliffy/keycode@1.0.0-rc.7";
 import { parse } from "jsr:@pd/pulldown-cmark@0.1.0";
 
 import { process } from "jsr:@pd/pdpipe@0.2.2";
