@@ -1,25 +1,40 @@
-import {esbuild, pd, std} from "./deps.ts";
+import type { BuildOptions } from "npm:esbuild@0.23.1";
 import type { BuildInput } from "./pipedown.d.ts";
-import {denoPlugins} from "jsr:@luca/esbuild-deno-loader@0.10.3";
+import { esbuild, pd, std } from "./deps.ts";
+import { denoPlugins } from "jsr:@luca/esbuild-deno-loader@0.11.0";
 
-async function buildIIFE(input: BuildInput) {
-  const configPath = std.join(Deno.cwd(), ".pd", "deno.json");
-  const _denoPlugins = denoPlugins({ configPath, loader: "native" });
-  const filteredPipes =
-    input.pipes?.filter((pipe) => pipe.config?.build?.includes("iife")) || [];
-  for (const pipe of filteredPipes) {
-    const scriptPath = std.join(pipe.dir, "index.ts");
-    await esbuild.build({
-      bundle: true,
-      entryPoints: [scriptPath],
-      // entryNames: "[dir].js",
-      format: "iife",
-      treeShaking: true,
-      // outdir: '.pd/public',
-      outfile: std.join(pipe.dir, "index.iife.js"),
-      globalName: `PD.${pipe.fileName}`,
-      plugins: _denoPlugins,
-    })
+const configPath = std.join(Deno.cwd(), ".pd", "deno.json");
+const plugins = [...denoPlugins({ configPath })];
+const buildConfigDefaults: BuildOptions = {
+  bundle: true,
+  treeShaking: true,
+  plugins,
+  format: "esm",
+  // entryNames: "[dir].js",
+  // outdirs: ['.pd/public'],
+};
+
+function extractConfig(input: ExportPipeInput) {
+  input.builds = (input.pipes || []).map((pipe) => {
+    const build = pipe.config?.build || [];
+    return build.map((userConf) => {
+      return {
+        ...buildConfigDefaults,
+        entryPoints: [std.join(pipe.dir, "index.ts")],
+        outfile: std.join(
+          pipe.dir,
+          `index.${userConf.format || buildConfigDefaults.format}.js`,
+        ),
+        globalName: `PD.${pipe.fileName}`,
+        ...userConf,
+      };
+    });
+  }).flat();
+}
+
+async function esBuilder(input: ExportPipeInput) {
+  for (const build of input.builds) {
+    await esbuild.build(build)
       .catch((e) => {
         input.warning = input.warning || [];
         input.warning.push(e);
@@ -27,34 +42,14 @@ async function buildIIFE(input: BuildInput) {
   }
 }
 
-async function buildESM(input: BuildInput) {
-  const configPath = std.join(Deno.cwd(), ".pd", "deno.json");
-  const _denoPlugins = denoPlugins({ configPath });
-  const filteredPipes =
-    input.pipes?.filter((pipe) => pipe.config?.build?.includes("esm")) || [];
-  for (const pipe of filteredPipes) {
-    const scriptPath = std.join(pipe.dir, "index.ts");
-    await esbuild.build({
-      bundle: true,
-      entryPoints: [scriptPath],
-      // entryNames: "[dir].js",
-      format: "esm",
-      treeShaking: true,
-      // outdir: '.pd/public',
-      outfile: std.join(pipe.dir, "index.esm.js"),
-      globalName: `PD.${pipe.fileName}`,
-      plugins: _denoPlugins,
-    }).catch((e) => {
-      input.warning = input.warning || [];
-      input.warning.push(e);
-    });
-  }
-}
+type ExportPipeInput = BuildInput & {
+  builds: BuildOptions[];
+};
 
-export async function exportPipe(input: BuildInput){
+export async function exportPipe(input: BuildInput) {
   const funcs = [
-    buildIIFE,
-    buildESM,
-  ]
-  return await pd.process(funcs, input, {})
+    extractConfig,
+    esBuilder,
+  ];
+  return await pd.process(funcs, { ...input, builds: [] }, {});
 }
