@@ -15,7 +15,7 @@ import { firstNotNullishOf } from "jsr:@std/collections@1.0.9";
 import { parseArgs } from "jsr:@std/cli@1.0.6";
 
 import { parse as keycodeParse } from "jsr:@cliffy/keycode@1.0.0-rc.7";
-import { parse } from "jsr:@pd/pulldown-cmark@0.1.0";
+import { parse, html } from "jsr:@pd/pulldown-cmark@0.1.0";
 
 import { process } from "jsr:@pd/pdpipe@0.2.2";
 import { $p } from "jsr:@pd/pointers@0.1.1";
@@ -41,6 +41,7 @@ export const std = {
 };
 export const md = {
   parse,
+  html
 };
 
 export const pd = {

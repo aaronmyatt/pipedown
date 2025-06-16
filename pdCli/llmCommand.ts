@@ -1,6 +1,7 @@
 import type { CliInput } from "../pipedown.d.ts";
-import { pd, std } from "../deps.ts";
+import { pd, std, md } from "../deps.ts";
 import { PD_DIR } from "./helpers.ts";
+import {Tag, TokenType} from "../rangeFinder.ts";
 
 const helpText = `
 llm - Generate or improve codeblocks using LLM
@@ -102,11 +103,27 @@ async function updateMarkdownFile(markdownFile: string, targetIndex: number, new
   
   try {
     const content = await Deno.readTextFile(markdownPath);
+    const parsedContent = md.parse(content);
     const pipeDir = std.join(PD_DIR, markdownFile);
     const indexJsonPath = std.join(pipeDir, "index.json");
     const pipeData = JSON.parse(await Deno.readTextFile(indexJsonPath));
-    
     const targetStep = pipeData.steps[targetIndex];
+
+    console.log(parsedContent.slice(targetStep.range[0], targetStep.range[1]));
+    // update the code block in the parsedContent range
+    const updatedTokens = parsedContent.slice(targetStep.range[0], targetStep.range[1]).map((token) => {
+      if (token.type === TokenType.text && token.content === targetStep.code) {
+        token.content = 'wat';
+      }
+      return token;
+    })
+    
+    parsedContent.splice(targetStep.range[0], targetStep.range[1] - targetStep.range[0], ...updatedTokens);
+
+
+    throw new Error(`Pipe data not found for ${markdownFile}. Please ensure the pipe is built and the index.json exists.`);
+
+    
     const oldCode = targetStep.code;
     
     // Find and replace the exact code string
