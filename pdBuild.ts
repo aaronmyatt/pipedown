@@ -144,11 +144,51 @@ async function transformMdFiles(input: BuildInput) {
 }
 
 async function copyFiles(input: BuildInput) {
-  // copy js(x),json,ts(x) files to .pd directory, preserving directory structure
-  for await (const entry of std.walk(".", walkOptions(input, { exts: [".js", ".jsx", ".json", ".ts", ".tsx"] }))) {
-    const dest = std.join(PD_DIR, utils.fileDir(entry.path), entry.name);
-    await Deno.mkdir(std.dirname(dest), { recursive: true });
-    await Deno.copyFile(entry.path, dest);
+  // Collect all file references from markdown codeblocks
+  const referencedFiles = new Set<string>();
+  
+  for (const pipe of (input.pipes || [])) {
+    for (const step of pipe.steps) {
+      // Look for import statements and file references in the code
+      const importMatches = step.code.match(/(?:import|from)\s+["']([^"']+)["']/g);
+      if (importMatches) {
+        for (const match of importMatches) {
+          const filePath = match.match(/["']([^"']+)["']/)?.[1];
+          if (filePath && (filePath.endsWith('.js') || filePath.endsWith('.jsx') || 
+                          filePath.endsWith('.ts') || filePath.endsWith('.tsx') || 
+                          filePath.endsWith('.json'))) {
+            referencedFiles.add(filePath);
+          }
+        }
+      }
+      
+      // Also look for other file references (e.g., in strings)
+      const fileMatches = step.code.match(/["']([^"']*\.(js|jsx|ts|tsx|json))["']/g);
+      if (fileMatches) {
+        for (const match of fileMatches) {
+          const filePath = match.replace(/["']/g, '');
+          referencedFiles.add(filePath);
+        }
+      }
+    }
+  }
+  
+  // Copy only the referenced files
+  for (const filePath of referencedFiles) {
+    try {
+      // Resolve relative paths
+      const sourcePath = std.resolve(filePath);
+      const relativePath = std.relative(Deno.cwd(), sourcePath);
+      
+      // Check if file exists and is within the project
+      if (await std.exists(sourcePath) && !relativePath.startsWith('..')) {
+        const dest = std.join(PD_DIR, relativePath);
+        await Deno.mkdir(std.dirname(dest), { recursive: true });
+        await Deno.copyFile(sourcePath, dest);
+      }
+    } catch (_e) {
+      // Skip files that can't be copied
+    }
   }
 }
 
