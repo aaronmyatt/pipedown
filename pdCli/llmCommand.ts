@@ -103,43 +103,37 @@ async function updateMarkdownFile(markdownFile: string, targetIndex: number, new
   
   try {
     const content = await Deno.readTextFile(markdownPath);
-    const parsedContent = md.parse(content);
     const pipeDir = std.join(PD_DIR, markdownFile);
     const indexJsonPath = std.join(pipeDir, "index.json");
     const pipeData = JSON.parse(await Deno.readTextFile(indexJsonPath));
     const targetStep = pipeData.steps[targetIndex];
 
-    console.log(parsedContent.slice(targetStep.range[0], targetStep.range[1]));
-    // update the code block in the parsedContent range
-    const updatedTokens = parsedContent.slice(targetStep.range[0], targetStep.range[1]).map((token) => {
-      if (token.type === TokenType.text && token.content === targetStep.code) {
-        token.content = 'wat';
+    // Create markdown-it instance
+    const markdownIt = new md.MarkdownIt();
+    
+    // Parse markdown content into tokens
+    const tokens = markdownIt.parse(content, {});
+    
+    // Find the target codeblock token within the range
+    let codeblockFound = false;
+    for (let i = targetStep.range[0]; i < targetStep.range[1] && i < tokens.length; i++) {
+      const token = tokens[i];
+      if (token && token.type === 'fence' && token.content.trim() === targetStep.code.trim()) {
+        // Update the codeblock content
+        token.content = newCode;
+        codeblockFound = true;
+        break;
       }
-      return token;
-    })
-    
-    parsedContent.splice(targetStep.range[0], targetStep.range[1] - targetStep.range[0], ...updatedTokens);
-
-
-    throw new Error(`Pipe data not found for ${markdownFile}. Please ensure the pipe is built and the index.json exists.`);
-
-    
-    const oldCode = targetStep.code;
-    
-    // Find and replace the exact code string
-    if (!content.includes(oldCode)) {
-      throw new Error(`Could not find the exact code block in markdown file. Expected code:\n${oldCode}`);
     }
     
-    // Replace the old code with new code
-    const newContent = content.replace(oldCode, newCode);
-    
-    // Verify the replacement happened (content should be different unless old and new are identical)
-    if (newContent === content && oldCode !== newCode) {
-      throw new Error("Code replacement failed - content unchanged");
+    if (!codeblockFound) {
+      throw new Error(`Could not find the target codeblock in the specified range. Expected code:\n${targetStep.code}`);
     }
     
-    await Deno.writeTextFile(markdownPath, newContent);
+    // Render the updated tokens back to markdown
+    const updatedContent = markdownIt.renderer.render(tokens, markdownIt.options, {});
+    
+    await Deno.writeTextFile(markdownPath, updatedContent);
     console.log(std.colors.brightGreen(`✓ Updated codeblock in ${markdownPath}`));
     
   } catch (error) {
