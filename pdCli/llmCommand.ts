@@ -131,8 +131,8 @@ async function updateMarkdownFile(markdownFile: string, targetIndex: number, new
     }
 
     
-    // Render the updated tokens back to markdown
-    const updatedContent = markdownIt.renderer.render(tokens, markdownIt.options, {});
+    // Convert tokens back to markdown using custom serializer
+    const updatedContent = tokensToMarkdown(tokens);
     
     await Deno.writeTextFile(markdownPath, updatedContent);
     console.log(std.colors.brightGreen(`✓ Updated codeblock in ${markdownPath}`));
@@ -140,6 +140,78 @@ async function updateMarkdownFile(markdownFile: string, targetIndex: number, new
   } catch (error) {
     throw new Error(`Failed to update markdown file: ${error.message}`);
   }
+}
+
+// Custom function to convert tokens back to markdown
+function tokensToMarkdown(tokens: any[]): string {
+  let result = '';
+  
+  for (const token of tokens) {
+    switch (token.type) {
+      case 'heading_open':
+        result += '#'.repeat(token.tag.slice(1)) + ' ';
+        break;
+      case 'heading_close':
+        result += '\n\n';
+        break;
+      case 'paragraph_open':
+        // No action needed
+        break;
+      case 'paragraph_close':
+        result += '\n\n';
+        break;
+      case 'fence':
+        result += '```' + (token.info || '') + '\n';
+        result += token.content;
+        if (!token.content.endsWith('\n')) result += '\n';
+        result += '```\n\n';
+        break;
+      case 'code_inline':
+        result += '`' + token.content + '`';
+        break;
+      case 'text':
+        result += token.content;
+        break;
+      case 'softbreak':
+        result += '\n';
+        break;
+      case 'hardbreak':
+        result += '\n';
+        break;
+      case 'bullet_list_open':
+        // No action needed
+        break;
+      case 'bullet_list_close':
+        result += '\n';
+        break;
+      case 'list_item_open':
+        result += '- ';
+        break;
+      case 'list_item_close':
+        result += '\n';
+        break;
+      case 'strong_open':
+        result += '**';
+        break;
+      case 'strong_close':
+        result += '**';
+        break;
+      case 'em_open':
+        result += '*';
+        break;
+      case 'em_close':
+        result += '*';
+        break;
+      default:
+        // For unhandled token types, try to preserve content if available
+        if (token.content) {
+          result += token.content;
+        }
+        break;
+    }
+  }
+  
+  return result.trim() + '\n';
 }
 
 export async function llmCommand(input: CliInput) {
