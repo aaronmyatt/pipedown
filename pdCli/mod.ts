@@ -84,19 +84,20 @@ async function registerProject(input: CliInput) {
     }
 }
 
-export function checkFlags(
+export function checkMinFlags(
     flags: string[],
     func: (input: CliInput) => Promise<CliInput> | CliInput,
 ): (input: CliInput) => Promise<CliInput> | CliInput {
     return (input: CliInput) => {
-        if (input.flags._.length === 0 && flags[0] === "none") {
-            return func(input);
+        // Check if we have at least the required number of arguments
+        if (input.flags._.length < flags.length) {
+            return input;
         }
 
-        const flagsMatch = input.flags._.length &&
-            input.flags._.every((flag, index) => {
-                return flags[index] === "*" || flags[index] === flag;
-            });
+        const flagsMatch = flags.every((flag, index) => {
+            return flag === "*" || flag === input.flags._[index];
+        });
+
         if (flagsMatch) return func(input);
         return input;
     };
@@ -124,21 +125,21 @@ const funcs = [
     pdInit,
     registerProject,
     gatherProjectContext,
-    checkFlags(["none"], defaultCommand),
-    checkFlags(["help"], helpCommand),
-    checkFlags(["list"], listCommand),
-    checkFlags(["clean"], cleanCommand),
-    checkFlags(["build"], buildCommand),
-    checkFlags(["serve", "*", "*"], serveCommand),
-    checkFlags(["repl"], replCommand),
-    checkFlags(["run", "*", "*"], runCommand),
-    checkFlags(["runWith", "*", "*", "*"], runWithCommand),
-    checkFlags(["llm", "*", "*", "*"], llmCommand),
-    checkFlags(["test"], testCommand),
-    checkFlags(["test-update"], updateTestCommand),
-    checkFlags(["t"], testCommand),
-    checkFlags(["tu"], updateTestCommand),
-    checkFlags(["version"], versionCommand),
+    checkMinFlags(["none"], defaultCommand),
+    checkMinFlags(["help"], helpCommand),
+    checkMinFlags(["list"], listCommand),
+    checkMinFlags(["clean"], cleanCommand),
+    checkMinFlags(["build"], buildCommand),
+    checkMinFlags(["serve", "*", "*"], serveCommand),
+    checkMinFlags(["repl"], replCommand),
+    checkMinFlags(["run", "*", "*"], runCommand),
+    checkMinFlags(["runWith", "*", "*", "*"], runWithCommand),
+    checkMinFlags(["llm", "*", "*", "*"], llmCommand),
+    checkMinFlags(["test"], testCommand),
+    checkMinFlags(["test-update"], updateTestCommand),
+    checkMinFlags(["t"], testCommand),
+    checkMinFlags(["tu"], updateTestCommand),
+    checkMinFlags(["version"], versionCommand),
 ];
 
 const debugParamPresent = Deno.env.get("DEBUG") ||

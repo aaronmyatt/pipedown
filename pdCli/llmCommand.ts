@@ -81,12 +81,13 @@ Please provide only the improved code without any explanation or markdown format
 
 async function callLLM(prompt: string): Promise<string> {
   const command = new Deno.Command("llm", {
-    args: ["--schema", ".code", prompt],
+    args: ["-m", "claude-3.7-sonnet", "--schema", "code,", prompt],
     stdout: "piped",
     stderr: "piped",
   });
   
   const { code, stdout, stderr } = await command.output();
+  console.log(std.colors.brightBlue(`LLM command executed with code: ${code}`));
   
   if (code !== 0) {
     const errorText = new TextDecoder().decode(stderr);
@@ -116,7 +117,7 @@ async function updateMarkdownFile(markdownFile: string, targetIndex: number, new
     let currentLine = 0;
     
     for (let i = 0; i < lines.length; i++) {
-      if (currentLine >= startLine && lines[i].startsWith('```')) {
+      if (currentLine >= startLine-3 && lines[i].startsWith('```')) {
         if (codeBlockStart === -1) {
           codeBlockStart = i;
         } else {
@@ -124,12 +125,12 @@ async function updateMarkdownFile(markdownFile: string, targetIndex: number, new
           break;
         }
       }
-      if (currentLine >= endLine) break;
+      if (currentLine >= endLine-3) break;
       currentLine++;
     }
     
     if (codeBlockStart === -1 || codeBlockEnd === -1) {
-      throw new Error("Could not find code block boundaries in markdown file");
+      throw new Error(`Could not find code block boundaries in markdown file: ${codeBlockStart} to ${codeBlockEnd}`);
     }
     
     // Replace the code content
@@ -150,10 +151,10 @@ async function updateMarkdownFile(markdownFile: string, targetIndex: number, new
 }
 
 export async function llmCommand(input: CliInput) {
-  if (pd.$p.get(input, "/flags/help") || pd.$p.get(input, "/flags/h")) {
-    console.log(helpText);
-    return input;
-  }
+  // if (pd.$p.get(input, "/flags/help") || pd.$p.get(input, "/flags/h")) {
+  //   console.log(helpText);
+  //   return input;
+  // }
   
   const args = input.flags._;
   if (args.length < 4) {
@@ -164,7 +165,7 @@ export async function llmCommand(input: CliInput) {
   
   const [, markdownFile, target, ...promptParts] = args as string[];
   const prompt = promptParts.join(' ');
-  
+
   try {
     console.log(std.colors.brightBlue(`Loading context for ${markdownFile}...`));
     const steps = await loadPipeContext(markdownFile);
