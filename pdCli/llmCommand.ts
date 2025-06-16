@@ -107,40 +107,20 @@ async function updateMarkdownFile(markdownFile: string, targetIndex: number, new
     const pipeData = JSON.parse(await Deno.readTextFile(indexJsonPath));
     
     const targetStep = pipeData.steps[targetIndex];
-    const [startLine, endLine] = targetStep.range;
+    const oldCode = targetStep.code;
     
-    const lines = content.split('\n');
-    
-    // Find the code block boundaries
-    let codeBlockStart = -1;
-    let codeBlockEnd = -1;
-    let currentLine = 0;
-    
-    for (let i = 0; i < lines.length; i++) {
-      if (currentLine >= startLine-3 && lines[i].startsWith('```')) {
-        if (codeBlockStart === -1) {
-          codeBlockStart = i;
-        } else {
-          codeBlockEnd = i;
-          break;
-        }
-      }
-      if (currentLine >= endLine-3) break;
-      currentLine++;
+    // Find and replace the exact code string
+    if (!content.includes(oldCode)) {
+      throw new Error(`Could not find the exact code block in markdown file. Expected code:\n${oldCode}`);
     }
     
-    if (codeBlockStart === -1 || codeBlockEnd === -1) {
-      throw new Error(`Could not find code block boundaries in markdown file: ${codeBlockStart} to ${codeBlockEnd}`);
-    }
+    // Replace the old code with new code
+    const newContent = content.replace(oldCode, newCode);
     
-    // Replace the code content
-    const beforeCode = lines.slice(0, codeBlockStart + 1);
-    const afterCode = lines.slice(codeBlockEnd);
-    const newContent = [
-      ...beforeCode,
-      newCode,
-      ...afterCode
-    ].join('\n');
+    // Verify the replacement happened (content should be different unless old and new are identical)
+    if (newContent === content && oldCode !== newCode) {
+      throw new Error("Code replacement failed - content unchanged");
+    }
     
     await Deno.writeTextFile(markdownPath, newContent);
     console.log(std.colors.brightGreen(`✓ Updated codeblock in ${markdownPath}`));
