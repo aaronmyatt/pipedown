@@ -43,9 +43,15 @@ async function writeDenoImportMap(input: BuildInput) {
       input.importMap.imports["/" + innerPath] = path;
     }
   }
+
   await Deno.writeTextFile(
     std.join(PD_DIR, "deno.json"),
-    JSON.stringify(input.importMap, null, 2),
+    JSON.stringify({
+      ...input.importMap,
+
+      // extend .pd deno.json config with "nodeModulesDir": "auto"
+      // nodeModulesDir: "auto"
+    }, null, 2),
   );
   return input;
 }

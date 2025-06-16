@@ -2,7 +2,6 @@
   "compilerOptions": {
     "types": ["./pipedown.d.ts"]
   },
-  "tasks": {},
   "name": "@pd/pdcli",
   "version": "0.4.0",
   "exports": "./pdCli/mod.ts",
@@ -10,5 +9,9 @@
     "exclude": ["deps.ts", "test.ts", ".pd/", "old/"]
   },
   "license": "MIT",
-  "nodeModulesDir": "auto"
+  "nodeModulesDir": "auto",
+  "tasks": {
+    "installLocal": "deno install -Arfg -n pd pdCli/mod.ts",
+    "publishToJsr": ""
+  }
 }

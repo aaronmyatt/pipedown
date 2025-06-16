@@ -20,7 +20,7 @@ import { parse } from "jsr:@pd/pulldown-cmark@0.1.0";
 import { process } from "jsr:@pd/pdpipe@0.2.2";
 import { $p } from "jsr:@pd/pointers@0.1.1";
 
-import * as esbuild from "npm:esbuild@0.23.1";
+import * as esbuild from "npm:esbuild@0.25.4";
 //import { httpImports } from "https://deno.land/x/esbuild_plugin_http_imports@v1.3.0/index.ts";
 
 export const std = {

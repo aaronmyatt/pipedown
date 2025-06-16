@@ -52,25 +52,34 @@ async function registerProject(input: CliInput) {
 
     const home = Deno.env.get("HOME");
     if (home) {
+        const pipedownGlobalDir = std.join(home, ".pipedown");
         try {
-            await Deno.mkdir(std.join(home, ".pipedown"), { recursive: true });
+            await Deno.mkdir(pipedownGlobalDir, { recursive: true });
         } catch (e) {
             if (!(e instanceof Deno.errors.AlreadyExists)) throw e;
         }
 
-        const projectsPath = std.join(home, ".pipedown", "projects.json");
+        const projectsPath = std.join(pipedownGlobalDir, "projects.json");
         let projects = [];
         try {
-            projects = JSON.parse(projectsPath);
+            const projectsRaw = await Deno.readTextFile(projectsPath)
+            projects = JSON.parse(projectsRaw);
         } catch (_e) {
             // probably the first project
         }
-        projects.push(project);
-        await Deno.writeTextFile(
-            projectsPath,
-            JSON.stringify(projects, null, 2),
-            { create: true },
-        );
+
+        const exists = projects.find((_project: typeof project) => project.path === _project.path)
+
+        if(exists){
+            // do nothing
+        } else {
+            projects.push(project);
+            await Deno.writeTextFile(
+                projectsPath,
+                JSON.stringify(projects, null, 2),
+                { create: true },
+            );
+        }
     }
 }
 
