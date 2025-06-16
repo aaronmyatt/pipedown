@@ -6,15 +6,11 @@ const { $p } = pd;
 const SUPPORTED_LANGUAGES = ["ts", "js", "javascript", "typescript"];
 const META_LANGUAGES = ["json", "yaml", "yml"];
 
-
 const codeBlocks = $p.compile('/ranges/codeBlocks')
 const headingBlocks = $p.compile('/ranges/headings')
 const metaBlocks = $p.compile('/ranges/metaBlocks')
 const listBlocks = $p.compile('/ranges/lists')
 
-const tokenTag = $p.compile('/ranges/token/tag')
-const tokenType = $p.compile('/ranges/token/type')
-const tokenLang = $p.compile('/ranges/token/language')
 const tokenIndex = $p.compile('/ranges/index')
 
 export enum Tag {
@@ -30,64 +26,91 @@ export enum TokenType {
     text = "TEXT",
 }
 
+// Helper functions to normalize markdown-it tokens to our expected format
+const normalizeTokenType = (token: Token): string => {
+    if (token.type.endsWith('_open')) return TokenType.start;
+    if (token.type.endsWith('_close')) return TokenType.end;
+    if (token.type === 'inline' || token.content) return TokenType.text;
+    return token.type;
+};
+
+const normalizeTokenTag = (token: Token): string => {
+    if (token.type === 'fence' || token.type === 'code_block') return Tag.codeBlock;
+    if (token.type.startsWith('heading')) return Tag.heading;
+    if (token.type.startsWith('bullet_list') || token.type.startsWith('ordered_list')) return Tag.list;
+    if (token.type === 'list_item_open' || token.type === 'list_item_close') return Tag.item;
+    return token.tag || token.type;
+};
+
+const getTokenLanguage = (token: Token): string => {
+    if (token.type === 'fence' && token.info) {
+        return token.info.split(' ')[0]; // Get language from info string
+    }
+    return '';
+};
 
 const checkCodeBlock = (input: RangeFinderInput) => {
-    const isCodeBlock = tokenTag.get(input) === Tag.codeBlock;
-    const startOrEnd = tokenType.get(input);
-    const supported = SUPPORTED_LANGUAGES.includes(tokenLang.get(input)?.toLowerCase())
+    const token = input.ranges.token;
+    const normalizedTag = normalizeTokenTag(token);
+    const language = getTokenLanguage(token);
+    
+    const isCodeBlock = normalizedTag === Tag.codeBlock;
+    const supported = SUPPORTED_LANGUAGES.includes(language.toLowerCase());
 
-    if(isCodeBlock && startOrEnd === TokenType.start && supported){
-        $p.set(input, '/ranges/codeBlocks/-', [tokenIndex.get(input)])
-    }
-    if(isCodeBlock && startOrEnd === TokenType.end && supported){
-        // append end index to last codeBlock
-        const previousBlock = codeBlocks.get(input).at(-1)
-        previousBlock.push(tokenIndex.get(input))
+    if (isCodeBlock && (token.type === 'fence' || token.type === 'code_block') && supported) {
+        // For markdown-it, code blocks are single tokens, so we store start and end as same index
+        const index = tokenIndex.get(input);
+        $p.set(input, '/ranges/codeBlocks/-', [index, index]);
     }
 }
 
 const checkList = (input: RangeFinderInput) => {
-    const isList = tokenTag.get(input) === Tag.list;
-    const startOrEnd = tokenType.get(input);
+    const token = input.ranges.token;
+    const normalizedTag = normalizeTokenTag(token);
+    const normalizedType = normalizeTokenType(token);
 
-    if(isList && startOrEnd === TokenType.start)
-        $p.set(input, '/ranges/lists/-', [tokenIndex.get(input)])
+    if (normalizedTag === Tag.list && normalizedType === TokenType.start) {
+        $p.set(input, '/ranges/lists/-', [tokenIndex.get(input)]);
+    }
 
-    if(isList && startOrEnd === TokenType.end){
-        // lists may be nested, so we need to fill them in from the inside out
+    if (normalizedTag === Tag.list && normalizedType === TokenType.end) {
         const previousBlock = listBlocks.get(input).findLast((block: number[]) => {
-            return block.length === 1
-        })
-        previousBlock.push(tokenIndex.get(input))
+            return block.length === 1;
+        });
+        if (previousBlock) {
+            previousBlock.push(tokenIndex.get(input));
+        }
     }
 }
 
 const checkHeading = (input: RangeFinderInput) => {
-    const isHeading = tokenTag.get(input) === Tag.heading;
-    const startOrEnd = tokenType.get(input);
+    const token = input.ranges.token;
+    const normalizedTag = normalizeTokenTag(token);
+    const normalizedType = normalizeTokenType(token);
 
-    if(isHeading && startOrEnd === TokenType.start)
-        $p.set(input, '/ranges/headings/-', [tokenIndex.get(input)])
+    if (normalizedTag === Tag.heading && normalizedType === TokenType.start) {
+        $p.set(input, '/ranges/headings/-', [tokenIndex.get(input)]);
+    }
 
-    if(isHeading && startOrEnd === TokenType.end){
-        // append end index to last heading
-        const previousBlock = headingBlocks.get(input).at(-1)
-        previousBlock.push(tokenIndex.get(input))
+    if (normalizedTag === Tag.heading && normalizedType === TokenType.end) {
+        const previousBlock = headingBlocks.get(input).at(-1);
+        if (previousBlock) {
+            previousBlock.push(tokenIndex.get(input));
+        }
     }
 }
 
 const checkMetaBlock = (input: RangeFinderInput) => {
-    const isMetaBlock = tokenTag.get(input) === Tag.codeBlock;
-    const startOrEnd = tokenType.get(input);
-    const supported = META_LANGUAGES.includes(tokenLang.get(input)?.toLowerCase())
+    const token = input.ranges.token;
+    const normalizedTag = normalizeTokenTag(token);
+    const language = getTokenLanguage(token);
+    
+    const isMetaBlock = normalizedTag === Tag.codeBlock;
+    const supported = META_LANGUAGES.includes(language.toLowerCase());
 
-    if(isMetaBlock && startOrEnd === TokenType.start && supported)
-        $p.set(input, '/ranges/metaBlocks/-', [tokenIndex.get(input)])
-
-    if(isMetaBlock && startOrEnd === TokenType.end && supported){
-        // append end index to last metaBlock
-        const previousBlock = metaBlocks.get(input).at(-1)
-        previousBlock.push(tokenIndex.get(input))
+    if (isMetaBlock && (token.type === 'fence' || token.type === 'code_block') && supported) {
+        const index = tokenIndex.get(input);
+        $p.set(input, '/ranges/metaBlocks/-', [index, index]);
     }
 }
 

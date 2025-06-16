@@ -8,16 +8,24 @@ export type Token = {
     type: string;
     tag: string;
     content: string;
-    level: number;
-    kind: string;
-    fenced: boolean;
-    language: string;
-    start_number: number;
-    label: string;
-    alignments: Array<string>;
-    url: string;
-    title: string;
-    checked: boolean;
+    level?: number;
+    info?: string;
+    markup?: string;
+    map?: [number, number];
+    block?: boolean;
+    children?: Token[];
+    attrGet?: (name: string) => string | null;
+    attrSet?: (name: string, value: string) => void;
+    // Legacy properties for compatibility
+    kind?: string;
+    fenced?: boolean;
+    language?: string;
+    start_number?: number;
+    label?: string;
+    alignments?: Array<string>;
+    url?: string;
+    title?: string;
+    checked?: boolean;
 };
 
 export type Tokens = Token[];
