@@ -129,6 +129,7 @@ async function updateMarkdownFile(markdownFile: string, targetIndex: number, new
     if (!codeblockFound) {
       throw new Error(`Could not find the target codeblock in the specified range. Expected code:\n${targetStep.code}`);
     }
+
     
     // Render the updated tokens back to markdown
     const updatedContent = markdownIt.renderer.render(tokens, markdownIt.options, {});
@@ -142,10 +143,10 @@ async function updateMarkdownFile(markdownFile: string, targetIndex: number, new
 }
 
 export async function llmCommand(input: CliInput) {
-  // if (pd.$p.get(input, "/flags/help") || pd.$p.get(input, "/flags/h")) {
-  //   console.log(helpText);
-  //   return input;
-  // }
+  if (pd.$p.get(input, "/flags/help") || pd.$p.get(input, "/flags/h")) {
+    console.log(helpText);
+    return input;
+  }
   
   const args = input.flags._;
   if (args.length < 4) {
