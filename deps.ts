@@ -16,7 +16,6 @@ import { parseArgs } from "jsr:@std/cli@1.0.6";
 
 import { parse as keycodeParse } from "jsr:@cliffy/keycode@1.0.0-rc.7";
 import MarkdownIt from "npm:markdown-it@14.1.0";
-import markdownItToMarkdown from "npm:markdown-it-to-markdown@0.1.1";
 
 import { process } from "jsr:@pd/pdpipe@0.2.2";
 import { $p } from "jsr:@pd/pointers@0.1.1";
@@ -41,8 +40,7 @@ export const std = {
   firstNotNullishOf,
 };
 export const md = {
-  MarkdownIt,
-  markdownItToMarkdown
+  MarkdownIt
 };
 
 export const pd = {
