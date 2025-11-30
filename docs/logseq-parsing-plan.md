@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document outlines a plan for enabling pipedown to parse and execute markdown files written in Logseq's outline format. Logseq uses a bullet-first approach where every block of content is preceded by a `-` character, creating a hierarchical outline structure.
+This document outlines a plan for enabling pipedown to parse and execute markdown files written in Logseq's outline format. The approach is to **generalize the existing parser** to work regardless of whether headers, lists, and codeblocks are nested within lists themselves.
 
 ## Problem Statement
 
@@ -34,256 +34,218 @@ Pipedown currently recognizes the following syntax patterns (from `mdToPipe.ts` 
 | `- only:` | Only run this step |
 | `- flags: /path` | Flag checks |
 
-## Detection Strategy
+## Approach: Generalize the Existing Parser
 
-### Option 1: Heuristic Detection (Recommended)
+Instead of preprocessing Logseq files, we will modify the parser to **ignore list nesting depth** when identifying key elements. The core principle is:
 
-Detect Logseq format by analyzing the file content:
+> A `##` header and following codeblock become a function in the generated pipeline script. This happens **regardless of how nested in lists they are**. List syntax with recognized variants like `- if:` are still respected if they precede a codeblock.
 
-```typescript
-const isLogseqFormat = (markdown: string): boolean => {
-  const lines = markdown.split('\n').filter(line => line.trim().length > 0);
-  
-  // If the majority of non-empty lines start with "- ", it's likely Logseq
-  const bulletLines = lines.filter(line => /^\s*-\s/.test(line));
-  const bulletRatio = bulletLines.length / lines.length;
-  
-  // Consider it Logseq if >80% of lines are bullet-prefixed
-  return bulletRatio > 0.8;
-};
-```
+### Key Insight
 
-### Option 2: Explicit Flag
-
-Allow users to specify the format via configuration:
-
-```json
-{
-  "format": "logseq"
-}
-```
-
-### Option 3: File Path Convention
-
-Detect based on directory structure (e.g., files in a `journals/` or `pages/` directory typical of Logseq).
-
-**Recommendation**: Start with Option 1 (heuristic detection) as it requires no user intervention and works for the majority of cases. Consider adding Option 2 as an override.
-
-## Parsing Strategy
-
-### Approach A: Pre-process Markdown (Recommended)
-
-Strip bullet prefixes before passing to the existing parser:
-
-```typescript
-const preprocessLogseq = (markdown: string): string => {
-  const lines = markdown.split('\n');
-  
-  return lines.map(line => {
-    // Match leading whitespace + bullet + space
-    const match = line.match(/^(\s*)-\s(.*)$/);
-    if (match) {
-      const indent = match[1];
-      const content = match[2];
-      // Preserve indentation structure, remove bullet
-      return indent + content;
-    }
-    return line;
-  }).join('\n');
-};
-```
-
-**Advantages**:
-- Minimal changes to existing parser
-- Works with all existing pipedown syntax
-- Easy to test and debug
-
-**Disadvantages**:
-- Loses Logseq-specific structure information
-- Two-pass processing
-
-### Approach B: Modify Parser to Handle Bullets
-
-Extend `rangeFinder.ts` to recognize Logseq patterns:
-
-```typescript
-// In rangeFinder.ts, modify pattern matching to handle:
-// - "- # Heading" as HEADING
-// - "- ```ts" as CODE_BLOCK start
-// - "- if: /pointer" (already works since it uses list items)
-```
-
-**Advantages**:
-- Single-pass processing
-- Preserves original structure
-
-**Disadvantages**:
-- More invasive changes to core parser
-- Higher complexity
-
-### Approach C: Support Logseq-Style Programmatic Syntax (Alternative)
-
-Instead of stripping bullets, recognize keywords at line start:
-
-| Current Syntax | Logseq Alternative |
-|---------------|-------------------|
-| `- if: /pointer` | `if /pointer` |
-| `- check: /pointer` | `check /pointer` |
-| `- route: /path` | `route /path` |
-
-This approach treats the entire line as a command when a recognized keyword starts the line.
-
-**Recommendation**: Start with **Approach A** (pre-processing) for simplicity, then consider **Approach C** as a future enhancement for cleaner Logseq syntax.
+The markdown parser (pulldown-cmark) already tokenizes all elements correctly - it just happens that headings and code blocks can appear inside list items. The `rangeFinder.ts` already tracks these elements. The change is in how we **interpret** nesting rather than reject it.
 
 ## Implementation Plan
 
-### Phase 1: Detection and Basic Preprocessing
+### Phase 1: Analyze Token Structure for Nested Content
 
-1. **Add Logseq detection utility** (`pdUtils.ts`):
-   ```typescript
-   export const detectLogseqFormat = (markdown: string): boolean => {
-     const lines = markdown.split('\n').filter(line => line.trim().length > 0);
-     const bulletLines = lines.filter(line => /^\s*-\s/.test(line));
-     return bulletLines.length / lines.length > 0.8;
-   };
-   ```
+First, understand how the markdown parser tokenizes Logseq-style content:
 
-2. **Add Logseq preprocessor** (`pdUtils.ts`):
-   ```typescript
-   export const preprocessLogseq = (markdown: string): string => {
-     return markdown.split('\n').map(line => {
-       const match = line.match(/^(\s*)-\s(.*)$/);
-       return match ? match[1] + match[2] : line;
-     }).join('\n');
-   };
-   ```
-
-3. **Integrate into mdToPipe.ts**:
-   ```typescript
-   const parseMarkdown = (input: mdToPipeInput) => {
-     let markdown = input.markdown || "";
-     
-     // Detect and preprocess Logseq format
-     if (detectLogseqFormat(markdown)) {
-       markdown = preprocessLogseq(markdown);
-       input.isLogseq = true; // Flag for potential future use
-     }
-     
-     input.tokens = md.parse(markdown);
-   };
-   ```
-
-### Phase 2: Testing
-
-1. Create test fixtures for Logseq-formatted markdown:
-   - `test/logseq-basic.md` - Simple Logseq file with headings and code
-   - `test/logseq-conditions.md` - Logseq file with if/check/route syntax
-   - `test/logseq-nested.md` - Deeply nested Logseq outline
-
-2. Add unit tests for:
-   - Detection function accuracy
-   - Preprocessing correctness
-   - End-to-end pipe execution
-
-### Phase 3: Edge Cases and Refinement
-
-1. **Handle nested bullets properly**:
-   - Preserve relative indentation
-   - Handle mixed bullet styles (`-`, `*`, numbered lists)
-
-2. **Handle code blocks within Logseq**:
-   ```markdown
-   - ```ts
-     const x = 1;
-     ```
-   ```
-   Should become:
-   ```markdown
-   ```ts
-   const x = 1;
-   ```
-   ```
-
-3. **Handle Logseq properties**:
-   ```markdown
-   - key:: value
-   ```
-   Consider preserving or converting to pipedown config.
-
-### Phase 4: Future Enhancements (Optional)
-
-1. **Alternative keyword syntax** (Approach C):
-   - Recognize `if /pointer` at line start (without `- `)
-   - Makes Logseq files more readable
-
-2. **Bidirectional conversion**:
-   - Tool to convert standard pipedown to Logseq format
-   - Tool to convert Logseq to standard pipedown
-
-3. **Logseq block references**:
-   - Support `((block-id))` references for step composition
-
-## Example Transformations
-
-### Input: Logseq Format
 ```markdown
 - # My Pipeline
-- ## Step 1
-- - if: /enabled
-- - ```ts
-    console.log('Hello')
-    ```
-- ## Step 2
-- ```ts
-  input.result = 42
-  ```
+  - ## Step 1
+    - ```ts
+      console.log('Hello')
+      ```
 ```
 
-### Output: Standard Pipedown Format
-```markdown
-# My Pipeline
-## Step 1
-- if: /enabled
-- ```ts
-  console.log('Hello')
-  ```
-## Step 2
-```ts
-input.result = 42
+The parser will produce tokens like:
 ```
+START LIST
+START ITEM
+START HEADING (level 1)
+TEXT "My Pipeline"
+END HEADING
+START LIST (nested)
+START ITEM
+START HEADING (level 2)
+TEXT "Step 1"
+END HEADING
+...
 ```
+
+### Phase 2: Modify `rangeFinder.ts`
+
+The `rangeFinder.ts` already collects ranges for headings, code blocks, meta blocks, and lists. **No changes needed here** - it already identifies these elements regardless of nesting.
+
+### Phase 3: Modify `mdToPipe.ts` - Core Changes
+
+#### 3.1 `findPipeName` - Already Works
+
+The function finds a level-1 heading regardless of where it appears:
+```typescript
+const findPipeName = (input: mdToPipeInput) => {
+  const headingRange = input.ranges.headings.find((hRange: number[]) => {
+    const index = !hRange.length ? 0 : hRange[0];
+    const level = pd.$p.get(input.tokens.at(index) || {}, "/level");
+    return level === 1;  // Finds level 1 heading regardless of nesting
+  });
+  // ...
+};
+```
+
+**Status**: ✅ Already works with nested headings
+
+#### 3.2 `findSteps` - Already Works
+
+The function finds all code blocks and associates them with preceding headings:
+```typescript
+const findSteps = (input: mdToPipeInput) => {
+  input.pipe.steps = input.ranges.codeBlocks.map(
+    (codeBlockRange: number[]): Step => {
+      // Extract code from code block
+    },
+  ).map((step: Step, index: number, steps: Steps) => {
+    // Find preceding heading for step name
+  });
+};
+```
+
+**Status**: ✅ Already works with nested code blocks
+
+#### 3.3 `setupChecks` - Needs Modification
+
+This is where the main change is needed. Currently, it only processes checks for code blocks that are **directly** inside a list:
+
+```typescript
+const setupChecks = (input: mdToPipeInput) => {
+  // ...
+  input.pipe.steps = input.pipe.steps.map((step: Step) => {
+    step.inList = !!inRange(input.ranges.lists, step.range[0]);
+    return step;
+  })
+```
+
+**Modification needed**: Look for `- if:`, `- check:`, etc. patterns preceding a code block **regardless of list nesting depth**. The key is to find list items that precede the code block within the same parent context.
+
+```typescript
+const setupChecks = (input: mdToPipeInput) => {
+  const inRange = (ranges: Array<number[]>, index: number) => {
+    return ranges.find(([start, stop]: number[]) => {
+      return start < index && stop > index;
+    });
+  }
+
+  // Find the innermost list containing this code block
+  const findInnermostList = (ranges: Array<number[]>, index: number) => {
+    const containingLists = ranges
+      .filter(([start, stop]: number[]) => start < index && stop > index);
+    
+    if (containingLists.length === 0) return undefined;
+    
+    // Sort by start ascending - the list that starts latest is innermost
+    return containingLists.sort((a, b) => (a[0] - b[0])).at(-1);
+  }
+
+  input.pipe.steps = input.pipe.steps.map((step: Step) => {
+    // Check if code block is in ANY list (including deeply nested)
+    step.inList = !!inRange(input.ranges.lists, step.range[0]);
+    return step;
+  })
+    .map((step: Step, stepIndex: number) => {
+      if (step.inList) {
+        // Find the innermost list containing this code block
+        const listRange = findInnermostList(input.ranges.lists, step.range[0]);
+        
+        if (!listRange) return step;  // Guard against undefined
+
+        // ... rest of check processing remains the same
+      }
+      return step;
+    });
+}
+```
+
+### Phase 4: Testing
+
+Create test files that verify the parser works with:
+
+1. **Standard format** (existing tests):
+   ```markdown
+   # My Pipeline
+   ## Step 1
+   ```ts
+   console.log('Hello')
+   ```
+   ```
+
+2. **Logseq format** (new tests):
+   ```markdown
+   - # My Pipeline
+     - ## Step 1
+       - ```ts
+         console.log('Hello')
+         ```
+   ```
+
+3. **Mixed format** (edge case):
+   ```markdown
+   # My Pipeline
+   - ## Step 1
+     - if: /enabled
+     - ```ts
+       console.log('Hello')
+       ```
+   ```
+
+4. **Deeply nested**:
+   ```markdown
+   - - - # My Pipeline
+         - - ## Step 1
+               - if: /enabled
+               - ```ts
+                 console.log('Hello')
+                 ```
+   ```
+
+### Test Files to Create
+
+| File | Description |
+|------|-------------|
+| `test/logseq-basic.md` | Basic Logseq format with headings and code |
+| `test/logseq-conditions.md` | Logseq format with if/check/route syntax |
+| `test/logseq-deeply-nested.md` | Multiple levels of list nesting |
 
 ## File Changes Summary
 
 | File | Changes |
 |------|---------|
-| `pdUtils.ts` | Add `detectLogseqFormat()` and `preprocessLogseq()` |
-| `mdToPipe.ts` | Add preprocessing step in `parseMarkdown()` |
-| `pipedown.d.ts` | Add `isLogseq?: boolean` to input type |
-| `test/logseq-*.md` | New test fixtures |
+| `mdToPipe.ts` | Modify `setupChecks` to handle nested lists |
+| `test/logseq-*.md` | New test fixtures for Logseq format |
+
+## Key Principles
+
+1. **No preprocessing**: Parse Logseq files directly without stripping bullets
+2. **Depth-agnostic**: Headings and code blocks are recognized regardless of list nesting
+3. **Check syntax preserved**: `- if:`, `- check:`, etc. work the same way, just within their local list context
+4. **Backward compatible**: Standard pipedown files continue to work unchanged
 
 ## Risks and Considerations
 
-1. **False positives**: Standard markdown with many list items could be detected as Logseq
-   - Mitigation: Use high threshold (80%+) for detection
-   - Mitigation: Allow explicit format override in config
+1. **Ambiguous list context**: When a code block is nested in multiple lists, which list's items should provide the checks?
+   - **Solution**: Use the innermost (most deeply nested) list that contains the code block
 
-2. **Indentation handling**: Logseq uses tabs/spaces for hierarchy
-   - Mitigation: Normalize indentation during preprocessing
+2. **Performance**: No additional overhead since we're not preprocessing
 
-3. **Code block content**: Must not strip `-` from inside code blocks
-   - Mitigation: Track code block state during preprocessing
-
-4. **Performance**: Preprocessing adds overhead
-   - Mitigation: Only preprocess when Logseq format detected
+3. **Edge cases**: Mixed standard and Logseq format in the same file
+   - **Solution**: The depth-agnostic approach handles this naturally
 
 ## Conclusion
 
-The recommended approach is:
+The recommended approach is to:
 
-1. **Use heuristic detection** to automatically identify Logseq files
-2. **Preprocess by stripping bullet prefixes** before parsing
-3. **Preserve compatibility** with existing pipedown syntax
-4. **Add comprehensive tests** for edge cases
+1. **Generalize the parser** to recognize headings and code blocks regardless of list nesting
+2. **Modify `setupChecks`** to find check patterns in the innermost enclosing list
+3. **Preserve backward compatibility** with existing pipedown files
+4. **Add comprehensive tests** for Logseq-formatted files
 
-This approach provides the smallest possible change to the existing codebase while enabling full Logseq compatibility.
+This approach requires minimal changes to the existing codebase while enabling full Logseq compatibility through a single, unified parser.
