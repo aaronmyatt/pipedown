@@ -1,17 +1,48 @@
 import type { PDError } from "../pipedown.d.ts";
+import { std } from "../deps.ts";
 
-export const commonArgs = [
-    "--unstable-kv",
-    "-A",
-    "-c",
-    ".pd/deno.json",
-];
+// Get the global pipedown directory (~/.pipedown)
+export const getGlobalPipedownDir = () => {
+    const home = Deno.env.get("HOME");
+    if (!home) {
+        throw new Error("HOME environment variable is not set");
+    }
+    return std.join(home, ".pipedown");
+};
 
-export const PD_DIR = `./.pd`;
+// Get project name from config or current directory
+export const getProjectName = (globalConfig?: { name?: string }) => {
+    return globalConfig?.name || std.parsePath(Deno.cwd()).name;
+};
 
-export async function pdRun(scriptName: string, testInput: string) {
-    const pipeDir = `${PD_DIR}/${scriptName.replace(/\.md/, "")}`;
-    const scriptPath = `${pipeDir}/cli.ts`;
+// Get project-specific build directory within global pipedown directory
+export const getProjectBuildDir = (projectName?: string) => {
+    const name = projectName || getProjectName();
+    return std.join(getGlobalPipedownDir(), "builds", name);
+};
+
+// Legacy PD_DIR for backward compatibility - now points to global location
+// Note: This is evaluated at module load time, so it uses the current directory name
+export const PD_DIR = getProjectBuildDir();
+
+// Get common args for deno commands, requires project name for correct path
+export const getCommonArgs = (projectName?: string) => {
+    const buildDir = getProjectBuildDir(projectName);
+    return [
+        "--unstable-kv",
+        "-A",
+        "-c",
+        std.join(buildDir, "deno.json"),
+    ];
+};
+
+// Legacy commonArgs - uses default project name
+export const commonArgs = getCommonArgs();
+
+export async function pdRun(scriptName: string, testInput: string, projectName?: string) {
+    const buildDir = getProjectBuildDir(projectName);
+    const pipeDir = std.join(buildDir, scriptName.replace(/\.md/, ""));
+    const scriptPath = std.join(pipeDir, "cli.ts");
 
     const scriptArgs = Deno.args.slice(
         Deno.args.findIndex((arg) => arg === "--") + 1,
@@ -19,7 +50,7 @@ export async function pdRun(scriptName: string, testInput: string) {
     const command = new Deno.Command(Deno.execPath(), {
         args: [
             "run",
-            ...commonArgs,
+            ...getCommonArgs(projectName),
             scriptPath,
             "--input",
             testInput || "{}",
@@ -36,9 +67,11 @@ export async function pdRunWith(
     wrapperName: string,
     scriptName: string,
     testInput: string,
+    projectName?: string,
 ) {
-    const pipeDir = `${PD_DIR}/${scriptName.replace(/\.md/, "")}`;
-    const scriptPath = `${pipeDir}/${wrapperName}.ts`;
+    const buildDir = getProjectBuildDir(projectName);
+    const pipeDir = std.join(buildDir, scriptName.replace(/\.md/, ""));
+    const scriptPath = std.join(pipeDir, `${wrapperName}.ts`);
 
     const scriptArgs = Deno.args.slice(
         Deno.args.findIndex((arg) => arg === "--") + 1,
@@ -46,7 +79,7 @@ export async function pdRunWith(
     const command = new Deno.Command(Deno.execPath(), {
         args: [
             "run",
-            ...commonArgs,
+            ...getCommonArgs(projectName),
             scriptPath,
             "--input",
             testInput || "{}",
@@ -59,13 +92,14 @@ export async function pdRunWith(
     await command.output();
 }
 
-export async function pdServe(scriptName: string, testInput: string) {
-    const pipeDir = `${PD_DIR}/${scriptName.replace(/\.md/, "")}`;
-    const scriptPath = `${pipeDir}/server.ts`;
+export async function pdServe(scriptName: string, testInput: string, projectName?: string) {
+    const buildDir = getProjectBuildDir(projectName);
+    const pipeDir = std.join(buildDir, scriptName.replace(/\.md/, ""));
+    const scriptPath = std.join(pipeDir, "server.ts");
     const command = new Deno.Command(Deno.execPath(), {
         args: [
             "run",
-            ...commonArgs,
+            ...getCommonArgs(projectName),
             "--watch",
             scriptPath,
             testInput || "{}",
@@ -78,12 +112,13 @@ export async function pdServe(scriptName: string, testInput: string) {
     await process.output();
 }
 
-export async function pdRepl() {
+export async function pdRepl(projectName?: string) {
+    const buildDir = getProjectBuildDir(projectName);
     const command = new Deno.Command(Deno.execPath(), {
         args: [
             "repl",
-            ...commonArgs,
-            "--eval-file=./.pd/replEval.ts"
+            ...getCommonArgs(projectName),
+            `--eval-file=${std.join(buildDir, "replEval.ts")}`
         ],
         stdout: "inherit",
         stderr: "inherit",

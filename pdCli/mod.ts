@@ -2,7 +2,7 @@ import type { CliInput, Input, PipeConfig} from "../pipedown.d.ts";
 
 import projectMetadata from "./../deno.json" with { type: "json" };
 
-import { PD_DIR } from "./helpers.ts";
+import { getGlobalPipedownDir, getProjectBuildDir, getProjectName } from "./helpers.ts";
 
 import { pd, std } from "../deps.ts";
 
@@ -22,18 +22,7 @@ import { helpText } from "../stringTemplates.ts";
 import {replCommand} from "./replCommand.ts";
 
 async function pdInit(input: CliInput) {
-    try {
-        await Deno.mkdir(PD_DIR);
-        console.log(
-            std.colors.brightCyan("First time here? Welcome to Pipe ↓!"),
-        );
-        console.log(std.colors.brightGreen("Creating ~/.pd"));
-    } catch (e) {
-        if (!(e instanceof Deno.errors.AlreadyExists)) throw e;
-    }
-
-    // read global config file, config.json, from the current directory,
-    // if it exists
+    // Read global config file first to get project name
     const configPath = std.join(Deno.cwd(), "config.json");
     input.globalConfig = input.globalConfig || {};
     try {
@@ -42,36 +31,54 @@ async function pdInit(input: CliInput) {
     } catch (e) {
         if (!(e instanceof Deno.errors.NotFound)) throw e;
     }
+
+    // Create global pipedown directory and project-specific build directory
+    const globalDir = getGlobalPipedownDir();
+    const projectName = getProjectName(input.globalConfig);
+    const buildDir = getProjectBuildDir(projectName);
+    
+    try {
+        await Deno.mkdir(buildDir, { recursive: true });
+        console.log(
+            std.colors.brightCyan("First time here? Welcome to Pipe ↓!"),
+        );
+        console.log(std.colors.brightGreen(`Creating ${buildDir}`));
+    } catch (e) {
+        if (!(e instanceof Deno.errors.AlreadyExists)) throw e;
+    }
 }
 
 async function registerProject(input: CliInput) {
+    const projectName = getProjectName(input.globalConfig);
     const project = {
-        name: input.globalConfig.name || std.parsePath(Deno.cwd()).name,
+        name: projectName,
         path: Deno.cwd(),
+        buildDir: getProjectBuildDir(projectName),
     };
 
-    const home = Deno.env.get("HOME");
-    if (home) {
-        try {
-            await Deno.mkdir(std.join(home, ".pipedown"), { recursive: true });
-        } catch (e) {
-            if (!(e instanceof Deno.errors.AlreadyExists)) throw e;
-        }
-
-        const projectsPath = std.join(home, ".pipedown", "projects.json");
-        let projects = [];
-        try {
-            projects = JSON.parse(projectsPath);
-        } catch (_e) {
-            // probably the first project
-        }
-        projects.push(project);
-        await Deno.writeTextFile(
-            projectsPath,
-            JSON.stringify(projects, null, 2),
-            { create: true },
-        );
+    const globalDir = getGlobalPipedownDir();
+    const projectsPath = std.join(globalDir, "projects.json");
+    let projects: Array<typeof project> = [];
+    try {
+        const content = await Deno.readTextFile(projectsPath);
+        projects = JSON.parse(content);
+    } catch (_e) {
+        // probably the first project
     }
+    
+    // Update or add project entry
+    const existingIndex = projects.findIndex(p => p.path === project.path);
+    if (existingIndex >= 0) {
+        projects[existingIndex] = project;
+    } else {
+        projects.push(project);
+    }
+    
+    await Deno.writeTextFile(
+        projectsPath,
+        JSON.stringify(projects, null, 2),
+        { create: true },
+    );
 }
 
 export function checkFlags(

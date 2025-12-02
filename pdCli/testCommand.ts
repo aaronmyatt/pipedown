@@ -1,7 +1,7 @@
-import { pd } from "../deps.ts";
+import { pd, std } from "../deps.ts";
 import { pdBuild } from "../pdBuild.ts";
 import { cliHelpTemplate } from "../stringTemplates.ts";
-import { PD_DIR } from "./helpers.ts";
+import { getProjectBuildDir, getProjectName } from "./helpers.ts";
 import type { CliInput } from "../pipedown.d.ts";
 
 const helpText = cliHelpTemplate({
@@ -17,13 +17,17 @@ const helpText = cliHelpTemplate({
   ],
 });
 
-const args = [
-  "test",
-  "-A",
-  "--unstable-kv",
-  `--config=${PD_DIR}/deno.json`,
-  "--no-check",
-];
+function getTestArgs(input: CliInput) {
+  const projectName = getProjectName(input.globalConfig);
+  const buildDir = getProjectBuildDir(projectName);
+  return [
+    "test",
+    "-A",
+    "--unstable-kv",
+    `--config=${std.join(buildDir, "deno.json")}`,
+    "--no-check",
+  ];
+}
 
 export async function testCommand(input: CliInput) {
   if (pd.$p.get(input, "/flags/help") || pd.$p.get(input, "/flags/h")) {
@@ -31,6 +35,7 @@ export async function testCommand(input: CliInput) {
   } else {
     await pdBuild(input);
 
+    const args = getTestArgs(input);
     if (input.flags["--"].length > 0) {
       args.push("--");
       args.push(...input.flags["--"]);

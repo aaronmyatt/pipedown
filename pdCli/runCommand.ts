@@ -1,5 +1,5 @@
 import type { CliInput } from "../pipedown.d.ts";
-import { pdRun } from "./helpers.ts";
+import { pdRun, getProjectName } from "./helpers.ts";
 import { pd } from "../deps.ts";
 import { pdBuild } from "../pdBuild.ts";
 import { cliHelpTemplate } from "../stringTemplates.ts";
@@ -32,8 +32,9 @@ export async function runCommand(input: CliInput) {
   } else {
     const command = commandName.get(input);
     const testInput = inputRaw.get(input) || inputParam.get(input) || "{}";
+    const projectName = getProjectName(input.globalConfig);
     await pdBuild(input);
-    await pdRun(command, testInput);
+    await pdRun(command, testInput, projectName);
   }
   return input;
 }
