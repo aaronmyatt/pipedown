@@ -5,8 +5,7 @@ import * as utils from "./pdUtils.ts";
 import type {Step, WalkOptions, BuildInput} from "./pipedown.d.ts";
 import {defaultTemplateFiles} from "./defaultTemplateFiles.ts";
 import {exportPipe} from "./exportPipe.ts";
-
-const PD_DIR = `./.pd`;
+import {getProjectBuildDir, getProjectName} from "./pdCli/helpers.ts";
 
 const _walkOpts: WalkOptions = {
   exts: [".md"],
@@ -42,6 +41,8 @@ const respectGitIgnore = () => {
 
 async function parseMdFiles(input: BuildInput) {
   input.pipes = input.pipes || [];
+  const projectName = getProjectName(input.globalConfig);
+  const buildDir = getProjectBuildDir(projectName);
 
   for await (const entry of std.walk(Deno.cwd(), walkOptions(input))) {
     const markdown = await Deno.readTextFile(entry.path);
@@ -52,13 +53,12 @@ async function parseMdFiles(input: BuildInput) {
     const fileName = utils.fileName(entry.path);
     pd.$p.set(input, '/markdown/'+fileName, markdown);
     const dir = std.join(
-      PD_DIR,
+      buildDir,
       std.parsePath(std.relative(Deno.cwd(), entry.path)).dir,
       fileName,
     );
     const absoluteDir = std.join(
-      Deno.cwd(),
-      PD_DIR,
+      buildDir,
       std.parsePath(std.relative(Deno.cwd(), entry.path)).dir,
       fileName,
     );
@@ -102,8 +102,10 @@ async function mergeParentDirConfig(input: BuildInput) {
       } catch (_e) {
         // probably no config file
       }
-      const topOfProject = await std.exists(std.join(parentDir, '.pd', 'deno.json'));
-      if(topOfProject) break;
+      // Check for project root indicators: deno.json or .git directory
+      const hasDenoJson = await std.exists(std.join(parentDir, 'deno.json'));
+      const hasGitDir = await std.exists(std.join(parentDir, '.git'));
+      if(hasDenoJson || hasGitDir) break;
     }
     pipe.config = config;
   }
@@ -144,9 +146,11 @@ async function transformMdFiles(input: BuildInput) {
 }
 
 async function copyFiles(input: BuildInput) {
-  // copy js(x),json,ts(x) files to .pd directory, preserving directory structure
+  const projectName = getProjectName(input.globalConfig);
+  const buildDir = getProjectBuildDir(projectName);
+  // copy js(x),json,ts(x) files to build directory, preserving directory structure
   for await (const entry of std.walk(".", walkOptions(input, { exts: [".js", ".jsx", ".json", ".ts", ".tsx"] }))) {
-    const dest = std.join(PD_DIR, utils.fileDir(entry.path), entry.name);
+    const dest = std.join(buildDir, utils.fileDir(entry.path), entry.name);
     await Deno.mkdir(std.dirname(dest), { recursive: true });
     await Deno.copyFile(entry.path, dest);
   }

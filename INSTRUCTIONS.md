@@ -94,19 +94,28 @@ Values are JSON pointers: `/points/add`
 
 ## Build Output
 
+Build files are stored in a global directory to share across projects:
+
 ```
-.pd/
-├── {pipeName}/
-│   ├── index.ts      # Executable pipe
-│   ├── index.json    # Raw Pipe object
-│   ├── index.md      # Source copy
-│   ├── test.ts       # Test file
-│   ├── cli.ts        # CLI runner
-│   ├── server.ts     # HTTP server
-│   └── worker.ts     # Service worker
-├── deno.json         # Import map
-└── replEval.ts       # REPL helper
+~/.pipedown/
+├── builds/
+│   └── {projectName}/
+│       ├── {pipeName}/
+│       │   ├── index.ts      # Executable pipe
+│       │   ├── index.json    # Raw Pipe object
+│       │   ├── index.md      # Source copy
+│       │   ├── test.ts       # Test file
+│       │   ├── cli.ts        # CLI runner
+│       │   ├── server.ts     # HTTP server
+│       │   └── worker.ts     # Service worker
+│       ├── deno.json         # Import map
+│       └── replEval.ts       # REPL helper
+└── projects.json             # Registry of all projects
 ```
+
+The project name is derived from:
+1. The `name` field in `config.json` (if present)
+2. The current directory name (fallback)
 
 ---
 

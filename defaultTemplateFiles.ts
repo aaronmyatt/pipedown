@@ -1,7 +1,10 @@
 import {pd, std} from "./deps.ts";
 import * as templates from "./stringTemplates.ts";
 import type { BuildInput } from "./pipedown.d.ts";
-import { PD_DIR } from "./pdCli/helpers.ts";
+import { getProjectBuildDir, getProjectName } from "./pdCli/helpers.ts";
+
+// Helper to escape special regex characters in a string
+const escapeRegex = (str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 async function writeTests(input: BuildInput) {
   for (const pipe of (input.pipes || [])) {
@@ -16,6 +19,9 @@ async function writeTests(input: BuildInput) {
 }
 
 async function writeDenoImportMap(input: BuildInput) {
+  const projectName = getProjectName(input.globalConfig);
+  const buildDir = getProjectBuildDir(projectName);
+  
   input.importMap = {
     imports: {
       "/": "./",
@@ -23,37 +29,40 @@ async function writeDenoImportMap(input: BuildInput) {
     },
     lint: {
       include: [
-        ".pd/**/*.ts",
+        `${buildDir}/**/*.ts`,
       ],
       exclude: [
-        ".pd/**/*.json",
-        ".pd/**/*.md",
+        `${buildDir}/**/*.json`,
+        `${buildDir}/**/*.md`,
       ],
     },
   };
 
-  for await (const entry of std.walk("./.pd", { exts: [".ts"] })) {
+  for await (const entry of std.walk(buildDir, { exts: [".ts"] })) {
     const dirName = std.dirname(entry.path).split("/").pop();
-    const innerPath = std.dirname(entry.path).replace(/\.pd\//, "");
+    const buildDirPattern = new RegExp(`^${escapeRegex(buildDir)}/?`);
+    const innerPath = std.dirname(entry.path).replace(buildDirPattern, "");
     if (entry.path.includes("index.ts")) {
-      // regex for '.pd' at start of path
-      const regex = new RegExp(`^\.pd`);
-      const path = entry.path.replace(regex, ".");
+      const path = entry.path.replace(new RegExp(`^${escapeRegex(buildDir)}`), ".");
       input.importMap.imports[`${dirName}`] = path;
-      input.importMap.imports["/" + innerPath] = path;
+      if (innerPath) {
+        input.importMap.imports["/" + innerPath] = path;
+      }
     }
   }
   await Deno.writeTextFile(
-    std.join(PD_DIR, "deno.json"),
+    std.join(buildDir, "deno.json"),
     JSON.stringify(input.importMap, null, 2),
   );
   return input;
 }
 
 async function writeReplEvalFile(input: BuildInput) {
-  const replEvalPath = std.join(PD_DIR, "replEval.ts");
+  const projectName = getProjectName(input.globalConfig);
+  const buildDir = getProjectBuildDir(projectName);
+  const replEvalPath = std.join(buildDir, "replEval.ts");
 
-  // assumes deno repl is run from .pd directory
+  // assumes deno repl is run from build directory
   const importNames =
     (input.importMap ? Object.keys(input.importMap.imports) : [])
       .filter((key) => !key.includes("/"))

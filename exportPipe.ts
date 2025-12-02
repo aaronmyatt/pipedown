@@ -2,19 +2,26 @@ import type { BuildOptions } from "npm:esbuild@0.23.1";
 import type { BuildInput } from "./pipedown.d.ts";
 import { esbuild, pd, std } from "./deps.ts";
 import { denoPlugins } from "jsr:@luca/esbuild-deno-loader@0.11.0";
+import { getProjectBuildDir, getProjectName } from "./pdCli/helpers.ts";
 
-const configPath = std.join(Deno.cwd(), ".pd", "deno.json");
-const plugins = [...denoPlugins({ configPath })];
-const buildConfigDefaults: BuildOptions = {
-  bundle: true,
-  treeShaking: true,
-  plugins,
-  format: "esm",
-  // entryNames: "[dir].js",
-  // outdirs: ['.pd/public'],
-};
+function getBuildConfigDefaults(input: BuildInput): BuildOptions {
+  const projectName = getProjectName(input.globalConfig);
+  const buildDir = getProjectBuildDir(projectName);
+  const configPath = std.join(buildDir, "deno.json");
+  const plugins = [...denoPlugins({ configPath })];
+  
+  return {
+    bundle: true,
+    treeShaking: true,
+    plugins,
+    format: "esm",
+    // entryNames: "[dir].js",
+    // outdirs: ['builds/public'],
+  };
+}
 
 function extractConfig(input: ExportPipeInput) {
+  const buildConfigDefaults = getBuildConfigDefaults(input);
   input.builds = (input.pipes || []).map((pipe) => {
     const build = pipe.config?.build || [];
     return build.map((userConf) => {

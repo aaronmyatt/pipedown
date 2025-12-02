@@ -1,5 +1,5 @@
 import type { CliInput } from "../pipedown.d.ts";
-import { pdRepl } from "./helpers.ts";
+import { pdRepl, getProjectName } from "./helpers.ts";
 import { pd } from "../deps.ts";
 import { pdBuild } from "../pdBuild.ts";
 import { cliHelpTemplate } from "../stringTemplates.ts";
@@ -19,8 +19,9 @@ export async function replCommand(input: CliInput) {
   if (pd.$p.get(input, "/flags/help") || pd.$p.get(input, "/flags/h")) {
     console.log(helpText);
   } else {
+    const projectName = getProjectName(input.globalConfig);
     await pdBuild(input);
-    await pdRepl();
+    await pdRepl(projectName);
   }
   return input;
 }
