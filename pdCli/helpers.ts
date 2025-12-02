@@ -21,8 +21,9 @@ export const getProjectBuildDir = (projectName?: string) => {
     return std.join(getGlobalPipedownDir(), "builds", name);
 };
 
-// Legacy PD_DIR for backward compatibility - now points to global location
-// Note: This is evaluated at module load time, so it uses the current directory name
+// DEPRECATED: PD_DIR is kept for backward compatibility but should not be used.
+// Use getProjectBuildDir(projectName) instead for correct path resolution.
+// This constant is evaluated at module load time and uses the current directory name.
 export const PD_DIR = getProjectBuildDir();
 
 // Get common args for deno commands, requires project name for correct path
@@ -36,7 +37,8 @@ export const getCommonArgs = (projectName?: string) => {
     ];
 };
 
-// Legacy commonArgs - uses default project name
+// DEPRECATED: commonArgs is kept for backward compatibility but should not be used.
+// Use getCommonArgs(projectName) instead for correct path resolution.
 export const commonArgs = getCommonArgs();
 
 export async function pdRun(scriptName: string, testInput: string, projectName?: string) {

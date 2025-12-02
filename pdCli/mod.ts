@@ -62,8 +62,17 @@ async function registerProject(input: CliInput) {
     try {
         const content = await Deno.readTextFile(projectsPath);
         projects = JSON.parse(content);
-    } catch (_e) {
-        // probably the first project
+        if (!Array.isArray(projects)) {
+            console.warn(std.colors.yellow(`Warning: ${projectsPath} is not a valid array, resetting to empty list`));
+            projects = [];
+        }
+    } catch (e) {
+        if (e instanceof Deno.errors.NotFound) {
+            // First project - file doesn't exist yet
+        } else if (e instanceof SyntaxError) {
+            console.warn(std.colors.yellow(`Warning: ${projectsPath} contains invalid JSON, resetting to empty list`));
+        }
+        // Keep projects as empty array
     }
     
     // Update or add project entry

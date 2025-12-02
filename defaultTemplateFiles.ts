@@ -3,6 +3,9 @@ import * as templates from "./stringTemplates.ts";
 import type { BuildInput } from "./pipedown.d.ts";
 import { getProjectBuildDir, getProjectName } from "./pdCli/helpers.ts";
 
+// Helper to escape special regex characters in a string
+const escapeRegex = (str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 async function writeTests(input: BuildInput) {
   for (const pipe of (input.pipes || [])) {
     const testPath = std.join(pipe.dir, "test.ts");
@@ -37,9 +40,10 @@ async function writeDenoImportMap(input: BuildInput) {
 
   for await (const entry of std.walk(buildDir, { exts: [".ts"] })) {
     const dirName = std.dirname(entry.path).split("/").pop();
-    const innerPath = std.dirname(entry.path).replace(new RegExp(`^${buildDir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/?`), "");
+    const buildDirPattern = new RegExp(`^${escapeRegex(buildDir)}/?`);
+    const innerPath = std.dirname(entry.path).replace(buildDirPattern, "");
     if (entry.path.includes("index.ts")) {
-      const path = entry.path.replace(new RegExp(`^${buildDir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`), ".");
+      const path = entry.path.replace(new RegExp(`^${escapeRegex(buildDir)}`), ".");
       input.importMap.imports[`${dirName}`] = path;
       if (innerPath) {
         input.importMap.imports["/" + innerPath] = path;
