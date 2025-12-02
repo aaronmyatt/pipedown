@@ -20,6 +20,7 @@ import { cleanCommand } from "./cleanCommand.ts";
 import { defaultCommand } from "./defaultCommand.ts";
 import { helpText } from "../stringTemplates.ts";
 import {replCommand} from "./replCommand.ts";
+import { newCommand } from "./newCommand.ts";
 
 async function pdInit(input: CliInput) {
     try {
@@ -128,6 +129,7 @@ const funcs = [
     checkFlags(["t"], testCommand),
     checkFlags(["tu"], updateTestCommand),
     checkFlags(["version"], versionCommand),
+    checkFlags(["new", "*"], newCommand),
 ];
 
 const debugParamPresent = Deno.env.get("DEBUG") ||
@@ -151,6 +153,11 @@ const flags: Args = std.parseArgs(Deno.args, {
         "v",
         "help",
         "h",
+        "clean",
+        "template",
+    ],
+    string: [
+        "type",
     ],
 });
 if (flags.version || flags.v) {
