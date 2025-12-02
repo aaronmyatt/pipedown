@@ -23,7 +23,12 @@ const helpText = cliHelpTemplate({
 
 const nameArg = pd.$p.compile("/flags/_/1");
 
-type EntryPointType = "script" | "server" | "cli";
+const ENTRY_POINT_TYPES = ["script", "server", "cli"] as const;
+type EntryPointType = typeof ENTRY_POINT_TYPES[number];
+
+function isValidEntryPointType(type: string): type is EntryPointType {
+  return ENTRY_POINT_TYPES.includes(type as EntryPointType);
+}
 
 async function writeEntryPointFile(name: string, type: EntryPointType, clean: boolean): Promise<void> {
   const fileName = name.endsWith(".md") ? name : `${name}.md`;
@@ -103,9 +108,8 @@ export async function newCommand(input: CliInput): Promise<CliInput> {
   const typeArg = pd.$p.get(input, "/flags/type") as string | undefined;
   
   // Validate type argument
-  const validTypes: EntryPointType[] = ["script", "server", "cli"];
-  const type: EntryPointType = (typeArg && validTypes.includes(typeArg as EntryPointType)) 
-    ? typeArg as EntryPointType 
+  const type: EntryPointType = (typeArg && isValidEntryPointType(typeArg)) 
+    ? typeArg 
     : "script";
   
   if (isTemplate) {
