@@ -24,6 +24,7 @@ import { llmCommand } from "./llmCommand.ts";
 import { inspectCommand } from "./inspectCommand.ts";
 import { runStepCommand } from "./runStepCommand.ts";
 import { syncCommand } from "./syncCommand.ts";
+import { watchCommand } from "./watchCommand.ts";
 
 async function pdInit(input: CliInput) {
     try {
@@ -141,6 +142,7 @@ const funcs = [
     checkMinFlags(["inspect", "*"], inspectCommand),
     checkMinFlags(["run-step", "*", "*"], runStepCommand),
     checkMinFlags(["sync", "*"], syncCommand),
+    checkMinFlags(["watch"], watchCommand),
     checkMinFlags(["test"], testCommand),
     checkMinFlags(["test-update"], updateTestCommand),
     checkMinFlags(["t"], testCommand),
