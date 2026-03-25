@@ -83,6 +83,12 @@ export type Step = {
     internal?: boolean;
     /** Conditional execution configuration extracted from list directives. */
     config?: StepConfig;
+    /** Paragraph text between the heading and the code block. */
+    description?: string;
+    /** The heading level (2, 3, etc.) for reconstruction. */
+    headingLevel?: number;
+    /** The code block language identifier (ts, js, etc.). */
+    language?: string;
 };
 
 /** Configuration for conditional step execution. */
@@ -153,6 +159,8 @@ export type Pipe = {
     fileName: string;
     /** Raw Zod schema source text from the top-level zod block (one per pipe). */
     schema?: string;
+    /** Prose description between the H1 heading and the first step/config block. */
+    pipeDescription?: string;
 };
 
 /** Input/output for the rangeFinder token classifier. */

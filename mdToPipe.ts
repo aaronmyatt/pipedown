@@ -81,13 +81,15 @@ const findSteps = (input: mdToPipeInput) => {
     (codeBlockRange: number[]): Step => {
       const token = input.tokens.at(codeBlockRange[0]);
       const code = token?.content || "";
-      
+      const language = token?.info?.split(' ')[0] || "ts";
+
       return {
         code,
         range: codeBlockRange,
         name: "",
         funcName: "",
         inList: false,
+        language,
       };
     },
   )
@@ -101,11 +103,17 @@ const findSteps = (input: mdToPipeInput) => {
           return afterLastCodeBlock && beforeCurrentCodeBlock;
         },
       );
-      
+
       if (headingRange) {
         const headingToken = input.tokens.at(headingRange[0]);
         let headingText = "";
-        
+
+        // Extract heading level from the tag (h1, h2, h3, etc.)
+        if (headingToken?.tag) {
+          const level = parseInt(headingToken.tag.replace("h", ""));
+          if (!isNaN(level)) step.headingLevel = level;
+        }
+
         if (headingToken?.children) {
           headingText = headingToken.children
             .filter(child => child.type === 'text')
@@ -117,14 +125,56 @@ const findSteps = (input: mdToPipeInput) => {
             headingText = nextToken.content || "";
           }
         }
-        
+
         step.name = headingText || "anonymous" + step.range[0];
+
+        // Extract description: paragraph text between heading and code block
+        const headingEnd = headingRange[1];
+        const codeStart = step.range[0];
+        const descParts: string[] = [];
+        for (let i = headingEnd + 1; i < codeStart; i++) {
+          const t = input.tokens[i];
+          if (t?.type === 'inline' && t.content) {
+            descParts.push(t.content);
+          }
+        }
+        if (descParts.length > 0) {
+          step.description = descParts.join("\n");
+        }
       } else {
         step.name = "anonymous" + step.range[0];
       }
       step.funcName = sanitizeString(step.name);
       return step;
     });
+};
+
+const findPipeDescription = (input: mdToPipeInput) => {
+  // Extract prose between the H1 heading and the first step/config/schema block
+  const firstHeading = input.ranges.headings[0];
+  if (!firstHeading) return;
+
+  const headingEnd = firstHeading[1];
+
+  // Find the first structural element after the heading
+  const firstCodeBlock = input.ranges.codeBlocks[0]?.[0] ?? Infinity;
+  const firstMetaBlock = input.ranges.metaBlocks[0]?.[0] ?? Infinity;
+  const firstSchemaBlock = input.ranges.schemaBlocks?.[0]?.[0] ?? Infinity;
+  const firstSecondHeading = input.ranges.headings[1]?.[0] ?? Infinity;
+  const firstBlock = Math.min(firstCodeBlock, firstMetaBlock, firstSchemaBlock, firstSecondHeading);
+
+  if (firstBlock === Infinity) return;
+
+  const descParts: string[] = [];
+  for (let i = headingEnd + 1; i < firstBlock; i++) {
+    const t = input.tokens[i];
+    if (t?.type === 'inline' && t.content) {
+      descParts.push(t.content);
+    }
+  }
+  if (descParts.length > 0) {
+    input.pipe.pipeDescription = descParts.join("\n");
+  }
 };
 
 const mergeMetaConfig = (input: mdToPipeInput) => {
@@ -204,6 +254,7 @@ export const mdToPipe = async (input: {markdown:string, pipe: Pipe}&Input) => {
     parseMarkdown,
     findRanges,
     findPipeName,
+    findPipeDescription,
     findSchema,
     findSteps,
     mergeMetaConfig,
