@@ -92,7 +92,7 @@ export function checkMinFlags(
         // Check if we have at least the required number of arguments
         if (input.flags._.length < flags.length) {
             return input;
-        }
+        }       
 
         const flagsMatch = flags.every((flag, index) => {
             return flag === "*" || flag === input.flags._[index];

@@ -46,7 +46,7 @@ async function parseMdFiles(input: BuildInput) {
   for await (const entry of std.walk(Deno.cwd(), walkOptions(input))) {
     const markdown = await Deno.readTextFile(entry.path);
     if (markdown === "") continue;
-
+    
     // the "executable markdown" will live in a directory with the same name as the file.
     // We will use {pipe.dir}/index.ts for the entry point.
     const fileName = utils.fileName(entry.path);
@@ -75,7 +75,7 @@ async function parseMdFiles(input: BuildInput) {
         steps: [],
       },
     });
-    input.errors = input.errors?.concat(output.errors || []);
+
     if (
       output.pipe &&
       output.pipe.steps.filter((step: Step) => !step.internal).length > 0
@@ -89,9 +89,12 @@ async function parseMdFiles(input: BuildInput) {
 
 // merge parent directory config.json files into the pipe config
 async function mergeParentDirConfig(input: BuildInput) {
+  console.log(`Merging parent directory configs for ${input.pipes?.length} pipes...`);
   for (const pipe of (input.pipes || [])) {
     const parts = pipe.mdPath.split("/");
     let config = pipe.config;
+
+    console.log(`Merging parent directory config for pipe: ${pipe.name}`);
     
     for (let i = parts.length - 1; i > 0; i--) {
       const parentDir = '/' + std.join(...parts.slice(0, i));
@@ -111,6 +114,7 @@ async function mergeParentDirConfig(input: BuildInput) {
 
 async function writePipeDir(input: BuildInput) {
   for (const pipe of (input.pipes || [])) {
+    console.log(`Creating pipe directory: ${pipe.dir}`);
     await Deno.mkdir(pipe.dir, { recursive: true  });
   }
 }
@@ -177,7 +181,7 @@ async function copyFiles(input: BuildInput) {
   for (const filePath of referencedFiles) {
     try {
       // Resolve relative paths
-      const sourcePath = std.resolve(filePath);
+      const sourcePath = filePath;
       const relativePath = std.relative(Deno.cwd(), sourcePath);
       
       // Check if file exists and is within the project
@@ -187,13 +191,15 @@ async function copyFiles(input: BuildInput) {
         await Deno.copyFile(sourcePath, dest);
       }
     } catch (_e) {
-      // Skip files that can't be copied
+      // console.error(`Error copying file ${filePath}:`, _e);
     }
   }
+  console.log(`Copied ${referencedFiles.size} referenced files to ${PD_DIR}`);
 }
 
 const writeDefaultGeneratedTemplates = async (input: BuildInput) => {
   await defaultTemplateFiles(input);
+
 }
 
 const writeUserTemplates = async (input: BuildInput) => {
@@ -227,7 +233,7 @@ export const pdBuild = async (input: BuildInput) => {
   });
 
   const funcs = [
-    copyFiles,
+    // copyFiles,
     parseMdFiles,
     mergeParentDirConfig,
     writePipeDir,
