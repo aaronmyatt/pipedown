@@ -162,6 +162,7 @@ Run deno publish to push the new version to JSR.
     args: publishArgs,
     stdout: "inherit",
     stderr: "inherit",
+    stdin: "inherit",
   });
 
   const publishResult = await publishCmd.output();
