@@ -12,6 +12,10 @@
   "nodeModulesDir": "auto",
   "tasks": {
     "installLocal": "deno install -Arfg -n pd pdCli/mod.ts",
-    "publishToJsr": ""
+    "release": "cd deploy && pd build && pd run release.md",
+    "release:patch": "cd deploy && pd build && pd run release.md --input '{\"bump\": \"patch\"}'",
+    "release:minor": "cd deploy && pd build && pd run release.md --input '{\"bump\": \"minor\"}'",
+    "release:major": "cd deploy && pd build && pd run release.md --input '{\"bump\": \"major\"}'",
+    "release:dry": "cd deploy && pd build && pd run release.md --input '{\"bump\": \"patch\", \"dryRun\": true}'"
   }
 }
