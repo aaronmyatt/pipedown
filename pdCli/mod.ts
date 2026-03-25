@@ -21,6 +21,8 @@ import { defaultCommand } from "./defaultCommand.ts";
 import { helpText } from "../stringTemplates.ts";
 import {replCommand} from "./replCommand.ts";
 import { llmCommand } from "./llmCommand.ts";
+import { inspectCommand } from "./inspectCommand.ts";
+import { runStepCommand } from "./runStepCommand.ts";
 
 async function pdInit(input: CliInput) {
     try {
@@ -135,6 +137,8 @@ const funcs = [
     checkMinFlags(["run", "*", "*"], runCommand),
     checkMinFlags(["runWith", "*", "*", "*"], runWithCommand),
     checkMinFlags(["llm", "*", "*", "*"], llmCommand),
+    checkMinFlags(["inspect", "*"], inspectCommand),
+    checkMinFlags(["run-step", "*", "*"], runStepCommand),
     checkMinFlags(["test"], testCommand),
     checkMinFlags(["test-update"], updateTestCommand),
     checkMinFlags(["t"], testCommand),
