@@ -151,6 +151,8 @@ export type Pipe = {
     absoluteDir: string;
     /** Sanitized filename (without extension). */
     fileName: string;
+    /** Raw Zod schema source text from the top-level zod block (one per pipe). */
+    schema?: string;
 };
 
 /** Input/output for the rangeFinder token classifier. */
@@ -168,6 +170,8 @@ export type RangeFinderInput = {
         metaBlocks: number[][];
         /** Ranges of list open/close pairs. */
         lists: number[][];
+        /** Ranges of schema blocks (zod). */
+        schemaBlocks: number[][];
     };
 };
 

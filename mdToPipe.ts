@@ -61,6 +61,21 @@ const findPipeName = (input: mdToPipeInput) => {
   input.pipe.cleanName = sanitizeString(input.pipe.name || "anonymous");
 };
 
+const findSchema = (input: mdToPipeInput) => {
+  if (!input.ranges.schemaBlocks || input.ranges.schemaBlocks.length === 0) return;
+
+  // Use only the first zod block — one schema per pipe
+  const schemaRange = input.ranges.schemaBlocks[0];
+  const token = input.tokens.at(schemaRange[0]);
+  if (token) {
+    input.pipe.schema = token.content || "";
+  }
+
+  if (input.ranges.schemaBlocks.length > 1) {
+    console.warn("Warning: multiple zod blocks found — only the first is used as the pipe schema.");
+  }
+};
+
 const findSteps = (input: mdToPipeInput) => {
   input.pipe.steps = input.ranges.codeBlocks.map(
     (codeBlockRange: number[]): Step => {
@@ -189,6 +204,7 @@ export const mdToPipe = async (input: {markdown:string, pipe: Pipe}&Input) => {
     parseMarkdown,
     findRanges,
     findPipeName,
+    findSchema,
     findSteps,
     mergeMetaConfig,
     setupChecks,
@@ -225,6 +241,7 @@ export const mdToPipe = async (input: {markdown:string, pipe: Pipe}&Input) => {
         headings: [],
         metaBlocks: [],
         lists: [],
+        schemaBlocks: [],
       },
     }, input),
     {},

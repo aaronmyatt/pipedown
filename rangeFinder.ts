@@ -5,6 +5,7 @@ const { $p } = pd;
 
 const SUPPORTED_LANGUAGES = ["ts", "js", "javascript", "typescript"];
 const META_LANGUAGES = ["json", "yaml", "yml"];
+const SCHEMA_LANGUAGES = ["zod"];
 
 const codeBlocks = $p.compile('/ranges/codeBlocks')
 const headingBlocks = $p.compile('/ranges/headings')
@@ -104,13 +105,27 @@ const checkMetaBlock = (input: RangeFinderInput) => {
     const token = input.ranges.token;
     const normalizedTag = normalizeTokenTag(token);
     const language = getTokenLanguage(token);
-    
+
     const isMetaBlock = normalizedTag === Tag.codeBlock;
     const supported = META_LANGUAGES.includes(language.toLowerCase());
 
     if (isMetaBlock && (token.type === 'fence' || token.type === 'code_block') && supported) {
         const index = tokenIndex.get(input);
         $p.set(input, '/ranges/metaBlocks/-', [index, index]);
+    }
+}
+
+const checkSchemaBlock = (input: RangeFinderInput) => {
+    const token = input.ranges.token;
+    const normalizedTag = normalizeTokenTag(token);
+    const language = getTokenLanguage(token);
+
+    const isCodeBlock = normalizedTag === Tag.codeBlock;
+    const isSchema = SCHEMA_LANGUAGES.includes(language.toLowerCase());
+
+    if (isCodeBlock && (token.type === 'fence' || token.type === 'code_block') && isSchema) {
+        const index = tokenIndex.get(input);
+        $p.set(input, '/ranges/schemaBlocks/-', [index, index]);
     }
 }
 
@@ -125,12 +140,14 @@ const funcs = [
             headings: [],
             metaBlocks: [],
             lists: [],
+            schemaBlocks: [],
         }
     },
     checkCodeBlock,
     checkList,
     checkHeading,
     checkMetaBlock,
+    checkSchemaBlock,
 ]
 
 export async function rangeFinder(input: RangeFinderInput): Promise<RangeFinderInput>{

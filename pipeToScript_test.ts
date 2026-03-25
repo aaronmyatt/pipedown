@@ -261,6 +261,78 @@ Deno.test("pipeToScript", async (t) => {
     assertEquals(result.script!.includes("@std/dotenv"), false);
   });
 
+  // --- Zod Schema ---
+
+  await t.step("generates schema validation code when pipe has schema", async () => {
+    const pipe = makePipe({
+      schema: `import { z } from "npm:zod";\n\nexport const schema = z.object({\n  name: z.string(),\n  result: z.string().default(""),\n});`,
+      steps: [
+        {
+          code: 'input.result = input.name;',
+          range: [0, 0],
+          name: "Process",
+          funcName: "Process",
+          inList: false,
+        },
+      ],
+    });
+
+    const result = await pipeToScript({ pipe });
+    assertEquals(result.success, true);
+    assertStringIncludes(result.script!, 'import { z } from "npm:zod"');
+    assertStringIncludes(result.script!, "_pd_initSchema");
+    assertStringIncludes(result.script!, "_pd_validateSchema");
+    assertStringIncludes(result.script!, "export const schema = z.object");
+    assertStringIncludes(result.script!, "PipeInput");
+  });
+
+  await t.step("funcSequence includes init and validate wrappers with schema", async () => {
+    const pipe = makePipe({
+      schema: `export const schema = z.object({ x: z.number() });`,
+      steps: [
+        {
+          code: "input.x = 1;",
+          range: [0, 0],
+          name: "StepA",
+          funcName: "StepA",
+          inList: false,
+        },
+        {
+          code: "input.y = 2;",
+          range: [1, 1],
+          name: "StepB",
+          funcName: "StepB",
+          inList: false,
+        },
+      ],
+    });
+
+    const result = await pipeToScript({ pipe });
+    assertEquals(result.success, true);
+    // Sequence should be: _pd_initSchema, StepA, _pd_validateSchema, StepB, _pd_validateSchema
+    assertStringIncludes(result.script!, "_pd_initSchema, StepA, _pd_validateSchema, StepB, _pd_validateSchema");
+  });
+
+  await t.step("does not generate schema code when pipe has no schema", async () => {
+    const pipe = makePipe({
+      steps: [
+        {
+          code: "input.x = 1;",
+          range: [0, 0],
+          name: "Step",
+          funcName: "Step",
+          inList: false,
+        },
+      ],
+    });
+
+    const result = await pipeToScript({ pipe });
+    assertEquals(result.success, true);
+    assertEquals(result.script!.includes("_pd_initSchema"), false);
+    assertEquals(result.script!.includes("_pd_validateSchema"), false);
+    assertEquals(result.script!.includes("npm:zod"), false);
+  });
+
   await t.step("includes dotenv import when no build config", async () => {
     const pipe = makePipe({
       steps: [

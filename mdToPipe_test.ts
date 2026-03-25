@@ -459,6 +459,60 @@ input.y = 2;
     assertEquals(result.pipe.steps.length >= 1, true);
   });
 
+  // --- Zod Schema ---
+
+  await t.step("extracts zod schema from top-level zod block", async () => {
+    const result = await parse(`# Test
+
+\`\`\`zod
+import { z } from "npm:zod";
+
+export const schema = z.object({
+  name: z.string(),
+  result: z.string().default(""),
+});
+\`\`\`
+
+## Step
+
+\`\`\`ts
+input.result = input.name;
+\`\`\`
+`);
+    assertExists(result.pipe.schema);
+    assertEquals(result.pipe.schema!.includes("z.object"), true);
+    assertEquals(result.pipe.schema!.includes("z.string()"), true);
+  });
+
+  await t.step("pipe.schema is undefined when no zod block present", async () => {
+    const result = await parse(`# Test
+
+## Step
+
+\`\`\`ts
+input.x = 1;
+\`\`\`
+`);
+    assertEquals(result.pipe.schema, undefined);
+  });
+
+  await t.step("zod block does not appear as a code step", async () => {
+    const result = await parse(`# Test
+
+\`\`\`zod
+export const schema = z.object({ x: z.number() });
+\`\`\`
+
+## Step
+
+\`\`\`ts
+input.x = 1;
+\`\`\`
+`);
+    assertEquals(result.pipe.steps.length, 1);
+    assertEquals(result.pipe.steps[0].name, "Step");
+  });
+
   await t.step("handles H3 and deeper headings as step names", async () => {
     const result = await parse(`# Test
 

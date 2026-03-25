@@ -47,18 +47,64 @@ export const pipeToScript = async (input: PipeToScriptInput) => {
   };
 
   const scriptTemplate = (input: PipeToScriptInput) => {
+    const hasSchema = !!input.pipe.schema;
+
+    const zodImport = hasSchema ? 'import { z } from "npm:zod";' : "";
+    // Strip import statements from schema text — they're hoisted to the top
+    const schemaBody = hasSchema
+      ? input.pipe.schema!.replace(/import.*from.*/gm, "").trim()
+      : "";
+
+    const schemaBlock = hasSchema ? `
+// Pipe schema — validates input at every step boundary
+${schemaBody}
+export type PipeInput = z.infer<typeof schema>;
+
+function _pd_initSchema(input) {
+  const result = schema.safeParse(input);
+  if (result.success) {
+    Object.assign(input, result.data);
+  } else {
+    input.errors = input.errors || [];
+    input.errors.push({ func: "_pd_initSchema", message: result.error.message, issues: result.error.issues });
+  }
+}
+
+function _pd_validateSchema(input) {
+  const result = schema.safeParse(input);
+  if (!result.success) {
+    input.errors = input.errors || [];
+    input.errors.push({ func: "_pd_validateSchema", message: result.error.message, issues: result.error.issues });
+  }
+}
+` : "";
+
+    // When schema exists, wrap each step with validation:
+    // init → step1 → validate → step2 → validate → ...
+    const stepNames = input.pipe.steps.map((step: Step) => step.funcName);
+    let funcSequenceItems: string;
+    if (hasSchema) {
+      const withValidation = stepNames.flatMap(
+        (name: string) => [name, "_pd_validateSchema"],
+      );
+      funcSequenceItems = ["_pd_initSchema", ...withValidation].join(", ");
+    } else {
+      funcSequenceItems = stepNames.join(", ");
+    }
+
     input.script =
       `// deno-lint-ignore-file ban-unused-ignore no-unused-vars require-await
 import Pipe from "jsr:@pd/pdpipe@0.2.2";
 import $p from "jsr:@pd/pointers@0.1.1";
+${zodImport}
 ${!input.pipe.config?.build && 'import "jsr:@std/dotenv/load";'}
 import rawPipe from "./index.json" with {type: "json"};
 ${input.pipeImports && input.pipeImports.join("\n")}
-
+${schemaBlock}
 ${input.functions && input.functions.join("\n")}
 
 const funcSequence = [
-${input.pipe && input.pipe.steps.map((step: Step) => step.funcName).join(", ")}
+${funcSequenceItems}
 ]
 const pipe = Pipe(funcSequence, rawPipe);
 const process = (input={}) => pipe.process(input);

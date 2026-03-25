@@ -126,6 +126,13 @@ Deno.test("rangeFinder", async (t) => {
     assertEquals(result.ranges.metaBlocks.length, 1);
   });
 
+  await t.step("detects zod schema blocks", async () => {
+    const result = await findAllRanges('```zod\nexport const schema = z.object({});\n```');
+    assertEquals(result.ranges.schemaBlocks.length, 1);
+    assertEquals(result.ranges.codeBlocks.length, 0);
+    assertEquals(result.ranges.metaBlocks.length, 0);
+  });
+
   await t.step("handles mixed content", async () => {
     const markdown = `# Title
 
