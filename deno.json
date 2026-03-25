@@ -1,12 +1,19 @@
 {
   "compilerOptions": {
-    "types": ["./pipedown.d.ts"]
+    "types": [
+      "./pipedown.d.ts"
+    ]
   },
   "name": "@pd/pdcli",
   "version": "0.4.0",
   "exports": "./pdCli/mod.ts",
   "lint": {
-    "exclude": ["deps.ts", "test.ts", ".pd/", "old/"]
+    "exclude": [
+      "deps.ts",
+      "test.ts",
+      ".pd/",
+      "old/"
+    ]
   },
   "license": "MIT",
   "nodeModulesDir": "auto",
