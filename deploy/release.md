@@ -99,6 +99,21 @@ if (summaryMatch) {
 }
 ```
 
+## Update deno.json
+
+Write the new version to deno.json.
+
+- not: /error
+- not: /dryRun
+- ```ts
+  input.denoJson.version = input.newVersion;
+  await Deno.writeTextFile(
+    input.denoJsonPath,
+    JSON.stringify(input.denoJson, null, 2) + "\n"
+  );
+  console.log("Updated " + input.denoJsonPath + " to v" + input.newVersion);
+  ```
+
 ## Check Git Status
 
 Ensure the working tree is clean before publishing.
@@ -124,21 +139,6 @@ if (gitOutput.length > 0) {
   console.log("Working tree clean");
 }
 ```
-
-## Update deno.json
-
-Write the new version to deno.json.
-
-- not: /error
-- not: /dryRun
-- ```ts
-  input.denoJson.version = input.newVersion;
-  await Deno.writeTextFile(
-    input.denoJsonPath,
-    JSON.stringify(input.denoJson, null, 2) + "\n"
-  );
-  console.log("Updated " + input.denoJsonPath + " to v" + input.newVersion);
-  ```
 
 ## Publish to JSR
 
