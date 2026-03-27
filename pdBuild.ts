@@ -21,10 +21,11 @@ const _walkOpts: WalkOptions = {
 
 function walkOptions(input: BuildInput, override: WalkOptions = {}) {
   const walkOpts = Object.assign({}, _walkOpts, override);
-  walkOpts.skip && walkOpts.skip
-  .concat(respectGitIgnore())
-  .concat(input.globalConfig?.skip || [])
-  .concat(input.globalConfig?.exclude || [])
+  // .concat() returns a new array — must reassign to apply gitignore and global skip/exclude patterns
+  walkOpts.skip = (walkOpts.skip || [])
+    .concat(respectGitIgnore())
+    .concat(input.globalConfig?.skip || [])
+    .concat(input.globalConfig?.exclude || []);
   if (input.match) walkOpts.match = [new RegExp(input.match)];
   return walkOpts;
 }
