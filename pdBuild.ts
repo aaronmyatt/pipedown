@@ -89,12 +89,12 @@ async function parseMdFiles(input: BuildInput) {
 
 // merge parent directory config.json files into the pipe config
 async function mergeParentDirConfig(input: BuildInput) {
-  console.log(`Merging parent directory configs for ${input.pipes?.length} pipes...`);
+  if (input.debug) console.log(`Merging parent directory configs for ${input.pipes?.length} pipes...`);
   for (const pipe of (input.pipes || [])) {
     const parts = pipe.mdPath.split("/");
     let config = pipe.config;
 
-    console.log(`Merging parent directory config for pipe: ${pipe.name}`);
+    if (input.debug) console.log(`Merging parent directory config for pipe: ${pipe.name}`);
     
     for (let i = parts.length - 1; i > 0; i--) {
       const parentDir = '/' + std.join(...parts.slice(0, i));
@@ -114,7 +114,7 @@ async function mergeParentDirConfig(input: BuildInput) {
 
 async function writePipeDir(input: BuildInput) {
   for (const pipe of (input.pipes || [])) {
-    console.log(`Creating pipe directory: ${pipe.dir}`);
+    if (input.debug) console.log(`Creating pipe directory: ${pipe.dir}`);
     await Deno.mkdir(pipe.dir, { recursive: true  });
   }
 }
@@ -141,7 +141,7 @@ async function transformMdFiles(input: BuildInput) {
       await Deno.writeTextFile(scriptPath, output.script);
     } else {
       input.errors = input.errors || [];
-      input.errors.concat(output.errors || []);
+      input.errors.push(...(output.errors || []));
     }
   }
   return input;

@@ -54,11 +54,12 @@ const checkCodeBlock = (input: RangeFinderInput) => {
     const token = input.ranges.token;
     const normalizedTag = normalizeTokenTag(token);
     const language = getTokenLanguage(token);
-    
+
     const isCodeBlock = normalizedTag === Tag.codeBlock;
     const supported = SUPPORTED_LANGUAGES.includes(language.toLowerCase());
+    const isSkipped = token.info?.split(' ').slice(1).includes('skip');
 
-    if (isCodeBlock && (token.type === 'fence' || token.type === 'code_block') && supported) {
+    if (isCodeBlock && (token.type === 'fence' || token.type === 'code_block') && supported && !isSkipped) {
         // For markdown-it, code blocks are single tokens, so we store start and end as same index
         const index = tokenIndex.get(input);
         $p.set(input, '/ranges/codeBlocks/-', [index, index]);
@@ -108,8 +109,9 @@ const checkMetaBlock = (input: RangeFinderInput) => {
 
     const isMetaBlock = normalizedTag === Tag.codeBlock;
     const supported = META_LANGUAGES.includes(language.toLowerCase());
+    const isSkipped = token.info?.split(' ').slice(1).includes('skip');
 
-    if (isMetaBlock && (token.type === 'fence' || token.type === 'code_block') && supported) {
+    if (isMetaBlock && (token.type === 'fence' || token.type === 'code_block') && supported && !isSkipped) {
         const index = tokenIndex.get(input);
         $p.set(input, '/ranges/metaBlocks/-', [index, index]);
     }

@@ -333,6 +333,28 @@ Deno.test("pipeToScript", async (t) => {
     assertEquals(result.script!.includes("npm:zod"), false);
   });
 
+  await t.step("does not render literal 'false' when build config present", async () => {
+    const pipe = makePipe({
+      config: { build: [{ format: "esm" }] },
+      steps: [
+        {
+          code: "input.x = 1;",
+          range: [0, 0],
+          name: "Step",
+          funcName: "Step",
+          inList: false,
+        },
+      ],
+    });
+
+    const result = await pipeToScript({ pipe });
+    assertEquals(result.success, true);
+    // Each line of the script should not be the literal "false"
+    const lines = result.script!.split("\n");
+    const falseLines = lines.filter((l) => l.trim() === "false");
+    assertEquals(falseLines.length, 0, "Script should not contain a bare 'false' line");
+  });
+
   await t.step("includes dotenv import when no build config", async () => {
     const pipe = makePipe({
       steps: [

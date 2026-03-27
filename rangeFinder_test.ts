@@ -133,6 +133,29 @@ Deno.test("rangeFinder", async (t) => {
     assertEquals(result.ranges.metaBlocks.length, 0);
   });
 
+  await t.step("excludes code blocks with skip attribute", async () => {
+    const result = await findAllRanges("```js skip\nimport { pipe } from './foo.js';\n```");
+    assertEquals(result.ranges.codeBlocks.length, 0);
+  });
+
+  await t.step("excludes ts code blocks with skip attribute", async () => {
+    const result = await findAllRanges("```ts skip\nconsole.log('skipped');\n```");
+    assertEquals(result.ranges.codeBlocks.length, 0);
+  });
+
+  await t.step("skip attribute does not affect non-skip code blocks", async () => {
+    const result = await findAllRanges(
+      "```js skip\nskipped\n```\n\n```js\nkept\n```",
+    );
+    assertEquals(result.ranges.codeBlocks.length, 1);
+  });
+
+  await t.step("skip attribute does not affect meta blocks", async () => {
+    const result = await findAllRanges('```json\n{"key": "value"}\n```\n\n```ts skip\nskipped\n```');
+    assertEquals(result.ranges.metaBlocks.length, 1);
+    assertEquals(result.ranges.codeBlocks.length, 0);
+  });
+
   await t.step("handles mixed content", async () => {
     const markdown = `# Title
 

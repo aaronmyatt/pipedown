@@ -97,7 +97,7 @@ function _pd_validateSchema(input) {
 import Pipe from "jsr:@pd/pdpipe@0.2.2";
 import $p from "jsr:@pd/pointers@0.1.1";
 ${zodImport}
-${!input.pipe.config?.build && 'import "jsr:@std/dotenv/load";'}
+${input.pipe.config?.build ? '' : 'import "jsr:@std/dotenv/load";'}
 import rawPipe from "./index.json" with {type: "json"};
 ${input.pipeImports && input.pipeImports.join("\n")}
 ${schemaBlock}

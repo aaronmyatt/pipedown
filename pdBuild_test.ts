@@ -170,6 +170,52 @@ input.result = capitalize(input.validated);
     assertStringIncludes(script.script!, 'from "npm:lodash"');
   });
 
+  await t.step("skip blocks are excluded from steps and generated script", async () => {
+    const { pipe, script } = await fullPipeline(`# Skip Test
+
+\`\`\`js skip
+import { pipe } from "./skipTest.js";
+\`\`\`
+
+## Real Step
+
+\`\`\`ts
+input.result = "done";
+\`\`\`
+`);
+    assertEquals(pipe.steps.length, 1);
+    assertEquals(pipe.steps[0].funcName, "RealStep");
+    assertEquals(script.success, true);
+    assertEquals(script.script!.includes("skipTest.js"), false, "Skip block import should not appear in generated script");
+    assertEquals(script.script!.includes("import { pipe }"), false, "Skip block import should not leak");
+  });
+
+  await t.step("skip blocks with imports do not contaminate other steps", async () => {
+    const { pipe, script } = await fullPipeline(`# Multi Skip
+
+\`\`\`js skip
+import { foo } from "./foo.js";
+\`\`\`
+
+## Step A
+
+\`\`\`ts
+import { bar } from "npm:bar";
+input.a = bar();
+\`\`\`
+
+## Step B
+
+\`\`\`ts
+input.b = true;
+\`\`\`
+`);
+    assertEquals(pipe.steps.length, 2);
+    assertEquals(script.success, true);
+    assertStringIncludes(script.script!, 'from "npm:bar"');
+    assertEquals(script.script!.includes("foo.js"), false, "Skip block import should not appear");
+  });
+
   await t.step("pipe JSON structure matches expected format", async () => {
     const { pipe } = await fullPipeline(`# JSON Structure
 
