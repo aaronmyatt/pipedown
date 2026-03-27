@@ -91,6 +91,17 @@ export type Step = {
     language?: string;
     /** Whether this step has side effects and should be VCR recorded/replayed in tests. */
     mock?: boolean;
+    /** Source line mapping for lossless round-trip reconstruction. */
+    sourceMap?: {
+        /** Line number (0-indexed) of the heading_open token in the original source. */
+        headingLine?: number;
+        /** Line number (0-indexed) of the fence-open line (```) in the original source. */
+        codeStartLine?: number;
+        /** Line number (0-indexed, exclusive) after the fence-close line in the original source. */
+        codeEndLine?: number;
+    };
+    /** The code content at parse time, for detecting modifications during round-trip. */
+    originalCode?: string;
 };
 
 /** Configuration for conditional step execution. */
@@ -163,6 +174,8 @@ export type Pipe = {
     schema?: string;
     /** Prose description between the H1 heading and the first step/config block. */
     pipeDescription?: string;
+    /** The original markdown source text, for lossless round-trip reconstruction. */
+    rawSource?: string;
 };
 
 /** Input/output for the rangeFinder token classifier. */

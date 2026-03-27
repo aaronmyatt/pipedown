@@ -42,6 +42,8 @@ const collectInlineText = (tokens: Token[], fromIndex: number, toIndex: number):
 const parseMarkdown = (input: mdToPipeInput) => {
   const markdownIt = new md.MarkdownIt();
   input.tokens = markdownIt.parse(input.markdown || "", {});
+  // Preserve the raw source for lossless round-trip reconstruction
+  input.pipe.rawSource = input.markdown;
 };
 
 const findRanges = async (input: mdToPipeInput) => {
@@ -94,6 +96,11 @@ const findSteps = (input: mdToPipeInput) => {
       const infoFlags = token?.info?.split(' ').slice(1) || [];
       const isMock = infoFlags.includes('mock');
 
+      // Capture source line map from token.map for lossless round-trip
+      const codeSourceMap = token?.map
+        ? { codeStartLine: token.map[0], codeEndLine: token.map[1] }
+        : undefined;
+
       return {
         code,
         range: codeBlockRange,
@@ -102,6 +109,8 @@ const findSteps = (input: mdToPipeInput) => {
         inList: false,
         language,
         mock: isMock || undefined,
+        originalCode: code,
+        sourceMap: codeSourceMap,
       };
     },
   )
@@ -127,6 +136,14 @@ const findSteps = (input: mdToPipeInput) => {
         }
 
         step.name = headingText(input.tokens, headingRange[0]) || "anonymous" + step.range[0];
+
+        // Capture heading line number from token.map for lossless round-trip
+        if (headingToken?.map) {
+          step.sourceMap = {
+            ...step.sourceMap,
+            headingLine: headingToken.map[0],
+          };
+        }
 
         // Extract description: paragraph text between heading end and code block start
         const descParts = collectInlineText(input.tokens, headingRange[1] + 1, step.range[0]);
