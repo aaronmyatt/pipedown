@@ -137,7 +137,7 @@ const funcs = [
     checkMinFlags(["serve", "*", "*"], serveCommand),
     checkMinFlags(["repl"], replCommand),
     checkMinFlags(["run", "*"], runCommand),
-    checkMinFlags(["runWith", "*", "*", "*"], runWithCommand),
+    checkMinFlags(["run-with", "*", "*", "*"], runWithCommand),
     checkMinFlags(["llm", "*", "*", "*"], llmCommand),
     checkMinFlags(["inspect", "*"], inspectCommand),
     checkMinFlags(["run-step", "*", "*"], runStepCommand),

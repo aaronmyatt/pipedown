@@ -1,34 +1,5 @@
 import { std } from "./deps.ts";
 
-export function denoTestFileTemplate (pipeName: string){
-  return `import {assertEquals} from "jsr:@std/assert" 
-import { assertSnapshot } from "jsr:@std/testing/snapshot";
-import {pipe, rawPipe} from "./index.ts";
-
-Deno.test("${pipeName}", async (t) => {
-  rawPipe.config = rawPipe.config || {};
-  rawPipe.config.inputs = rawPipe.config.inputs || [];
-  
-  for(const pipeInput of rawPipe.config.inputs) {
-    const testName = pipeInput?._name || JSON.stringify(pipeInput)
-    pipeInput.mode = 'test';
-    await t.step({
-      name: testName,
-      fn: async () => {
-        pipeInput.test = true;
-        const output = await pipe.process(pipeInput);
-        try {
-          await assertSnapshot(t, output, {name: testName});
-        } catch (e) {
-          console.log(output);
-          throw e;
-        }
-      }
-    })
-  }
-});`
-}
-
 export const denoReplEvalTemplate = (importNames: string[]) =>
   `${
     importNames
@@ -59,8 +30,8 @@ function test(pipe, { exclude = [], test = true } = {}) {
 async function step(pipe, { exclude = [], test = true } = {}) {
   const wTestMode = pipe.json.config.inputs.map(i => { i.test = test; return i })
   const inputIterable = wTestMode[Symbol.iterator]();
-  let notDone = true; 
-  let continueLoop = true; 
+  let notDone = true;
+  let continueLoop = true;
   while(notDone && continueLoop) {
     const { value, done } = inputIterable.next();
     if(done) notDone = false;
@@ -92,132 +63,6 @@ ${
     ).join("\n")
   }
 `;
-
-export const pdCliTemplate = () =>
-  `import pipe from "./index.ts"
-import {parseArgs} from "jsr:@std/cli@1.0.28";
-import $p from "jsr:@pd/pointers@0.1.1";
-
-const flags = parseArgs(Deno.args);
-const input = JSON.parse(flags.input || flags.i || '{}');
-$p.set(input, "/flags", flags);
-$p.set(input, "/mode/cli", true);
-
-const output = await pipe.process(input)
-
-
-if(flags.json || flags.j) {
-  console.log(JSON.stringify(output));
-} else {
- console.log(output);
-}
-Deno.exit(0);
-`;
-
-export const pdServerTemplate = () =>
-  `import pipe from "./index.ts"
-import {parseArgs} from "jsr:@std/cli@1.0.28";
-
-const isDenoDeploy = Deno.env.has('DENO_DEPLOYMENT_ID');
-
-function findOpenPort(defaultPort = 8000){
-  let port = defaultPort;
-  if(isDenoDeploy) return port;
-  while(true){
-    try {
-      Deno.listen({port});
-    } catch (e) {
-      port += 1;
-      continue;
-    }
-    return port;
-  }
-}
-
-const flags = parseArgs(Deno.args);
-const hostname = flags.host || "127.0.0.1";
-const port = flags.port || findOpenPort();
-
-const handler = async (request: Request) => {
-  console.log(request.url);
-  const output = await pipe.process({request, body: {}, responseOptions: {
-          headers: {
-              "content-type": "application/json"
-          },
-          status: 200,
-      },
-      mode: {
-          server: true,
-          deploy: isDenoDeploy
-      }
-  });
-  if(output.errors) {
-      console.error(output.errors);
-      return new Response(JSON.stringify(output.errors), {status: 500});
-  }
-  if(output.responseOptions.headers['content-type'] === 'application/json' && typeof output.body === 'object') {
-      output.body = JSON.stringify(output.body);
-  }
-  const response = output.response || new Response(output.body, output.responseOptions);
-  return response;
-};
-
-const server = Deno.serve({ handler, port, hostname });
-server.finished.then(() => console.log("Server closed"));`;
-
-export const pdWorkerTemplate = () =>
-  `import pipe from "./index.ts"
-globalThis.addEventListener("install", async (event) => {
-    event.waitUntil(pipe.process({event, mode: { worker: true }, type: {install: true}}));
-})
-globalThis.addEventListener("activate", async (event) => {
-    event.waitUntil(pipe.process({event, mode: { worker: true }, type: {activate: true}}));
-})
-globalThis.addEventListener("fetch", async (event) => {
-    const detectCacheExceptions = [
-        event.request.headers.get("connection"),
-        event.request.headers.get('content-type'),
-        event.request.headers.get('accept')
-    ];
-    const skipCache = detectCacheExceptions.filter(Boolean)
-        .some(header => {
-            return ['upgrade', 'text/event-stream'].includes(header.toLowerCase())
-        })
-    if(skipCache) return;
-    
-
-    event.respondWith((async () => {
-        const output = await pipe.process({
-            event, 
-            type: {fetch: true},
-            request: event.request,
-            body: {},
-            responseOptions: {
-                headers: {
-                    "content-type": "application/json"
-                },
-                status: 200,
-            }
-        })
-        if(output.errors) {
-            console.error(output.errors);
-            return new Response(JSON.stringify(output.errors), {status: 500});
-        }
-        const response = output.response || new Response(output.body, output.responseOptions);
-        return response;
-    })());
-})
-
-globalThis.addEventListener("message", async (event) => {
-    const output = await pipe.process({event, mode: { worker: true }, type: {message: true}});
-    if(output.errors) {
-        console.error(output.errors);
-        return;
-    }
-    if(output.data) {
-        console.log(output.data);
-    }
-});`;
 
 export const cliHelpTemplate = ({ title, command, sections }: {
   title: string;
@@ -280,6 +125,7 @@ export const helpText = cliHelpTemplate({
   pd build                                          # Build all .md pipelines
   pd run myPipe.md                                  # Build and run myPipe.md
   pd run myPipe.md --input '{"key": "value"}'       # Run with initial input
+  pd run-with server myPipe.md                      # Run with a user template in the templates/ directory
   pd run-step myPipe.md 2                           # Run steps 0-2, print intermediate state
   pd inspect myPipe.md                              # Dump full pipe structure as JSON
   pd inspect myPipe.md 0                            # Dump step 0 with preceding context
