@@ -19,8 +19,8 @@ import { testCommand, updateTestCommand } from "./testCommand.ts";
 import { cleanCommand } from "./cleanCommand.ts";
 import { defaultCommand } from "./defaultCommand.ts";
 import { helpText } from "../stringTemplates.ts";
-import {replCommand} from "./replCommand.ts";
 import { llmCommand } from "./llmCommand.ts";
+import { replCommand } from "./replCommand.ts";
 import { inspectCommand } from "./inspectCommand.ts";
 import { runStepCommand } from "./runStepCommand.ts";
 import { syncCommand } from "./syncCommand.ts";
@@ -47,6 +47,45 @@ async function pdInit(input: CliInput) {
     } catch (e) {
         if (!(e instanceof Deno.errors.NotFound)) throw e;
     }
+}
+
+const DEFAULT_TEMPLATE_FILES = ["cli.ts", "server.ts", "worker.ts", "test.ts", "trace.ts"];
+
+async function scaffoldTemplates(input: CliInput) {
+    const templatesDir = std.join(Deno.cwd(), "templates");
+    const configPath = std.join(Deno.cwd(), "config.json");
+
+    // Only scaffold if templates/ directory doesn't exist yet
+    if (await std.exists(templatesDir)) return input;
+
+    await Deno.mkdir(templatesDir, { recursive: true });
+    console.log(std.colors.brightGreen("Scaffolding default templates to templates/"));
+
+    // Copy default template files from pipedown source
+    const sourceTemplateDir = new URL("../templates/", import.meta.url);
+    for (const file of DEFAULT_TEMPLATE_FILES) {
+        const sourceUrl = new URL(file, sourceTemplateDir);
+        const content = await Deno.readTextFile(sourceUrl);
+        await Deno.writeTextFile(std.join(templatesDir, file), content);
+    }
+
+    // Update config.json to include templates
+    const templatePaths = DEFAULT_TEMPLATE_FILES.map(f => `./templates/${f}`);
+    let config: Record<string, unknown> = {};
+    try {
+        config = JSON.parse(await Deno.readTextFile(configPath));
+    } catch { /* no existing config.json */ }
+
+    const existingTemplates = (config.templates as string[]) || [];
+    const newTemplates = templatePaths.filter(t => !existingTemplates.includes(t));
+    config.templates = [...existingTemplates, ...newTemplates];
+
+    await Deno.writeTextFile(configPath, JSON.stringify(config, null, 4));
+
+    // Update globalConfig so the build picks up the templates
+    Object.assign(input.globalConfig, config);
+
+    return input;
 }
 
 async function registerProject(input: CliInput) {
@@ -127,6 +166,7 @@ const versionCommand = (input: CliInput) => {
 
 const funcs = [
     pdInit,
+    scaffoldTemplates,
     registerProject,
     gatherProjectContext,
     checkMinFlags(["none"], defaultCommand),
@@ -171,6 +211,7 @@ const flags: Args = std.parseArgs(Deno.args, {
         "v",
         "help",
         "h",
+        "trace",
     ],
 });
 if (flags.version || flags.v) {

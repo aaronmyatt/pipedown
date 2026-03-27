@@ -159,6 +159,8 @@ const writeUserTemplates = async (input: BuildInput) => {
         [] as string[]
     ) {
       const pipePath = std.join(pipe.dir, utils.fileName(path) + ".ts");
+      // Skip if file already exists (allows user overrides in .pd/<pipe>/)
+      if (await std.exists(pipePath)) continue;
       await Deno.copyFile(path, pipePath);
     }
   }

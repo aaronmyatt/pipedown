@@ -3,18 +3,6 @@ import * as templates from "./stringTemplates.ts";
 import type { BuildInput } from "./pipedown.d.ts";
 import { PD_DIR } from "./pdCli/helpers.ts";
 
-async function writeTests(input: BuildInput) {
-  for (const pipe of (input.pipes || [])) {
-    const testPath = std.join(pipe.dir, "test.ts");
-    if (await std.exists(testPath)) continue;
-    await Deno.writeTextFile(
-      testPath,
-      templates.denoTestFileTemplate(pipe.name),
-    );
-  }
-  return input;
-}
-
 async function writeDenoImportMap(input: BuildInput) {
   input.importMap = {
     imports: {
@@ -71,40 +59,10 @@ async function writeReplEvalFile(input: BuildInput) {
   );
 }
 
-const writeCliFile = async (input: BuildInput) => {
-  for (const pipe of (input.pipes || [])) {
-    const cliPath = std.join(pipe.dir, "cli.ts");
-    if (await std.exists(cliPath)) continue;
-    await Deno.writeTextFile(cliPath, templates.pdCliTemplate());
-  }
-};
-
-const writeServerFile = async (input: BuildInput) => {
-  for (const pipe of (input.pipes || [])) {
-    const serverPath = std.join(pipe.dir, "server.ts");
-    if (await std.exists(serverPath)) continue;
-    await Deno.writeTextFile(serverPath, templates.pdServerTemplate());
-  }
-  return input;
-};
-
-const writeWorkerFile = async (input: BuildInput) => {
-  for (const pipe of (input.pipes || [])) {
-    const workerPath = std.join(pipe.dir, "worker.ts");
-    if (await std.exists(workerPath)) continue;
-    await Deno.writeTextFile(workerPath, templates.pdWorkerTemplate());
-  }
-  return input;
-};
-
 export async function defaultTemplateFiles(input: BuildInput){
   const funcs = [
-    writeTests,
     writeDenoImportMap,
     writeReplEvalFile,
-    writeCliFile,
-    writeServerFile,
-    writeWorkerFile,
   ]
   return await pd.process(funcs, input, {})
 }

@@ -9,9 +9,9 @@ export const commonArgs = [
 
 export const PD_DIR = `./.pd`;
 
-export async function pdRun(scriptName: string, testInput: string) {
+export async function pdRun(scriptName: string, testInput: string, entryPoint = "cli.ts") {
     const pipeDir = `${PD_DIR}/${scriptName.replace(/\.md/, "")}`;
-    const scriptPath = `${pipeDir}/cli.ts`;
+    const scriptPath = `${pipeDir}/${entryPoint}`;
 
     const scriptArgs = Deno.args.slice(
         Deno.args.findIndex((arg) => arg === "--") + 1,
