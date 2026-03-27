@@ -31,14 +31,14 @@ export async function runCommand(input: CliInput) {
   if (pd.$p.get(input, "/flags/help") || pd.$p.get(input, "/flags/h")) {
     console.log(helpText);
   } else {
-    const command = commandName.get(input);
+    const scriptName = commandName.get(input);
     const testInput = inputRaw.get(input) || inputParam.get(input) || "{}";
     const noTraceFlag = pd.$p.get(input, "/flags/no-trace");
     const configTrace = input.globalConfig?.trace;
     const traceEnabled = !noTraceFlag && configTrace !== false;
     const entryPoint = traceEnabled ? "trace.ts" : "cli.ts";
     await pdBuild(input);
-    await pdRun(command, testInput, entryPoint);
+    await pdRun({scriptName, testInput, entryPoint});
   }
   return input;
 }
