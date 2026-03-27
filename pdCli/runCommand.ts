@@ -21,6 +21,7 @@ const helpText = cliHelpTemplate({
     -p, --pretty  Pretty print the JSON output.
     -h, --help    Display this message.
     -d, --debug   Display debug information.
+    --no-trace    Disable tracing (enabled by default). Also configurable via config.json { "trace": false }.
     --input       Initial input for the pipedown file. Needs to be a JSON string.`,
   ],
 });
@@ -32,8 +33,12 @@ export async function runCommand(input: CliInput) {
   } else {
     const command = commandName.get(input);
     const testInput = inputRaw.get(input) || inputParam.get(input) || "{}";
+    const noTraceFlag = pd.$p.get(input, "/flags/no-trace");
+    const configTrace = input.globalConfig?.trace;
+    const traceEnabled = !noTraceFlag && configTrace !== false;
+    const entryPoint = traceEnabled ? "trace.ts" : "cli.ts";
     await pdBuild(input);
-    await pdRun(command, testInput);
+    await pdRun(command, testInput, entryPoint);
   }
   return input;
 }

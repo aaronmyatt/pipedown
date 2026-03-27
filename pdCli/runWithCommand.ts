@@ -11,12 +11,12 @@ const inputParam = pd.$p.compile("/flags/input");
 
 const helpText = cliHelpTemplate({
   title: "Run",
-  command: "pd runWith [options] [file]",
+  command: "pd run-with [options] [file]",
   sections: [
     "Build and run a markdown file with any user-defined template in the templates/ directory.",
     `Example:
-    pd runWith test file.md
-    pd runWith server file.md --input '{"key": "value"}'`,
+    pd run-with test file.md
+    pd run-with server file.md --input '{"key": "value"}'`,
     `Options:
     -j, --json    Output the build information as JSON.
     -p, --pretty  Pretty print the JSON output.
