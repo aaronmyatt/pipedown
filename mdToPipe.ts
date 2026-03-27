@@ -11,6 +11,34 @@ import type {
 } from "./pipedown.d.ts";
 import { sanitizeString } from "./pdUtils.ts";
 
+// Extract plain text from a heading token. Handles both markdown-it's
+// children array (inline tokens) and the fallback of looking at the next
+// token in the stream.
+const headingText = (tokens: Token[], headingIndex: number): string => {
+  const token = tokens.at(headingIndex);
+  if (token?.children) {
+    return token.children
+      .filter(child => child.type === 'text')
+      .map(child => child.content)
+      .join('');
+  }
+  // Fallback: markdown-it places heading text in the next inline token
+  const next = tokens.at(headingIndex + 1);
+  if (next?.type === 'inline') return next.content || "";
+  return "";
+};
+
+// Collect paragraph (inline) text between two token indices.
+// Used for pipe descriptions and step descriptions.
+const collectInlineText = (tokens: Token[], fromIndex: number, toIndex: number): string[] => {
+  const parts: string[] = [];
+  for (let i = fromIndex; i < toIndex; i++) {
+    const t = tokens[i];
+    if (t?.type === 'inline' && t.content) parts.push(t.content);
+  }
+  return parts;
+};
+
 const parseMarkdown = (input: mdToPipeInput) => {
   const markdownIt = new md.MarkdownIt();
   input.tokens = markdownIt.parse(input.markdown || "", {});
@@ -28,36 +56,17 @@ const findRanges = async (input: mdToPipeInput) => {
 };
 
 const findPipeName = (input: mdToPipeInput) => {
+  // The pipe name comes from the first H1 heading (nesting level 0 in markdown-it)
   const headingRange = input.ranges.headings.find((hRange: number[]) => {
     const index = !hRange.length ? 0 : hRange[0];
     const token = input.tokens.at(index);
-    // For markdown-it, heading level is in the type (heading_open) or level property
     const level = token?.level || (token?.type === 'heading_open' ? 1 : 0);
     return level === 1;
   });
-  
-  if (!headingRange) {
-    input.pipe.name = "anonymous";
-  } else {
-    // Find the inline token that contains the heading text
-    const headingToken = input.tokens.at(headingRange[0]);
-    let headingText = "";
-    
-    if (headingToken?.children) {
-      headingText = headingToken.children
-        .filter(child => child.type === 'text')
-        .map(child => child.content)
-        .join('');
-    } else {
-      // Fallback: look for next inline token
-      const nextToken = input.tokens.at(headingRange[0] + 1);
-      if (nextToken?.type === 'inline') {
-        headingText = nextToken.content || "";
-      }
-    }
-    
-    input.pipe.name = headingText || "anonymous";
-  }
+
+  input.pipe.name = headingRange
+    ? headingText(input.tokens, headingRange[0]) || "anonymous"
+    : "anonymous";
   input.pipe.cleanName = sanitizeString(input.pipe.name || "anonymous");
 };
 
@@ -97,6 +106,7 @@ const findSteps = (input: mdToPipeInput) => {
     },
   )
     .map((step: Step, index: number, steps: Steps) => {
+      // Find the nearest heading that sits between the previous code block and this one
       const headingRange = input.ranges.headings.findLast(
         (headingRange: number[]) => {
           const afterLastCodeBlock = index > 0
@@ -109,7 +119,6 @@ const findSteps = (input: mdToPipeInput) => {
 
       if (headingRange) {
         const headingToken = input.tokens.at(headingRange[0]);
-        let headingText = "";
 
         // Extract heading level from the tag (h1, h2, h3, etc.)
         if (headingToken?.tag) {
@@ -117,30 +126,10 @@ const findSteps = (input: mdToPipeInput) => {
           if (!isNaN(level)) step.headingLevel = level;
         }
 
-        if (headingToken?.children) {
-          headingText = headingToken.children
-            .filter(child => child.type === 'text')
-            .map(child => child.content)
-            .join('');
-        } else {
-          const nextToken = input.tokens.at(headingRange[0] + 1);
-          if (nextToken?.type === 'inline') {
-            headingText = nextToken.content || "";
-          }
-        }
+        step.name = headingText(input.tokens, headingRange[0]) || "anonymous" + step.range[0];
 
-        step.name = headingText || "anonymous" + step.range[0];
-
-        // Extract description: paragraph text between heading and code block
-        const headingEnd = headingRange[1];
-        const codeStart = step.range[0];
-        const descParts: string[] = [];
-        for (let i = headingEnd + 1; i < codeStart; i++) {
-          const t = input.tokens[i];
-          if (t?.type === 'inline' && t.content) {
-            descParts.push(t.content);
-          }
-        }
+        // Extract description: paragraph text between heading end and code block start
+        const descParts = collectInlineText(input.tokens, headingRange[1] + 1, step.range[0]);
         if (descParts.length > 0) {
           step.description = descParts.join("\n");
         }
@@ -153,28 +142,19 @@ const findSteps = (input: mdToPipeInput) => {
 };
 
 const findPipeDescription = (input: mdToPipeInput) => {
-  // Extract prose between the H1 heading and the first step/config/schema block
+  // Extract prose between the H1 heading and the first structural element
   const firstHeading = input.ranges.headings[0];
   if (!firstHeading) return;
 
-  const headingEnd = firstHeading[1];
-
-  // Find the first structural element after the heading
-  const firstCodeBlock = input.ranges.codeBlocks[0]?.[0] ?? Infinity;
-  const firstMetaBlock = input.ranges.metaBlocks[0]?.[0] ?? Infinity;
-  const firstSchemaBlock = input.ranges.schemaBlocks?.[0]?.[0] ?? Infinity;
-  const firstSecondHeading = input.ranges.headings[1]?.[0] ?? Infinity;
-  const firstBlock = Math.min(firstCodeBlock, firstMetaBlock, firstSchemaBlock, firstSecondHeading);
-
+  const firstBlock = Math.min(
+    input.ranges.codeBlocks[0]?.[0] ?? Infinity,
+    input.ranges.metaBlocks[0]?.[0] ?? Infinity,
+    input.ranges.schemaBlocks?.[0]?.[0] ?? Infinity,
+    input.ranges.headings[1]?.[0] ?? Infinity,
+  );
   if (firstBlock === Infinity) return;
 
-  const descParts: string[] = [];
-  for (let i = headingEnd + 1; i < firstBlock; i++) {
-    const t = input.tokens[i];
-    if (t?.type === 'inline' && t.content) {
-      descParts.push(t.content);
-    }
-  }
+  const descParts = collectInlineText(input.tokens, firstHeading[1] + 1, firstBlock);
   if (descParts.length > 0) {
     input.pipe.pipeDescription = descParts.join("\n");
   }
