@@ -124,21 +124,14 @@ export { pipe, rawPipe, process };
 
   const output = await pd.process<PipeToScriptInput>(funcs, input, {});
 
-  if (
-    Deno.env.get("DEBUG") || Deno.args.includes("--debug") ||
-    Deno.args.includes("-d") || Deno.args.includes("--DEBUG") ||
-    Deno.args.includes("-D")
-  ) {
-    if (output.errors && output.errors.length > 0) {
-      return { success: false, script: "", ...output, errors: output.errors };
-    } else {
-      return { success: true, script: output.script, ...output };
-    }
-  } else {
-    if (output.errors && output.errors.length > 0) {
-      return { success: false, script: "", errors: output.errors };
-    } else {
-      return { success: true, script: output.script };
-    }
-  }
+  const hasErrors = output.errors && output.errors.length > 0;
+  const isDebug = Deno.env.get("DEBUG") ||
+    ["-d", "-D", "--debug", "--DEBUG"].some(f => Deno.args.includes(f));
+
+  // In debug mode, spread the full pipeline output for introspection
+  const base = isDebug ? { ...output } : {};
+
+  return hasErrors
+    ? { ...base, success: false, script: "", errors: output.errors }
+    : { ...base, success: true, script: output.script };
 };
