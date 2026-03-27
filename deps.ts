@@ -19,8 +19,6 @@ import MarkdownIt from "npm:markdown-it@14.1.1";
 
 import { process } from "jsr:@pd/pdpipe@0.2.2";
 import { $p } from "jsr:@pd/pointers@0.1.1";
-
-import * as esbuild from "npm:esbuild@0.27.4";
 //import { httpImports } from "https://deno.land/x/esbuild_plugin_http_imports@v1.3.0/index.ts";
 
 export const std = {
@@ -48,4 +46,4 @@ export const pd = {
   $p,
 };
 
-export { esbuild, keycodeParse };
+export { keycodeParse };

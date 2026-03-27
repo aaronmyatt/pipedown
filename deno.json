@@ -1,4 +1,7 @@
 {
+  "exclude": [
+    "templates/"
+  ],
   "compilerOptions": {
     "types": [
       "./pipedown.d.ts"

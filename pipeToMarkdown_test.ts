@@ -21,12 +21,12 @@ function emptyPipe(): Pipe {
   };
 }
 
-async function parse(markdown: string) {
+async function parse(markdown: string): Promise<{ pipe: Pipe } & Input> {
   const result = await mdToPipe({
     markdown,
     pipe: emptyPipe(),
   } as { markdown: string; pipe: Pipe } & Input);
-  return result;
+  return result as { pipe: Pipe } & Input;
 }
 
 Deno.test("pipeToMarkdown lossless round-trip", async (t) => {
@@ -287,6 +287,15 @@ input.also_old = "original";
 
 Deno.test("pipeToMarkdown round-trip on testPipes", async (t) => {
   const testPipesDir = new URL("../testPipes/", import.meta.url).pathname;
+  const readPermission = await Deno.permissions.query({
+    name: "read",
+    path: testPipesDir,
+  });
+
+  if (readPermission.state !== "granted") {
+    console.log("Skipping testPipes round-trip test: read permission not granted.");
+    return;
+  }
 
   // Read each .md file, parse it, reconstruct, and compare
   for await (const entry of Deno.readDir(testPipesDir)) {

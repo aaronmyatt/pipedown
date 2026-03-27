@@ -1,6 +1,6 @@
 import type { BuildOptions } from "npm:esbuild@0.25.4";
 import type { BuildInput } from "./pipedown.d.ts";
-import { esbuild, pd, std } from "./deps.ts";
+import { pd, std } from "./deps.ts";
 import { denoPlugins } from "jsr:@luca/esbuild-deno-loader@0.11.1";
 
 const configPath = std.join(Deno.cwd(), ".pd", "deno.json");
@@ -33,6 +33,7 @@ function extractConfig(input: ExportPipeInput) {
 }
 
 async function esBuilder(input: ExportPipeInput) {
+  const esbuild = await import("npm:esbuild@0.27.4");
   for (const build of input.builds) {
     await esbuild.build(build)
       .catch((e) => {

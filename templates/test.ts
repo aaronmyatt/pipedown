@@ -1,3 +1,5 @@
+// @ts-nocheck
+
 import {assertEquals} from "jsr:@std/assert"
 import { assertSnapshot } from "jsr:@std/testing/snapshot";
 import {pipe, rawPipe} from "./index.ts";

@@ -13,7 +13,10 @@ import type { Input, Pipe } from "./pipedown.d.ts";
 // without requiring filesystem operations (no pdBuild, no .pd/ directory)
 
 Deno.test("integration: markdown to executable script", async (t) => {
-  async function fullPipeline(markdown: string) {
+  async function fullPipeline(markdown: string): Promise<{
+    pipe: Pipe;
+    script: Awaited<ReturnType<typeof pipeToScript>>;
+  }> {
     const parseResult = await mdToPipe({
       markdown,
       pipe: {
@@ -34,7 +37,7 @@ Deno.test("integration: markdown to executable script", async (t) => {
     } as { markdown: string; pipe: Pipe } & Input);
 
     const scriptResult = await pipeToScript({ pipe: parseResult.pipe });
-    return { pipe: parseResult.pipe, script: scriptResult };
+    return { pipe: parseResult.pipe as Pipe, script: scriptResult };
   }
 
   await t.step("simple pipeline produces valid script", async () => {
@@ -251,6 +254,15 @@ input.done = true;
 Deno.test("integration: pdBuild generates expected files", async (t) => {
   const testPipesDir = join(Deno.cwd(), "..", "testPipes");
   const pdDir = join(testPipesDir, ".pd");
+  const readPermission = await Deno.permissions.query({
+    name: "read",
+    path: testPipesDir,
+  });
+
+  if (readPermission.state !== "granted") {
+    console.log("Skipping pdBuild file tests: read permission not granted.");
+    return;
+  }
 
   const pdDirExists = await exists(pdDir);
   if (!pdDirExists) {

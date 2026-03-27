@@ -20,12 +20,12 @@ function emptyPipe(): Pipe {
   };
 }
 
-async function parse(markdown: string) {
+async function parse(markdown: string): Promise<{ pipe: Pipe } & Input> {
   const result = await mdToPipe({
     markdown,
     pipe: emptyPipe(),
   } as { markdown: string; pipe: Pipe } & Input);
-  return result;
+  return result as { pipe: Pipe } & Input;
 }
 
 Deno.test("mdToPipe", async (t) => {
