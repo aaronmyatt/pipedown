@@ -6,6 +6,7 @@
   },
   "name": "@pd/pdcli",
   "version": "0.5.0",
+  "description": "CLI tool that transforms markdown files into executable TypeScript pipelines — build, run, test, and serve Pipedown pipes",
   "exports": "./pdCli/mod.ts",
   "lint": {
     "exclude": [

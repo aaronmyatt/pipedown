@@ -1,3 +1,33 @@
+/**
+ * Pipedown CLI — transforms markdown files into executable TypeScript pipelines.
+ *
+ * Install and use via Deno:
+ *
+ * @example Install and run the CLI
+ * ```sh
+ * deno install -Arfg -n pd jsr:@pd/pdcli
+ * pd build          # compile .md pipes into .ts scripts
+ * pd run pipe.md    # build and execute a pipe
+ * pd test           # run pipe tests
+ * pd serve pipe.md  # serve a pipe over HTTP
+ * ```
+ *
+ * @example Use checkMinFlags to guard a CLI command handler
+ * ```ts
+ * import { checkMinFlags } from "@pd/pdcli";
+ *
+ * const myCommand = checkMinFlags(
+ *   ["greet", "*"],
+ *   async (input) => {
+ *     console.log(`Hello, ${input.flags._[1]}`);
+ *     return input;
+ *   },
+ * );
+ * ```
+ *
+ * @module
+ */
+
 import type { CliInput, Input, PipeConfig} from "../pipedown.d.ts";
 
 import projectMetadata from "./../deno.json" with { type: "json" };
@@ -127,6 +157,16 @@ async function registerProject(input: CliInput) {
     }
 }
 
+/**
+ * Guard a CLI command handler so it only runs when positional arguments match.
+ *
+ * Each entry in `flags` is matched against the corresponding positional arg.
+ * Use `"*"` as a wildcard that matches any value.
+ *
+ * @param flags - Pattern of positional args to match (e.g. `["build"]` or `["run", "*"]`).
+ * @param func - The command handler to invoke when the pattern matches.
+ * @returns A wrapped function that passes through unmatched input unchanged.
+ */
 export function checkMinFlags(
     flags: string[],
     func: (input: CliInput) => Promise<CliInput> | CliInput,
