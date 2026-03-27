@@ -11,12 +11,12 @@ const inputParam = pd.$p.compile("/flags/input");
 
 const helpText = cliHelpTemplate({
   title: "Run",
-  command: "pd run [options] [file]",
+  command: "pd runWith [options] [file]",
   sections: [
-    "Build and run a markdown file in the current directory.",
+    "Build and run a markdown file with any user-defined template in the templates/ directory.",
     `Example:
-    pd run file.md
-    pd run file.md --input '{"key": "value"}'`,
+    pd runWith test file.md
+    pd runWith server file.md --input '{"key": "value"}'`,
     `Options:
     -j, --json    Output the build information as JSON.
     -p, --pretty  Pretty print the JSON output.
@@ -25,7 +25,6 @@ const helpText = cliHelpTemplate({
     --input       Initial input for the pipedown file. Needs to be a JSON string.`,
   ],
 });
-
 
 export async function runWithCommand(input: CliInput) {
   if (pd.$p.get(input, "/flags/help") || pd.$p.get(input, "/flags/h")) {
