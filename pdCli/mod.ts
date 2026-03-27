@@ -212,6 +212,8 @@ const flags: Args = std.parseArgs(Deno.args, {
         "help",
         "h",
         "trace",
+        "record",
+        "replay",
     ],
 });
 if (flags.version || flags.v) {

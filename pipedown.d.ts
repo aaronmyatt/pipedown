@@ -89,6 +89,8 @@ export type Step = {
     headingLevel?: number;
     /** The code block language identifier (ts, js, etc.). */
     language?: string;
+    /** Whether this step has side effects and should be VCR recorded/replayed in tests. */
+    mock?: boolean;
 };
 
 /** Configuration for conditional step execution. */

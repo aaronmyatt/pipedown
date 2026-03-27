@@ -82,6 +82,8 @@ const findSteps = (input: mdToPipeInput) => {
       const token = input.tokens.at(codeBlockRange[0]);
       const code = token?.content || "";
       const language = token?.info?.split(' ')[0] || "ts";
+      const infoFlags = token?.info?.split(' ').slice(1) || [];
+      const isMock = infoFlags.includes('mock');
 
       return {
         code,
@@ -90,6 +92,7 @@ const findSteps = (input: mdToPipeInput) => {
         funcName: "",
         inList: false,
         language,
+        mock: isMock || undefined,
       };
     },
   )
@@ -204,7 +207,7 @@ const setupChecks = (input: mdToPipeInput) => {
     .map((step: Step, stepIndex: number) => {
       if (step.inList) {
         const listRange = inRange(input.ranges.lists, step.range[0]);
-        const checkRegex = new RegExp('(?<type>check|when|if|flags|or|and|not|route|stop|only):\\s*(?<pointer>\\S*)');
+        const checkRegex = new RegExp('(?<type>check|when|if|flags|or|and|not|route|stop|only|mock):\\s*(?<pointer>\\S*)');
 
         if (listRange) {
           // Collect list item text content
@@ -239,10 +242,17 @@ const setupChecks = (input: mdToPipeInput) => {
                 "route": () => pd.$p.set(step, `/config/routes/-`, check.pointer),
                 "stop": () => pd.$p.set(step, `/config/stop`, stepIndex),
                 "only": () => pd.$p.set(step, `/config/only`, stepIndex),
+                "mock": () => { step.mock = true; },
               };
 
               actions[check.type]?.();
             });
+
+          // Also handle bare `- mock` (no colon)
+          listItems
+            .map((text: string) => text.trim())
+            .filter((text: string) => text === 'mock')
+            .forEach(() => { step.mock = true; });
         }
       }
       return step;
