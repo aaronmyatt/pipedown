@@ -50,20 +50,23 @@ const getTokenLanguage = (token: Token): string => {
     return '';
 };
 
+// Shared logic for classifying fenced code blocks by language.
+// Each checker provides: which language set to match, where to push the range, and whether 'skip' applies.
+const isFencedBlock = (token: Token): boolean =>
+    normalizeTokenTag(token) === Tag.codeBlock &&
+    (token.type === 'fence' || token.type === 'code_block');
+
+const isSkipped = (token: Token): boolean =>
+    token.info?.split(' ').slice(1).includes('skip') ?? false;
+
 const checkCodeBlock = (input: RangeFinderInput) => {
     const token = input.ranges.token;
-    const normalizedTag = normalizeTokenTag(token);
-    const language = getTokenLanguage(token);
+    if (!isFencedBlock(token)) return;
+    if (!SUPPORTED_LANGUAGES.includes(getTokenLanguage(token).toLowerCase())) return;
+    if (isSkipped(token)) return;
 
-    const isCodeBlock = normalizedTag === Tag.codeBlock;
-    const supported = SUPPORTED_LANGUAGES.includes(language.toLowerCase());
-    const isSkipped = token.info?.split(' ').slice(1).includes('skip');
-
-    if (isCodeBlock && (token.type === 'fence' || token.type === 'code_block') && supported && !isSkipped) {
-        // For markdown-it, code blocks are single tokens, so we store start and end as same index
-        const index = tokenIndex.get(input);
-        $p.set(input, '/ranges/codeBlocks/-', [index, index]);
-    }
+    const index = tokenIndex.get(input);
+    $p.set(input, '/ranges/codeBlocks/-', [index, index]);
 }
 
 const checkList = (input: RangeFinderInput) => {
@@ -104,31 +107,22 @@ const checkHeading = (input: RangeFinderInput) => {
 
 const checkMetaBlock = (input: RangeFinderInput) => {
     const token = input.ranges.token;
-    const normalizedTag = normalizeTokenTag(token);
-    const language = getTokenLanguage(token);
+    if (!isFencedBlock(token)) return;
+    if (!META_LANGUAGES.includes(getTokenLanguage(token).toLowerCase())) return;
+    if (isSkipped(token)) return;
 
-    const isMetaBlock = normalizedTag === Tag.codeBlock;
-    const supported = META_LANGUAGES.includes(language.toLowerCase());
-    const isSkipped = token.info?.split(' ').slice(1).includes('skip');
-
-    if (isMetaBlock && (token.type === 'fence' || token.type === 'code_block') && supported && !isSkipped) {
-        const index = tokenIndex.get(input);
-        $p.set(input, '/ranges/metaBlocks/-', [index, index]);
-    }
+    const index = tokenIndex.get(input);
+    $p.set(input, '/ranges/metaBlocks/-', [index, index]);
 }
 
 const checkSchemaBlock = (input: RangeFinderInput) => {
     const token = input.ranges.token;
-    const normalizedTag = normalizeTokenTag(token);
-    const language = getTokenLanguage(token);
+    if (!isFencedBlock(token)) return;
+    if (!SCHEMA_LANGUAGES.includes(getTokenLanguage(token).toLowerCase())) return;
+    // Schema blocks intentionally ignore 'skip' — a schema is always needed if present
 
-    const isCodeBlock = normalizedTag === Tag.codeBlock;
-    const isSchema = SCHEMA_LANGUAGES.includes(language.toLowerCase());
-
-    if (isCodeBlock && (token.type === 'fence' || token.type === 'code_block') && isSchema) {
-        const index = tokenIndex.get(input);
-        $p.set(input, '/ranges/schemaBlocks/-', [index, index]);
-    }
+    const index = tokenIndex.get(input);
+    $p.set(input, '/ranges/schemaBlocks/-', [index, index]);
 }
 
 
