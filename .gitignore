@@ -27,7 +27,6 @@ pipe-*
 /pipes-*
 outputs/
 inputs/
-/.pd/
+.pd/
 repl
 .aider*
-deploy/.pd/
