@@ -35,6 +35,7 @@ import projectMetadata from "./../deno.json" with { type: "json" };
 import { PD_DIR } from "./helpers.ts";
 
 import { pd, std } from "../deps.ts";
+import { readPipedownConfig, writePipedownConfig } from "../pdConfig.ts";
 
 const { process } = pd;
 const version = projectMetadata.version;
@@ -69,23 +70,17 @@ async function pdInit(input: CliInput) {
         if (!(e instanceof Deno.errors.AlreadyExists)) throw e;
     }
 
-    // read global config file, config.json, from the current directory,
-    // if it exists
-    const configPath = std.join(Deno.cwd(), "config.json");
+    // read project config from deno.json "pipedown" property (primary)
+    // or config.json (fallback), if either exists
     input.globalConfig = input.globalConfig || {};
-    try {
-        const config = JSON.parse(await Deno.readTextFile(configPath));
-        Object.assign(input.globalConfig, config);
-    } catch (e) {
-        if (!(e instanceof Deno.errors.NotFound)) throw e;
-    }
+    const config = await readPipedownConfig(Deno.cwd());
+    Object.assign(input.globalConfig, config);
 }
 
 const DEFAULT_TEMPLATE_FILES = ["cli.ts", "server.ts", "worker.ts", "test.ts", "trace.ts"];
 
 async function scaffoldTemplates(input: CliInput) {
     const templatesDir = std.join(Deno.cwd(), "templates");
-    const configPath = std.join(Deno.cwd(), "config.json");
 
     // Only scaffold if templates/ directory doesn't exist yet
     if (await std.exists(templatesDir)) return input;
@@ -101,18 +96,15 @@ async function scaffoldTemplates(input: CliInput) {
         await Deno.writeTextFile(std.join(templatesDir, file), content);
     }
 
-    // Update config.json to include templates
+    // Update config to include templates (prefers deno.json "pipedown", falls back to config.json)
     const templatePaths = DEFAULT_TEMPLATE_FILES.map(f => `./templates/${f}`);
-    let config: Record<string, unknown> = {};
-    try {
-        config = JSON.parse(await Deno.readTextFile(configPath));
-    } catch { /* no existing config.json */ }
+    const config = await readPipedownConfig(Deno.cwd());
 
     const existingTemplates = (config.templates as string[]) || [];
     const newTemplates = templatePaths.filter(t => !existingTemplates.includes(t));
     config.templates = [...existingTemplates, ...newTemplates];
 
-    await Deno.writeTextFile(configPath, JSON.stringify(config, null, 4));
+    await writePipedownConfig(Deno.cwd(), config);
 
     // Update globalConfig so the build picks up the templates
     Object.assign(input.globalConfig, config);

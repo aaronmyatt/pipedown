@@ -68,6 +68,16 @@ PD.utils.renderMarkdownWithAnnotations = function(raw, pipeData) {
     tokens.forEach(function(token) {
       if (token.type === "heading_open" && token.map) {
         var line = token.map[0];
+
+        // Mark every h2 as a step boundary — in pipedown every h2 demarcates
+        // a pipeline step. Steps that are executable get the additional
+        // pd-step-heading class + data-step-index; those without (skipped or
+        // missing a valid language specifier) remain just pd-step-boundary,
+        // which CSS uses to render them in a muted/inactive style.
+        if (token.tag === "h2") {
+          token.attrJoin("class", "pd-step-boundary");
+        }
+
         if (stepsByLine[line] !== undefined) {
           token.attrSet("data-step-index", "" + stepsByLine[line]);
           token.attrJoin("class", "pd-step-heading");

@@ -5,6 +5,7 @@ import * as utils from "./pdUtils.ts";
 import type {Step, WalkOptions, BuildInput} from "./pipedown.d.ts";
 import {defaultTemplateFiles} from "./defaultTemplateFiles.ts";
 import {exportPipe} from "./exportPipe.ts";
+import {readPipedownConfig} from "./pdConfig.ts";
 
 // ── Helpers ──
 
@@ -135,7 +136,7 @@ async function parseMdFiles(input: BuildInput) {
 }
 
 
-// merge parent directory config.json files into the pipe config
+// merge parent directory config (deno.json "pipedown" + config.json) into the pipe config
 async function mergeParentDirConfig(input: BuildInput) {
   if (input.debug) console.log(`Merging parent directory configs for ${input.pipes?.length} pipes...`);
   for (const pipe of (input.pipes || [])) {
@@ -143,15 +144,16 @@ async function mergeParentDirConfig(input: BuildInput) {
     let config = pipe.config;
 
     if (input.debug) console.log(`Merging parent directory config for pipe: ${pipe.name}`);
-    
+
     for (let i = parts.length - 1; i > 0; i--) {
       const parentDir = '/' + std.join(...parts.slice(0, i));
-      const maybeConfigFilePath = std.join(parentDir, "config.json")
-     try {
-        const parentConfig = await Deno.readTextFile(maybeConfigFilePath);
-        config = Object.assign(config || {}, JSON.parse(parentConfig));
+      try {
+        const parentConfig = await readPipedownConfig(parentDir);
+        if (Object.keys(parentConfig).length > 0) {
+          config = Object.assign(config || {}, parentConfig);
+        }
       } catch (_e) {
-        // probably no config file
+        // probably no config in this directory
       }
       const topOfProject = await std.exists(std.join(parentDir, '.pd', 'deno.json'));
       if(topOfProject) break;

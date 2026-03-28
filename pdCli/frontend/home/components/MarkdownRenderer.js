@@ -1,13 +1,19 @@
 // Home MarkdownRenderer component (includes decorateHeadings + injectStepToolbars)
 
 function decorateHeadings(container) {
-  container.querySelectorAll("[data-step-index]").forEach(function(el) {
+  // Wrap ALL step boundary headings (both executable and non-executable) in
+  // a .heading-wrapper div. In pipedown every h2 is a step boundary — those
+  // with data-step-index are executable, those without are skipped or lack a
+  // valid language specifier.
+  container.querySelectorAll("h2.pd-step-boundary").forEach(function(el) {
     if (el.parentNode.classList && el.parentNode.classList.contains("heading-wrapper")) return;
     var wrapper = document.createElement("div");
     wrapper.className = "heading-wrapper";
     el.parentNode.insertBefore(wrapper, el);
     wrapper.appendChild(el);
   });
+
+  // Also wrap the pipe-level h1 heading.
   var h1 = container.querySelector(".pd-pipe-heading");
   if (h1 && !(h1.parentNode.classList && h1.parentNode.classList.contains("heading-wrapper"))) {
     var wrapper = document.createElement("div");
@@ -17,14 +23,76 @@ function decorateHeadings(container) {
   }
 }
 
+// ── Step Section Wrapping ──
+// Wraps each step's full section (from its h2 heading through all content
+// until the next step's h2 heading) inside a `.step-section` div.
+// This allows the toolbar to be revealed when the cursor is anywhere within
+// the step section, not just on the heading itself.
+//
+// Sections whose heading does NOT have a data-step-index are non-executable
+// (skipped or missing a valid language specifier). These receive the
+// additional `step-section--inactive` class so CSS can render them in a
+// muted/faded style.
+// Ref: CSS `.step-section:hover .toolbar-overlay` handles toolbar visibility.
+function wrapStepSections(container) {
+  // Gather ALL heading-wrappers that contain a step boundary heading (h2).
+  // Both executable (data-step-index) and non-executable headings are
+  // included so that every step section gets wrapped. The h1 pipe heading
+  // also lives in a .heading-wrapper but is NOT a step boundary, so it is
+  // excluded by querying for .pd-step-boundary specifically.
+  var stepWrappers = [];
+  container.querySelectorAll("h2.pd-step-boundary").forEach(function(heading) {
+    var wrapper = heading.parentNode;
+    if (wrapper.classList && wrapper.classList.contains("heading-wrapper")) {
+      stepWrappers.push({ el: wrapper, isExecutable: heading.hasAttribute("data-step-index") });
+    }
+  });
+
+  stepWrappers.forEach(function(item, i) {
+    var wrapper = item.el;
+
+    // Idempotency: skip if this heading-wrapper is already inside a .step-section.
+    if (wrapper.parentNode.classList &&
+        wrapper.parentNode.classList.contains("step-section")) return;
+
+    // Create the section container and insert it where the heading-wrapper currently sits.
+    // Non-executable steps get the --inactive modifier class.
+    var section = document.createElement("div");
+    section.className = item.isExecutable ? "step-section" : "step-section step-section--inactive";
+    wrapper.parentNode.insertBefore(section, wrapper);
+    // Move the heading-wrapper into the section.
+    section.appendChild(wrapper);
+
+    // Collect all following siblings until we hit the next step's heading-wrapper
+    // (or another .step-section from a previous pass).
+    var nextEl = stepWrappers[i + 1] ? stepWrappers[i + 1].el : null;
+    while (section.nextSibling) {
+      var sibling = section.nextSibling;
+      // Stop before the next step's heading wrapper.
+      if (sibling === nextEl) break;
+      // Stop before an already-wrapped step section.
+      if (sibling.classList && sibling.classList.contains("step-section")) break;
+      // Safety: stop before any heading-wrapper that holds a step boundary heading.
+      if (sibling.classList && sibling.classList.contains("heading-wrapper") &&
+          sibling.querySelector("h2.pd-step-boundary")) break;
+      section.appendChild(sibling);
+    }
+  });
+}
+
 function injectStepToolbars(container) {
   if (!PD.state.pipeData || !PD.state.pipeData.steps) return;
-  container.querySelectorAll("[data-step-index]").forEach(function(heading) {
-    var idx = parseInt(heading.getAttribute("data-step-index"));
-    if (isNaN(idx)) return;
-    var step = PD.state.pipeData.steps[idx];
-    if (!step) return;
 
+  // Wrap each step section first so hover zones cover full step content.
+  wrapStepSections(container);
+
+  // ── Inject toolbars for ALL step boundary headings ──
+  // Every h2.pd-step-boundary gets a toolbar. Executable steps (those with
+  // data-step-index) get the full button set. Non-executable steps (skipped
+  // or missing a valid language) get the LLM-generation buttons only — this
+  // supports the workflow of writing a heading + description first, then
+  // using the "Code" button to have the LLM generate the code block.
+  container.querySelectorAll("h2.pd-step-boundary").forEach(function(heading) {
     var wrapper = heading.parentNode;
     if (wrapper.querySelector(".toolbar-overlay")) return;
 
@@ -33,24 +101,44 @@ function injectStepToolbars(container) {
     toolbar.innerHTML = "";
     wrapper.appendChild(toolbar);
 
-    m.render(toolbar, [
-      m("button.tb-btn", { onclick: function() { PD.actions.llmAction("step-title", { stepIndex: idx }); } }, "Title"),
-      m("button.tb-btn", { onclick: function() { PD.actions.llmAction("step-description", { stepIndex: idx }); } }, "Describe"),
-      m("button.tb-btn", { onclick: function() { PD.actions.llmAction("step-code", { stepIndex: idx }); } }, "Code"),
-      m("button.tb-btn.primary", { onclick: function() { PD.actions.runToStep(idx); } }, "Run to here"),
-      m("button.tb-btn", {
-        onclick: function() { PD.actions.toggleDSL(idx); m.redraw(); },
-        style: PD.utils.buildDSLLines(step.config).length === 0 ? "opacity: 0.4; pointer-events: none;" : ""
-      }, "DSL"),
-      m("button.tb-btn", { onclick: function() { PD.actions.loadStepTraces(idx); m.redraw(); } }, "I/O")
-    ]);
+    var isExecutable = heading.hasAttribute("data-step-index");
 
-    var extraId = "step-extra-" + idx;
-    var existing = document.getElementById(extraId);
-    if (!existing) {
-      var extra = document.createElement("div");
-      extra.id = extraId;
-      wrapper.parentNode.insertBefore(extra, wrapper.nextSibling);
+    if (isExecutable) {
+      // ── Executable step: full toolbar ──
+      var idx = parseInt(heading.getAttribute("data-step-index"));
+      var step = PD.state.pipeData.steps[idx];
+      if (!step) return;
+
+      m.render(toolbar, [
+        m("button.tb-btn", { onclick: function() { PD.actions.llmAction("step-title", { stepIndex: idx }); } }, "Title"),
+        m("button.tb-btn", { onclick: function() { PD.actions.llmAction("step-description", { stepIndex: idx }); } }, "Describe"),
+        m("button.tb-btn", { onclick: function() { PD.actions.llmAction("step-code", { stepIndex: idx }); } }, "Code"),
+        m("button.tb-btn.primary", { onclick: function() { PD.actions.runToStep(idx); } }, "Run to here"),
+        m("button.tb-btn", {
+          onclick: function() { PD.actions.toggleDSL(idx); m.redraw(); },
+          style: PD.utils.buildDSLLines(step.config).length === 0 ? "opacity: 0.4; pointer-events: none;" : ""
+        }, "DSL"),
+        m("button.tb-btn", { onclick: function() { PD.actions.loadStepTraces(idx); m.redraw(); } }, "I/O")
+      ]);
+
+      var extraId = "step-extra-" + idx;
+      var existing = document.getElementById(extraId);
+      if (!existing) {
+        var extra = document.createElement("div");
+        extra.id = extraId;
+        wrapper.parentNode.insertBefore(extra, wrapper.nextSibling);
+      }
+    } else {
+      // ── Non-executable step: LLM-generation buttons only ──
+      // Pass headingName so the backend can locate the heading by text rather
+      // than by stepIndex. Runtime buttons (Run, DSL, I/O) are omitted since
+      // there is no compiled step to operate on.
+      var headingName = heading.textContent.trim();
+      m.render(toolbar, [
+        m("button.tb-btn", { onclick: function() { PD.actions.llmAction("step-title", { headingName: headingName }); } }, "Title"),
+        m("button.tb-btn", { onclick: function() { PD.actions.llmAction("step-description", { headingName: headingName }); } }, "Describe"),
+        m("button.tb-btn", { onclick: function() { PD.actions.llmAction("step-code", { headingName: headingName }); } }, "Code")
+      ]);
     }
   });
 

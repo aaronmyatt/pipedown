@@ -126,7 +126,7 @@ export type StepConfig = {
 
 export type Steps = Step[];
 
-/** Pipeline configuration from JSON blocks and config.json files. */
+/** Pipeline configuration from JSON blocks, deno.json "pipedown" property, or config.json files. */
 export type PipeConfig = {
     [key: string]: unknown;
     /** Test input objects used by `pd test`. Each may have a `_name` for labeling. */

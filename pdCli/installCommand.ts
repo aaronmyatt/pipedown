@@ -28,6 +28,7 @@ interface InstalledPackage {
   archivePath: string;
   packageDir: string;
   entry: string;
+  exports?: Record<string, string>;
 }
 
 type InstalledRegistry = Record<string, InstalledPackage>;
@@ -181,6 +182,7 @@ export async function installCommand(input: CliInput) {
       archivePath: absArchivePath,
       packageDir: std.relative(projectDir, packageDir),
       entry: manifest.entry,
+      exports: manifest.exports,
     };
     await writeInstalled(projectDir, installed);
 

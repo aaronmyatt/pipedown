@@ -54,11 +54,47 @@
   position: relative;
 }
 
+/* Step section wrappers — each step's heading + body content is grouped
+   inside a .step-section div so the toolbar appears when the cursor is
+   anywhere from the h2 heading down to the start of the next step. */
+.step-section {
+  position: relative;
+}
+
+/* Non-executable step sections — steps that are skipped or lack a valid
+   language specifier (ts/js). Rendered with reduced opacity, a left border
+   accent, and a subtle "inactive" badge on the heading to make it clear
+   these sections are not part of the pipeline execution. */
+.step-section--inactive {
+  opacity: 0.55;
+  border-left: 3px solid var(--surface-4);
+  padding-left: var(--size-2);
+  margin-left: calc(-1 * var(--size-2) - 3px);
+}
+.step-section--inactive:hover {
+  opacity: 0.75;
+}
+/* Badge appended after the heading text via CSS pseudo-element */
+.step-section--inactive > .heading-wrapper > h2::after {
+  content: "inactive";
+  display: inline-block;
+  margin-left: var(--size-2);
+  font-size: var(--font-size-00);
+  font-weight: var(--font-weight-4);
+  color: var(--text-2);
+  background: var(--surface-3);
+  padding: 2px var(--size-1);
+  border-radius: var(--radius-1);
+  vertical-align: middle;
+}
+
 /* Heading wrappers for toolbar positioning */
 .heading-wrapper {
   position: relative;
 }
-.heading-wrapper:hover .toolbar-overlay {
+
+/* Reveal toolbar when hovering anywhere inside the step section */
+.step-section:hover > .heading-wrapper > .toolbar-overlay {
   opacity: 1;
   pointer-events: all;
 }

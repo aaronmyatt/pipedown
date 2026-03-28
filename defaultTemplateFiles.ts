@@ -32,6 +32,44 @@ async function writeDenoImportMap(input: BuildInput) {
     }
   }
 
+  // Resolve installed packages under @pkg/ prefix
+  try {
+    const raw = await Deno.readTextFile(".pipedown/installed.json");
+    const installed: Record<string, { entry: string; packageDir: string; exports?: Record<string, string> }> = JSON.parse(raw);
+
+    for (const [pkgName, pkg] of Object.entries(installed)) {
+      const pkgPdDir = std.join(pkg.packageDir, ".pd");
+      const entryStem = std.basename(pkg.entry).replace(/\.md$/, "");
+
+      // Collect all pipes built in this package
+      const pipes: Array<{ name: string; path: string }> = [];
+      try {
+        for await (const e of std.walk(pkgPdDir, { exts: [".ts"] })) {
+          if (!e.path.endsWith("index.ts")) continue;
+          const name = std.dirname(e.path).split("/").pop()!;
+          pipes.push({ name, path: "../" + e.path });
+        }
+      } catch {
+        continue; // package .pd/ not found — not built yet, skip
+      }
+
+      // @pkg/{pkgName}/{pipeName} for each pipe in the package
+      for (const pipe of pipes) {
+        input.importMap.imports[`@pkg/${pkgName}/${pipe.name}`] = pipe.path;
+      }
+
+      // @pkg/{pkgName} shorthand for the entry pipe
+      const entryPipe = pipes.find(p => p.name === entryStem)
+        || pipes.find(p => p.name.toLowerCase() === entryStem.toLowerCase())
+        || (pipes.length === 1 ? pipes[0] : null);
+      if (entryPipe) {
+        input.importMap.imports[`@pkg/${pkgName}`] = entryPipe.path;
+      }
+    }
+  } catch {
+    // No installed.json — no packages installed, skip
+  }
+
   await Deno.writeTextFile(
     std.join(PD_DIR, "deno.json"),
     JSON.stringify({

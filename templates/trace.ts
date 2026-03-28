@@ -145,12 +145,28 @@ pipe.stages = originalStages.map((stage, index) => {
 // --- Resolve project config ---
 
 function readProjectConfig(): Record<string, unknown> {
+  const projectRoot = "../../"; // .pd/<pipeName>/ -> project root
+  let base: Record<string, unknown> = {};
+
+  // Try deno.json -> pipedown first
   try {
-    const configText = Deno.readTextFileSync("../../config.json");
-    return JSON.parse(configText);
-  } catch {
-    return {};
-  }
+    const raw = JSON.parse(
+      Deno.readTextFileSync(projectRoot + "deno.json"),
+    );
+    if (raw.pipedown && typeof raw.pipedown === "object") {
+      base = raw.pipedown;
+    }
+  } catch { /* not found */ }
+
+  // Layer config.json on top (override)
+  try {
+    const legacy = JSON.parse(
+      Deno.readTextFileSync(projectRoot + "config.json"),
+    );
+    Object.assign(base, legacy);
+  } catch { /* not found */ }
+
+  return base;
 }
 
 function resolveProjectName(config: Record<string, unknown>): string {
