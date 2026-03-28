@@ -82,13 +82,29 @@ Please provide only the improved code without any explanation or markdown format
 }
 
 export async function callLLM(prompt: string): Promise<string> {
+  // Pass the prompt via stdin instead of as a positional argument.
+  // The `llm` CLI treats extra positional args as an error, and multi-line
+  // prompts with spaces/newlines get split into multiple args by Deno.Command.
+  // Piping via stdin avoids shell-escaping issues entirely.
+  // Ref: https://llm.datasette.io/en/stable/usage.html
   const command = new Deno.Command("llm", {
-    args: ["-m", "claude-3.7-sonnet", "--schema", "code,", prompt],
+    args: ["-m", "claude-sonnet-4.6", "-x", "code"],
+    stdin: "piped",
     stdout: "piped",
     stderr: "piped",
   });
-  
-  const { code, stdout, stderr } = await command.output();
+
+  // Spawn the process so we can write to stdin before awaiting output.
+  // Deno.Command.spawn() returns a child process with writable stdin.
+  // Ref: https://docs.deno.com/api/deno/~/Deno.Command.prototype.spawn
+  const child = command.spawn();
+
+  // Write the prompt to stdin and close the stream to signal EOF.
+  const writer = child.stdin.getWriter();
+  await writer.write(new TextEncoder().encode(prompt));
+  await writer.close();
+
+  const { code, stdout, stderr } = await child.output();
   console.log(std.colors.brightBlue(`LLM command executed with code: ${code}`));
   
   if (code !== 0) {
