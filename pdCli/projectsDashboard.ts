@@ -42,7 +42,8 @@ export async function scanProjectPipes(projectPath: string): Promise<PipeInfo[]>
       skip: [SKIP_PATTERN, /README\.md$/i],
     })) {
       const rel = std.relative(projectPath, entry.path);
-      const name = std.parsePath(rel).name;
+      const parsed = std.parsePath(rel);
+      const name = parsed.dir ? std.join(parsed.dir, parsed.name) : parsed.name;
       let mtime: string | null = null;
       try {
         const stat = await Deno.stat(entry.path);
