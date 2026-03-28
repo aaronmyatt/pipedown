@@ -580,7 +580,7 @@ export function projectsPage(): string {
         return m("div.layout", [
           m("div.topbar", [
             m("h1", "Pipedown"),
-            m("a", { href: "/" }, "Services"),
+            m("a", { href: "/" }, "Home"),
             m("a", { href: "/traces" }, "Traces")
           ]),
           m(Breadcrumb),

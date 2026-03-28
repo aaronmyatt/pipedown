@@ -20,10 +20,11 @@ Examples:
   pd llm myScript "API Call" "Optimize this API call for better performance"
 `;
 
-async function loadPipeContext(markdownFile: string) {
-  const pipeDir = std.join(PD_DIR, markdownFile);
+export async function loadPipeContext(markdownFile: string, projectPath?: string) {
+  const baseDir = projectPath ? std.join(projectPath, ".pd") : PD_DIR;
+  const pipeDir = std.join(baseDir, markdownFile);
   const indexJsonPath = std.join(pipeDir, "index.json");
-  
+
   try {
     const pipeData = JSON.parse(await Deno.readTextFile(indexJsonPath));
     return pipeData.steps || [];
@@ -32,7 +33,7 @@ async function loadPipeContext(markdownFile: string) {
   }
 }
 
-function findTargetStep(steps: any[], target: string) {
+export function findTargetStep(steps: any[], target: string) {
   // Try to parse as index first
   const index = parseInt(target);
   if (!isNaN(index)) {
@@ -56,7 +57,7 @@ function findTargetStep(steps: any[], target: string) {
   return { step: steps[stepIndex], index: stepIndex };
 }
 
-function buildContextPrompt(steps: any[], targetIndex: number, userPrompt: string) {
+export function buildContextPrompt(steps: any[], targetIndex: number, userPrompt: string) {
   // Get preceding steps for context
   const precedingSteps = steps.slice(0, targetIndex);
   const targetStep = steps[targetIndex];
@@ -80,7 +81,7 @@ User request: ${userPrompt}
 Please provide only the improved code without any explanation or markdown formatting.`;
 }
 
-async function callLLM(prompt: string): Promise<string> {
+export async function callLLM(prompt: string): Promise<string> {
   const command = new Deno.Command("llm", {
     args: ["-m", "claude-3.7-sonnet", "--schema", "code,", prompt],
     stdout: "piped",

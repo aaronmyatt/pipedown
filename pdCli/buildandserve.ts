@@ -5,6 +5,8 @@ import { pdBuild } from "../pdBuild.ts";
 import { reportErrors } from "./reportErrors.ts";
 import { scanTraces, readTrace, tracePage } from "./traceDashboard.ts";
 import { enrichProjects, readProjectsRegistry, scanProjectPipes, readPipeMarkdown, projectsPage } from "./projectsDashboard.ts";
+import { scanRecentPipes, readPipeIndex, recentStepTraces, homePage } from "./homeDashboard.ts";
+import { loadPipeContext, findTargetStep, buildContextPrompt, callLLM } from "./llmCommand.ts";
 
 let _controller: ReadableStreamDefaultController<string> | null = null;
 
@@ -17,240 +19,41 @@ const lazyIO = std.debounce(async (input = { errors: [] }) => {
   input.errors = [];
 }, 200);
 
-const page = (scriptsPaths: string[]) =>
-  `<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>Pipedown — Services</title>
-  <meta name="description" content="Pipedown"/>
-  <link rel="stylesheet" href="https://unpkg.com/open-props"/>
-  <link rel="stylesheet" href="https://unpkg.com/open-props/normalize.min.css"/>
-  <script src="https://unpkg.com/mithril/mithril.js"></script>
-  <style>
-    body {
-      margin: 0;
-      font-family: var(--font-sans);
-      background: var(--surface-1);
-      color: var(--text-1);
-    }
-    .layout {
-      display: grid;
-      grid-template-columns: 280px 1fr;
-      grid-template-rows: auto 1fr;
-      min-height: 100vh;
-    }
-    .topbar {
-      grid-column: 1 / -1;
-      display: flex;
-      align-items: center;
-      gap: var(--size-3);
-      padding: var(--size-2) var(--size-4);
-      background: var(--surface-2);
-      border-block-end: var(--border-size-1) solid var(--surface-3);
-    }
-    .topbar h1 {
-      font-size: var(--font-size-3);
-      margin: 0;
-    }
-    .topbar a {
-      color: var(--link);
-      text-decoration: none;
-      font-size: var(--font-size-1);
-    }
-    .topbar a:hover { text-decoration: underline; }
-    .sidebar {
-      background: var(--surface-2);
-      padding: var(--size-3);
-      overflow-y: auto;
-      border-inline-end: var(--border-size-1) solid var(--surface-3);
-    }
-    .pipe-item {
-      display: flex;
-      align-items: center;
-      gap: var(--size-2);
-      padding: var(--size-2);
-      border-radius: var(--radius-2);
-      margin-block-end: var(--size-1);
-    }
-    .pipe-item:hover { background: var(--surface-3); }
-    .pipe-item.active { background: var(--surface-4); }
-    .pipe-name {
-      cursor: pointer;
-      font-size: var(--font-size-1);
-      font-family: var(--font-mono);
-      color: var(--text-2);
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      flex: 1;
-    }
-    .pipe-name:hover { color: var(--text-1); }
-    .run-btn {
-      padding: var(--size-1) var(--size-2);
-      border-radius: var(--radius-2);
-      border: var(--border-size-1) solid var(--surface-4);
-      background: var(--surface-1);
-      color: var(--text-1);
-      cursor: pointer;
-      font-size: var(--font-size-0);
-      white-space: nowrap;
-    }
-    .run-btn:hover { background: var(--surface-3); }
-    .main-content {
-      padding: var(--size-4);
-      overflow: auto;
-    }
-    .main-content pre {
-      font-family: var(--font-mono);
-      font-size: var(--font-size-1);
-      background: var(--surface-2);
-      padding: var(--size-3);
-      border-radius: var(--radius-2);
-      overflow-x: auto;
-      white-space: pre-wrap;
-      word-break: break-word;
-    }
-    .main-content iframe {
-      width: 100%;
-      height: calc(100vh - 80px);
-      border: none;
-      border-radius: var(--radius-2);
-    }
-    .empty-state {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      height: 100%;
-      color: var(--text-2);
-      font-size: var(--font-size-2);
-    }
-  </style>
-  <script>
-    var scriptsPaths = ${JSON.stringify(scriptsPaths)};
-    document.addEventListener("DOMContentLoaded", function() {
-      scriptsPaths.forEach(function(path) {
-        if (path.includes('iife')) {
-          var script = document.createElement('script');
-          script.src = path;
-          document.body.appendChild(script);
-        }
-      });
-    });
-  </script>
-</head>
-<body>
-  <div id="app"></div>
-  <script>
-  (function() {
-    var state = {
-      currentPipe: null,
-      contentType: null, // "json" | "html" | "source"
-      content: null
-    };
+// Helper to resolve a project path from the registry by name
+async function resolveProject(name: string): Promise<{ name: string; path: string } | null> {
+  const raw = await readProjectsRegistry();
+  return raw.find((p) => p.name === name) || null;
+}
 
-    function runPipe(path) {
-      state.currentPipe = path;
-      state.content = null;
-      state.contentType = null;
-      m.redraw();
-
-      (async function() {
-        var pipe;
-        if (path.includes('iife')) {
-          var scriptName = path.split('/').at(-2);
-          pipe = PD[scriptName].pipe;
-        }
-        if (path.includes('esm')) {
-          var mod = await import(location.origin + '/' + path + '?' + Math.random());
-          pipe = mod.pipe;
-        }
-        var output = await pipe.process({ body: {}, responseOptions: { headers: {} }, mode: 'preview' });
-        if (output.body) {
-          if (output.responseOptions.headers['content-type'] === 'application/json') {
-            state.contentType = 'json';
-            state.content = output.body;
-          } else {
-            state.contentType = 'html';
-            state.content = output.body;
-          }
-        }
-        m.redraw();
-      })();
-    }
-
-    function fetchFile(path) {
-      state.currentPipe = path;
-      state.contentType = 'source';
-      fetch(path).then(function(res) { return res.text(); }).then(function(text) {
-        state.content = text;
-        m.redraw();
-      });
-    }
-
-    var PipeList = {
-      view: function() {
-        if (!scriptsPaths.length) {
-          return m("div.sidebar", m("p", { style: "color: var(--text-2); font-size: var(--font-size-1)" },
-            "No pipes built yet. Create a .md pipe file to get started."));
-        }
-        return m("div.sidebar", scriptsPaths.map(function(path) {
-          return m("div.pipe-item" + (state.currentPipe === path ? ".active" : ""), [
-            m("button.run-btn", { onclick: function() { runPipe(path); } }, "Run"),
-            m("span.pipe-name", { onclick: function() { fetchFile(path); } }, path)
-          ]);
-        }));
-      }
-    };
-
-    var OutputView = {
-      view: function() {
-        if (!state.content) {
-          return m("div.main-content", m("div.empty-state", "Select a pipe to run or view"));
-        }
-        if (state.contentType === 'json' || state.contentType === 'source') {
-          return m("div.main-content", m("pre", state.content));
-        }
-        if (state.contentType === 'html') {
-          return m("div.main-content",
-            m("iframe", {
-              sandbox: "allow-scripts allow-same-origin",
-              allow: "fullscreen",
-              srcdoc: state.content
-            })
-          );
+// Helper to run a shell command and stream output back
+function spawnAndStream(cmd: string[], cwd?: string): Response {
+  const process = new Deno.Command(cmd[0], {
+    args: cmd.slice(1),
+    stdout: "piped",
+    stderr: "piped",
+    cwd,
+  });
+  const child = process.spawn();
+  const merged = new ReadableStream({
+    async start(controller) {
+      const enc = new TextEncoder();
+      const dec = new TextDecoder();
+      async function pump(stream: ReadableStream<Uint8Array>) {
+        const reader = stream.getReader();
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          controller.enqueue(enc.encode(dec.decode(value)));
         }
       }
-    };
-
-    var Layout = {
-      view: function() {
-        return m("div.layout", [
-          m("div.topbar", [
-            m("h1", "Pipedown"),
-            m("a", { href: "/projects" }, "Projects"),
-            m("a", { href: "/traces" }, "Traces")
-          ]),
-          m(PipeList),
-          m(OutputView)
-        ]);
-      }
-    };
-
-    m.mount(document.getElementById("app"), Layout);
-
-    // SSE hot reload
-    var eventSource = new EventSource('/sse');
-    eventSource.onmessage = function(event) {
-      if (event.data === 'reload' && state.currentPipe) {
-        runPipe(state.currentPipe);
-      }
-    };
-  })();
-  </script>
-</body>
-</html>`;
+      await Promise.all([pump(child.stdout), pump(child.stderr)]);
+      controller.close();
+    },
+  });
+  return new Response(merged, {
+    headers: { "content-type": "text/plain; charset=utf-8" },
+  });
+}
 
 async function watchFs(input: BuildInput) {
   for await (const event of Deno.watchFs(Deno.cwd(), { recursive: true })) {
@@ -314,6 +117,208 @@ export async function serve(input: BuildInput){
 
   const handler = async (request: Request) => {
     const url = new URL(request.url);
+
+    // --- Home dashboard API routes ---
+
+    // Recent pipes (flat list across all projects)
+    if (url.pathname === "/api/recent-pipes") {
+      const pipes = await scanRecentPipes();
+      return new Response(JSON.stringify(pipes), {
+        headers: { "content-type": "application/json" },
+      });
+    }
+
+    // Pipe index.json (parsed pipe data for toolbar binding)
+    if (url.pathname.match(/^\/api\/projects\/[^/]+\/pipes\/[^/]+\/index$/)) {
+      const segments = url.pathname.split("/");
+      const projectName = decodeURIComponent(segments[3]);
+      const pipeName = decodeURIComponent(segments[5]);
+      const project = await resolveProject(projectName);
+      if (!project) return new Response("Project not found", { status: 404 });
+      const data = await readPipeIndex(project.path, pipeName);
+      if (!data) return new Response("Pipe index not found (run pd build first)", { status: 404 });
+      return new Response(JSON.stringify(data), {
+        headers: { "content-type": "application/json" },
+      });
+    }
+
+    // Step traces for a specific pipe
+    if (url.pathname.match(/^\/api\/projects\/[^/]+\/pipes\/[^/]+\/traces$/)) {
+      const segments = url.pathname.split("/");
+      const projectName = decodeURIComponent(segments[3]);
+      const pipeName = decodeURIComponent(segments[5]);
+      const stepParam = url.searchParams.get("step");
+      const limitParam = url.searchParams.get("limit");
+      const stepIndex = stepParam !== null ? parseInt(stepParam) : 0;
+      const limit = limitParam ? parseInt(limitParam) : 5;
+      const data = await recentStepTraces(projectName, pipeName, stepIndex, limit);
+      return new Response(JSON.stringify(data), {
+        headers: { "content-type": "application/json" },
+      });
+    }
+
+    // --- Action API routes (POST) ---
+
+    if (request.method === "POST" && url.pathname === "/api/llm") {
+      try {
+        const body = await request.json();
+        const { action, project: projectName, pipe: pipeName, stepIndex, prompt: userPrompt } = body;
+        const project = await resolveProject(projectName);
+        if (!project) return new Response("Project not found", { status: 404 });
+
+        const steps = await loadPipeContext(pipeName, project.path);
+        let result: string;
+
+        if (action === "description") {
+          const contextPrompt = `Generate a concise description for this pipeline based on its steps:\n${JSON.stringify(steps.map((s: { name: string; code: string }) => ({ name: s.name, code: s.code })), null, 2)}\n\nProvide only the description text, no markdown formatting.`;
+          result = await callLLM(contextPrompt);
+        } else if (action === "schema") {
+          const contextPrompt = `Generate a Zod schema for the input/output of this pipeline:\n${JSON.stringify(steps.map((s: { name: string; code: string }) => ({ name: s.name, code: s.code })), null, 2)}\n\nProvide only the Zod schema code.`;
+          result = await callLLM(contextPrompt);
+        } else if (action === "tests") {
+          const contextPrompt = `Generate test input objects for this pipeline:\n${JSON.stringify(steps.map((s: { name: string; code: string }) => ({ name: s.name, code: s.code })), null, 2)}\n\nProvide JSON array of test inputs.`;
+          result = await callLLM(contextPrompt);
+        } else if (action === "step-title" && stepIndex !== undefined) {
+          const { step } = findTargetStep(steps, "" + stepIndex);
+          const contextPrompt = `Suggest a better title for this pipeline step:\nCurrent title: ${step.name}\nCode:\n${step.code}\n\nProvide only the title text.`;
+          result = await callLLM(contextPrompt);
+        } else if (action === "step-description" && stepIndex !== undefined) {
+          const { step } = findTargetStep(steps, "" + stepIndex);
+          const contextPrompt = `Write a brief description for this pipeline step:\nTitle: ${step.name}\nCode:\n${step.code}\n\nProvide only the description text.`;
+          result = await callLLM(contextPrompt);
+        } else if (action === "step-code" && stepIndex !== undefined) {
+          const contextPrompt = buildContextPrompt(steps, stepIndex, userPrompt || "Improve this code");
+          result = await callLLM(contextPrompt);
+        } else {
+          return new Response("Unknown action: " + action, { status: 400 });
+        }
+
+        return new Response(JSON.stringify({ result }), {
+          headers: { "content-type": "application/json" },
+        });
+      } catch (e) {
+        return new Response(JSON.stringify({ error: (e as Error).message }), {
+          status: 500,
+          headers: { "content-type": "application/json" },
+        });
+      }
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/run") {
+      try {
+        const body = await request.json();
+        const project = await resolveProject(body.project);
+        if (!project) return new Response("Project not found", { status: 404 });
+        const pdPath = std.join(project.path, ".pd", body.pipe, "index.ts");
+        const configPath = std.join(project.path, ".pd", "deno.json");
+        return spawnAndStream(
+          [Deno.execPath(), "run", "--unstable-kv", "-A", "-c", configPath, "--no-check", pdPath],
+          project.path,
+        );
+      } catch (e) {
+        return new Response("Error: " + (e as Error).message, { status: 500 });
+      }
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/run-step") {
+      try {
+        const body = await request.json();
+        const project = await resolveProject(body.project);
+        if (!project) return new Response("Project not found", { status: 404 });
+
+        const pipeDir = std.join(project.path, ".pd", body.pipe);
+        const indexJsonPath = std.join(pipeDir, "index.json");
+        const indexTsPath = std.join(pipeDir, "index.ts");
+        const configPath = std.join(project.path, ".pd", "deno.json");
+
+        const pipeData = JSON.parse(await Deno.readTextFile(indexJsonPath));
+        const stepIndex = body.stepIndex;
+        if (stepIndex >= pipeData.steps.length) {
+          return new Response("Step index out of range", { status: 400 });
+        }
+
+        const stepFuncNames = pipeData.steps
+          .slice(0, stepIndex + 1)
+          .map((s: { funcName: string }) => s.funcName);
+
+        const inputJson = body.input || "{}";
+        const escapedInput = inputJson.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+
+        const evalScript = `
+import { ${stepFuncNames.join(", ")} } from "file://${indexTsPath}";
+import rawPipe from "file://${indexJsonPath}" with {type: "json"};
+const input = JSON.parse('${escapedInput}');
+const opts = rawPipe;
+const steps = [${stepFuncNames.join(", ")}];
+for (const step of steps) {
+  try { await step(input, opts); } catch (e) {
+    input.errors = input.errors || [];
+    input.errors.push({ func: step.name, message: e.message });
+  }
+}
+console.log(JSON.stringify(input, null, 2));
+`;
+        const tmpFile = std.join(pipeDir, `_run_step_${Date.now()}.ts`);
+        await Deno.writeTextFile(tmpFile, evalScript);
+        try {
+          return spawnAndStream(
+            [Deno.execPath(), "run", "--unstable-kv", "-A", "-c", configPath, "--no-check", tmpFile],
+            project.path,
+          );
+        } finally {
+          // Cleanup is tricky with streaming; schedule it
+          setTimeout(() => Deno.remove(tmpFile).catch(() => {}), 30000);
+        }
+      } catch (e) {
+        return new Response("Error: " + (e as Error).message, { status: 500 });
+      }
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/test") {
+      try {
+        const body = await request.json();
+        const project = await resolveProject(body.project);
+        if (!project) return new Response("Project not found", { status: 404 });
+        return spawnAndStream(
+          [Deno.execPath(), "test", "--unstable-kv", "-A", "--no-check"],
+          project.path,
+        );
+      } catch (e) {
+        return new Response("Error: " + (e as Error).message, { status: 500 });
+      }
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/pack") {
+      try {
+        const body = await request.json();
+        const project = await resolveProject(body.project);
+        if (!project) return new Response("Project not found", { status: 404 });
+        return spawnAndStream(
+          [Deno.execPath(), "run", "-A", "--no-check", "jsr:@niceguyyo/pipedown", "pack"],
+          project.path,
+        );
+      } catch (e) {
+        return new Response("Error: " + (e as Error).message, { status: 500 });
+      }
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/open-editor") {
+      try {
+        const body = await request.json();
+        const filePath = body.filePath;
+        // Validate path is within a registered project
+        const projects = await readProjectsRegistry();
+        const isValid = projects.some((p) => filePath.startsWith(p.path));
+        if (!isValid) return new Response("Path not within a registered project", { status: 403 });
+        const cmd = new Deno.Command("code", { args: [filePath] });
+        await cmd.output();
+        return new Response("OK");
+      } catch (e) {
+        return new Response("Error: " + (e as Error).message, { status: 500 });
+      }
+    }
+
+    // --- Existing API routes ---
 
     // Projects API: list all projects enriched with mtime
     if (url.pathname === "/api/projects") {
@@ -440,18 +445,9 @@ export async function serve(input: BuildInput){
       return tellClientToReload();
     }
 
-    // Default: services page
-    const scriptsPaths: string[] = [];
-    for await (const entry of std.walk("./.pd")) {
-      if (entry.path.endsWith(".js")) {
-        scriptsPaths.push(entry.path);
-      }
-    }
-
-    return new Response(page(scriptsPaths), {
-      headers: {
-        "content-type": "text/html",
-      },
+    // Default: home dashboard (recent pipes with toolbar overlays)
+    return new Response(homePage(), {
+      headers: { "content-type": "text/html" },
     });
   }
 
