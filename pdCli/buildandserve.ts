@@ -2,11 +2,16 @@ import type { BuildInput } from "../pipedown.d.ts";
 import { std } from "../deps.ts";
 
 import { pdBuild } from "../pdBuild.ts";
+// pipeToMarkdown converts a Pipe JSON object back to markdown source.
+// Used here to persist LLM-generated changes (descriptions, schemas, code, etc.)
+// back to the original .md file — the same round-trip mechanism that `pd sync` uses.
+// Ref: see pipeToMarkdown.ts for lossless vs lossy reconstruction modes
+import { pipeToMarkdown } from "../pipeToMarkdown.ts";
 import { reportErrors } from "./reportErrors.ts";
 import { scanTraces, readTrace, tracePage } from "./traceDashboard.ts";
 import { enrichProjects, readProjectsRegistry, scanProjectPipes, readPipeMarkdown, projectsPage } from "./projectsDashboard.ts";
 import { scanRecentPipes, readPipeIndex, recentStepTraces, homePage } from "./homeDashboard.ts";
-import { loadPipeContext, findTargetStep, buildContextPrompt, callLLM } from "./llmCommand.ts";
+import { findTargetStep, buildContextPrompt, callLLM } from "./llmCommand.ts";
 
 let _controller: ReadableStreamDefaultController<string> | null = null;
 
@@ -57,6 +62,75 @@ async function buildProject(projectPath: string): Promise<boolean> {
     );
     return false;
   }
+}
+
+/**
+ * Strips markdown code fences from LLM output.
+ *
+ * LLMs are instructed to return bare code/schema, but often wrap their
+ * response in fenced code blocks like ```ts ... ``` or ```zod ... ```.
+ * This helper removes the outermost fence so the content can be stored
+ * directly in the Pipe JSON fields (code, schema, etc.).
+ *
+ * @param text - Raw LLM output that may be wrapped in code fences
+ * @returns The unwrapped content, or the original text if no fences found
+ */
+function stripCodeFences(text: string): string {
+  const trimmed = text.trim();
+  // Match opening fence with optional language tag and closing fence
+  // Ref: CommonMark spec § 4.5 — fenced code blocks
+  // https://spec.commonmark.org/0.31.2/#fenced-code-blocks
+  const match = trimmed.match(/^```\w*\s*\n([\s\S]*?)\n```\s*$/);
+  if (match) return match[1];
+  return trimmed;
+}
+
+/**
+ * Builds a context header for step-level LLM prompts.
+ *
+ * Step-level actions (step-title, step-description, step-code) need to
+ * understand the broader pipeline context to generate relevant output.
+ * This header includes:
+ * - Pipe name and description (so the LLM knows the pipeline's purpose)
+ * - Schema (so the LLM knows the data shape flowing through steps)
+ * - All preceding steps (name, description, code) so the LLM understands
+ *   what has already happened before the target step
+ *
+ * @param pipeData  - Full Pipe object from index.json
+ * @param steps     - The steps array (same as pipeData.steps)
+ * @param stepIndex - Zero-based index of the target step
+ * @returns A formatted context string to prepend to any step-level prompt
+ */
+// deno-lint-ignore no-explicit-any
+function buildPipeContextHeader(pipeData: any, steps: any[], stepIndex: number): string {
+  const parts: string[] = [];
+
+  parts.push("You are working on a step within a markdown-based pipeline.");
+
+  // Pipe-level metadata gives the LLM the "big picture"
+  parts.push(`\nPipeline name: ${pipeData.name || "unnamed"}`);
+  if (pipeData.pipeDescription) {
+    parts.push(`Pipeline description: ${pipeData.pipeDescription}`);
+  }
+  if (pipeData.schema) {
+    parts.push(`Pipeline schema:\n\`\`\`zod\n${pipeData.schema}\n\`\`\``);
+  }
+
+  // Preceding steps provide the sequential context — the LLM needs to
+  // understand what data transformations have already occurred before
+  // the target step so it can generate coherent titles, descriptions,
+  // or code improvements.
+  const preceding = steps.slice(0, stepIndex);
+  if (preceding.length > 0) {
+    parts.push("\nPreceding steps in this pipeline:");
+    preceding.forEach((s: { name: string; description?: string; code: string }, i: number) => {
+      parts.push(`\nStep ${i + 1}: ${s.name}`);
+      if (s.description) parts.push(`Description: ${s.description}`);
+      parts.push(`Code:\n\`\`\`\n${s.code}\n\`\`\``);
+    });
+  }
+
+  return parts.join("\n");
 }
 
 const lazyIO = std.debounce(async (input = { errors: [] }) => {
@@ -217,34 +291,104 @@ export async function serve(input: BuildInput){
         // Optimistic rebuild: recompile .md → .pd/ before LLM reads pipe context
         await buildProject(project.path);
 
-        const steps = await loadPipeContext(pipeName, project.path);
+        // Load the full Pipe object from index.json (not just steps).
+        // We need the complete object — including rawSource, mdPath, sourceMap,
+        // config, schema, etc. — so we can mutate it and use pipeToMarkdown()
+        // to write the LLM result back to the source .md file.
+        // Ref: see syncCommand.ts for the same load-mutate-write pattern
+        const pipeDir = std.join(project.path, ".pd", pipeName);
+        const indexJsonPath = std.join(pipeDir, "index.json");
+        const pipeData = JSON.parse(await Deno.readTextFile(indexJsonPath));
+        const steps = pipeData.steps || [];
+
         let result: string;
+        // Track whether the sync succeeded so we can inform the frontend
+        let synced = false;
 
         if (action === "description") {
           const contextPrompt = `Generate a concise description for this pipeline based on its steps:\n${JSON.stringify(steps.map((s: { name: string; code: string }) => ({ name: s.name, code: s.code })), null, 2)}\n\nProvide only the description text, no markdown formatting.`;
           result = await callLLM(contextPrompt);
+          // Persist: set the pipe-level description field
+          pipeData.pipeDescription = result;
         } else if (action === "schema") {
           const contextPrompt = `Generate a Zod schema for the input/output of this pipeline:\n${JSON.stringify(steps.map((s: { name: string; code: string }) => ({ name: s.name, code: s.code })), null, 2)}\n\nProvide only the Zod schema code.`;
           result = await callLLM(contextPrompt);
+          // Strip markdown code fences if the LLM wrapped the output.
+          // The LLM is instructed to return only the schema code, but may
+          // include ```zod ... ``` or ```ts ... ``` fences anyway.
+          pipeData.schema = stripCodeFences(result);
         } else if (action === "tests") {
           const contextPrompt = `Generate test input objects for this pipeline:\n${JSON.stringify(steps.map((s: { name: string; code: string }) => ({ name: s.name, code: s.code })), null, 2)}\n\nProvide JSON array of test inputs.`;
           result = await callLLM(contextPrompt);
+          // Parse the LLM's JSON array into config.inputs.
+          // The LLM may return markdown-fenced JSON — strip fences first.
+          try {
+            const cleaned = stripCodeFences(result);
+            const parsed = JSON.parse(cleaned);
+            // Ensure config object exists before setting inputs
+            if (!pipeData.config) pipeData.config = {};
+            pipeData.config.inputs = Array.isArray(parsed) ? parsed : [parsed];
+          } catch {
+            // If parsing fails, skip the sync but still return the raw result
+            // so the user can see what the LLM produced.
+            console.error("Could not parse LLM test output as JSON — skipping sync");
+          }
         } else if (action === "step-title" && stepIndex !== undefined) {
           const { step } = findTargetStep(steps, "" + stepIndex);
-          const contextPrompt = `Suggest a better title for this pipeline step:\nCurrent title: ${step.name}\nCode:\n${step.code}\n\nProvide only the title text.`;
+          // Build a full-context prompt so the LLM understands where this step
+          // sits within the pipeline. Includes pipe name, description, schema,
+          // and all preceding steps — the same context that step-code gets via
+          // buildContextPrompt, but focused on title generation.
+          const pipeContext = buildPipeContextHeader(pipeData, steps, stepIndex);
+          const contextPrompt = `${pipeContext}\nSuggest a better title for this pipeline step:\nCurrent title: ${step.name}\nCode:\n${step.code}\n\nProvide only the title text, no markdown formatting or quotes.`;
           result = await callLLM(contextPrompt);
+          // Persist: update the step's heading name in the pipe data
+          pipeData.steps[stepIndex].name = result.trim();
         } else if (action === "step-description" && stepIndex !== undefined) {
           const { step } = findTargetStep(steps, "" + stepIndex);
-          const contextPrompt = `Write a brief description for this pipeline step:\nTitle: ${step.name}\nCode:\n${step.code}\n\nProvide only the description text.`;
+          // Include full pipeline context so the LLM can write a description
+          // that accurately reflects how this step relates to earlier steps
+          // and the overall pipeline purpose.
+          const pipeContext = buildPipeContextHeader(pipeData, steps, stepIndex);
+          const contextPrompt = `${pipeContext}\nWrite a brief description for this pipeline step:\nTitle: ${step.name}\nCode:\n${step.code}\n\nProvide only the description text, no markdown formatting.`;
           result = await callLLM(contextPrompt);
+          // Persist: set the step's description paragraph
+          pipeData.steps[stepIndex].description = result.trim();
         } else if (action === "step-code" && stepIndex !== undefined) {
-          const contextPrompt = buildContextPrompt(steps, stepIndex, userPrompt || "Improve this code");
+          // buildContextPrompt already includes preceding steps, but we
+          // enhance it with pipe-level metadata (name, description, schema)
+          // so the LLM understands the broader pipeline purpose.
+          const pipeContext = buildPipeContextHeader(pipeData, steps, stepIndex);
+          const codePrompt = buildContextPrompt(steps, stepIndex, userPrompt || "Improve this code");
+          const contextPrompt = `${pipeContext}\n${codePrompt}`;
           result = await callLLM(contextPrompt);
+          // Strip markdown code fences if the LLM wrapped the output.
+          // The prompt asks for code-only, but LLMs often wrap in ```ts ... ```
+          pipeData.steps[stepIndex].code = stripCodeFences(result);
         } else {
           return new Response("Unknown action: " + action, { status: 400 });
         }
 
-        return new Response(JSON.stringify({ result }), {
+        // ── Sync LLM result back to the source markdown file ──
+        // This mirrors the `pd sync` command: convert the mutated Pipe JSON
+        // back to markdown via pipeToMarkdown(), write it to the original .md
+        // path, then rebuild so .pd/ reflects the new source.
+        // Ref: syncCommand.ts for the same pattern
+        if (pipeData.mdPath) {
+          try {
+            const markdown = pipeToMarkdown(pipeData);
+            await Deno.writeTextFile(pipeData.mdPath, markdown);
+            // Rebuild so the .pd/ directory (index.json, index.ts) stays in
+            // sync with the updated markdown source
+            await buildProject(project.path);
+            synced = true;
+          } catch (syncErr) {
+            // Log but don't fail the request — the LLM result is still valid
+            console.error("Sync-back failed:", (syncErr as Error).message);
+          }
+        }
+
+        return new Response(JSON.stringify({ result, synced }), {
           headers: { "content-type": "application/json" },
         });
       } catch (e) {
