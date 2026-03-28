@@ -451,6 +451,8 @@ console.log(JSON.stringify(input, null, 2));
     });
   }
 
+  console.log('wat')
+
   const server = Deno.serve({ handler, port, hostname });
   await server.finished.then(() => console.log("Server closed"));
 }

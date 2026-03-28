@@ -174,16 +174,24 @@ export function checkMinFlags(
     func: (input: CliInput) => Promise<CliInput> | CliInput,
 ): (input: CliInput) => Promise<CliInput> | CliInput {
     return (input: CliInput) => {
+        // ["none"] is a special case that matches when no positional arguments are provided
+        if(input.flags._.length === 0 && flags[0] === "none"){
+            return func(input);
+        }
+
+
         // Check if we have at least the required number of arguments
         if (input.flags._.length < flags.length) {
             return input;
         }       
-
+        
+        
         const flagsMatch = flags.every((flag, index) => {
             return flag === "*" || flag === input.flags._[index];
         });
-
+        
         if (flagsMatch) return func(input);
+
         return input;
     };
 }
