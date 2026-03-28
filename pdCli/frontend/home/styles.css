@@ -31,23 +31,6 @@
   color: var(--indigo-9);
 }
 
-/* View mode tabs */
-.view-tabs {
-  display: flex;
-  gap: var(--size-1);
-  margin-block-end: var(--size-3);
-}
-.view-tab {
-  padding: var(--size-1) var(--size-3);
-  border-radius: var(--radius-2);
-  cursor: pointer;
-  font-size: var(--font-size-1);
-  background: var(--surface-2);
-  border: none;
-  color: var(--text-2);
-}
-.view-tab:hover { background: var(--surface-3); }
-.view-tab.active { background: var(--surface-4); color: var(--text-1); }
 
 /* Markdown viewer extra: position relative for toolbar overlays */
 .md-viewer {
@@ -183,69 +166,73 @@
 .dsl-key { color: var(--indigo-7); }
 .dsl-val { color: var(--green-7); }
 
-/* Output view */
-.output-view pre {
-  font-family: var(--font-mono);
-  font-size: var(--font-size-1);
-  background: var(--surface-2);
-  padding: var(--size-3);
-  border-radius: var(--radius-2);
-  overflow-x: auto;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-.output-view iframe {
-  width: 100%;
-  height: calc(100vh - 140px);
-  border: none;
-  border-radius: var(--radius-2);
-}
-
-/* Operation panel */
-.op-panel {
+/* ── Right-hand sliding drawer ──
+   Unified output surface for all operations (run, run-step, LLM, tests, pack).
+   Fixed-position overlay that slides in from the right edge of the viewport.
+   Uses transform for the animation so the layout grid is unaffected.
+   Ref: Open Props tokens — https://open-props.style */
+.run-drawer {
   position: fixed;
-  bottom: 0;
+  top: 0;
   right: 0;
-  width: calc(100% - 300px);
-  max-height: 300px;
+  bottom: 0;
+  width: 45vw;
+  min-width: 360px;
+  max-width: 700px;
   background: var(--surface-2);
-  border-block-start: var(--border-size-2) solid var(--surface-4);
-  overflow-y: auto;
-  z-index: 30;
+  border-inline-start: var(--border-size-2) solid var(--surface-4);
+  box-shadow: var(--shadow-4);
+  z-index: 40;
   display: flex;
   flex-direction: column;
+  /* Offscreen by default — slides in when .open is added.
+     The extra 20px beyond 100% ensures the left border and shadow are
+     fully hidden even when a scrollbar narrows the viewport. */
+  transform: translateX(calc(100% + 20px));
+  transition: transform 0.25s var(--ease-3);
 }
-.op-panel-header {
+.run-drawer.open {
+  transform: translateX(0);
+}
+
+/* Header bar — sticky so it stays visible while scrolling output */
+.run-drawer-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--size-1) var(--size-3);
+  padding: var(--size-2) var(--size-3);
   background: var(--surface-3);
-  position: sticky;
-  top: 0;
+  border-block-end: var(--border-size-1) solid var(--surface-4);
+  flex-shrink: 0;
 }
-.op-panel-header span {
-  font-size: var(--font-size-0);
+.run-drawer-label {
+  font-size: var(--font-size-1);
   font-weight: var(--font-weight-6);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.op-panel-close {
+.run-drawer-close {
   background: none;
   border: none;
   color: var(--text-2);
   cursor: pointer;
-  font-size: var(--font-size-2);
+  font-size: var(--font-size-3);
   padding: 0 var(--size-1);
+  line-height: 1;
 }
-.op-panel-close:hover { color: var(--text-1); }
-.op-panel-body {
-  padding: var(--size-2) var(--size-3);
+.run-drawer-close:hover { color: var(--text-1); }
+
+/* Scrollable output body */
+.run-drawer-body {
+  padding: var(--size-3);
   font-family: var(--font-mono);
   font-size: var(--font-size-0);
   white-space: pre-wrap;
   word-break: break-word;
   flex: 1;
+  overflow-y: auto;
 }
-.op-panel-body .spinner { color: var(--text-2); }
 
 /* Step traces popover */
 .step-traces {

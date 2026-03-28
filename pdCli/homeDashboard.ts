@@ -75,6 +75,42 @@ export async function recentStepTraces(
   return results;
 }
 
+// ── Pipe-Level Traces ──
+// Returns the top-level input/output from the most recent trace files for a
+// given pipe. Unlike recentStepTraces (which drills into a single step's
+// before/after), this gives the whole-pipeline view.
+// Ref: trace file schema → { input, output, durationMs, stepsTotal, … }
+export async function recentPipeTraces(
+  projectName: string,
+  pipeName: string,
+  limit = 5,
+): Promise<unknown[]> {
+  const traces = await scanTraces();
+  const matching = traces.filter(
+    (t) => t.project === projectName && t.pipe === pipeName,
+  ).slice(0, limit);
+
+  const results: unknown[] = [];
+  for (const entry of matching) {
+    try {
+      const trace = (await readTrace(entry.filePath)) as {
+        input?: unknown;
+        output?: unknown;
+        durationMs?: number;
+        stepsTotal?: number;
+      };
+      results.push({
+        timestamp: entry.timestamp,
+        input: trace.input,
+        output: trace.output,
+        durationMs: trace.durationMs,
+        stepsTotal: trace.stepsTotal,
+      });
+    } catch { /* skip unreadable traces */ }
+  }
+  return results;
+}
+
 export function homePage(): string {
   return `<!doctype html>
 <html lang="en">
@@ -102,9 +138,8 @@ export function homePage(): string {
   <script src="/frontend/home/components/Sidebar.js"><\/script>
   <script src="/frontend/home/components/MarkdownRenderer.js"><\/script>
   <script src="/frontend/home/components/PipeToolbar.js"><\/script>
-  <script src="/frontend/home/components/StepToolbars.js"><\/script>
   <script src="/frontend/home/components/MainContent.js"><\/script>
-  <script src="/frontend/home/components/OperationPanel.js"><\/script>
+  <script src="/frontend/home/components/RunDrawer.js"><\/script>
   <script src="/frontend/home/components/Layout.js"><\/script>
   <script src="/frontend/home/app.js"><\/script>
 </body>

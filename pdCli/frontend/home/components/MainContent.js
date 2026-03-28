@@ -1,4 +1,8 @@
-// Home MainContent component
+// ── Home MainContent component ──
+// Renders the pipe toolbar and markdown source. Output from runs and other
+// operations is now displayed in the RunDrawer (right-hand sliding panel),
+// so this component always shows the markdown view — no more view-mode
+// tab switching.
 PD.components.MainContent = {
   oncreate: function(vnode) {
     if (PD.state.markdownHtml && PD.state.pipeData) {
@@ -7,7 +11,7 @@ PD.components.MainContent = {
     }
   },
   onupdate: function(vnode) {
-    if (PD.state.markdownHtml && PD.state.pipeData && PD.state.viewMode === "markdown") {
+    if (PD.state.markdownHtml && PD.state.pipeData) {
       var viewer = vnode.dom.querySelector(".md-viewer");
       if (viewer) PD.utils.injectStepToolbars(viewer);
     }
@@ -19,39 +23,9 @@ PD.components.MainContent = {
       ]));
     }
 
-    var viewTabs = null;
-    if (PD.state.runOutput) {
-      viewTabs = m(".view-tabs", [
-        m("button.view-tab" + (PD.state.viewMode === "markdown" ? ".active" : ""), {
-          onclick: function() { PD.state.viewMode = "markdown"; }
-        }, "Source"),
-        m("button.view-tab" + (PD.state.viewMode === "output" ? ".active" : ""), {
-          onclick: function() { PD.state.viewMode = "output"; }
-        }, "Output")
-      ]);
-    }
-
-    var content;
-    if (PD.state.viewMode === "output" && PD.state.runOutput) {
-      if (PD.state.runOutputType === "html") {
-        content = m("div.output-view", m("iframe", {
-          sandbox: "allow-scripts allow-same-origin",
-          allow: "fullscreen",
-          srcdoc: PD.state.runOutput
-        }));
-      } else {
-        content = m("div.output-view", m("pre", PD.state.runOutput));
-      }
-    } else {
-      content = [
-        m(PD.components.PipeToolbar),
-        m(PD.components.MarkdownRenderer)
-      ];
-    }
-
     return m("div.detail", [
-      viewTabs,
-      content
+      m(PD.components.PipeToolbar),
+      m(PD.components.MarkdownRenderer)
     ]);
   }
 };

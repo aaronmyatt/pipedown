@@ -11,7 +11,7 @@ PD.components.Layout = {
       ]),
       m(PD.components.Sidebar),
       m(PD.components.MainContent),
-      m(PD.components.OperationPanel)
+      m(PD.components.RunDrawer)
     ]);
   }
 };

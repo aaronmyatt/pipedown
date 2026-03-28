@@ -9,14 +9,28 @@ window.PD = {
     rawMarkdown: null,
     markdownHtml: null,
     markdownLoading: false,
-    viewMode: "markdown",
-    runOutput: null,
-    runOutputType: null,
     pipeDropdownOpen: false,
-    activeOp: null,
+
+    // ── Right-hand drawer panel ──
+    // Unified output surface for all operations (run, run-step, LLM, tests, pack).
+    // Replaces the old viewMode/runOutput/activeOp split.
+    drawerOpen: false,
+    drawerOutput: "",
+    drawerOutputType: null, // "json" | "stream" | null
+    drawerLabel: "",
+    drawerStatus: "idle",   // "idle" | "running" | "done" | "error"
+    drawerParsedOutput: null, // parsed JSON object from run stdout (for jsonTree)
+    drawerTrace: null,        // { timestamp, input, output, durationMs, stepsTotal } from trace API
+
     showListDSL: {},
     stepTraces: {},
-    showStepTraces: null
+    showStepTraces: null,
+
+    // ── Pipe-level I/O traces ──
+    // Toggled by the "I/O" button in PipeToolbar; displays the whole-pipeline
+    // input/output from the most recent trace files.
+    showPipeTraces: false,
+    pipeTraces: null
   },
   actions: {},
   utils: {},
@@ -98,12 +112,21 @@ PD.actions.selectPipe = function(pipe) {
   PD.state.markdownHtml = null;
   PD.state.pipeData = null;
   PD.state.rawMarkdown = null;
-  PD.state.viewMode = "markdown";
-  PD.state.runOutput = null;
   PD.state.showListDSL = {};
   PD.state.stepTraces = {};
   PD.state.showStepTraces = null;
+  PD.state.showPipeTraces = false;
+  PD.state.pipeTraces = null;
   PD.state.pipeDropdownOpen = false;
+
+  // Close the drawer when switching pipes so stale output doesn't linger.
+  PD.state.drawerOpen = false;
+  PD.state.drawerOutput = "";
+  PD.state.drawerOutputType = null;
+  PD.state.drawerLabel = "";
+  PD.state.drawerStatus = "idle";
+  PD.state.drawerParsedOutput = null;
+  PD.state.drawerTrace = null;
 
   var mdUrl = "/api/projects/" +
     encodeURIComponent(pipe.projectName) +
@@ -127,37 +150,83 @@ PD.actions.selectPipe = function(pipe) {
   }).then(function() { m.redraw.sync(); });
 };
 
-// --- API action helpers ---
+// ── API action helpers ──
+// All operations funnel output into the right-hand drawer panel via the
+// PD.state.drawer* properties. The drawer slides open automatically when
+// an operation starts and streams chunks in real-time.
+
+// closeDrawer — hides the drawer without clearing output so the user can
+// re-open it later if state is preserved.
+PD.actions.closeDrawer = function() {
+  PD.state.drawerOpen = false;
+};
+
+// loadDrawerTrace — fetches the most recent pipe-level trace after a run
+// completes. Trace data contains structured input/output plus metadata
+// (duration, step count) that enriches the drawer's jsonTree display.
+// Uses pipeData.name (the H1 heading) for the pipe name because trace
+// directories are named after the heading, not the filename stem.
+// Ref: buildandserve.ts trace API — GET /api/projects/{project}/pipes/{pipe}/traces
+PD.actions.loadDrawerTrace = function() {
+  if (!PD.state.selectedPipe) return;
+  var pipeName = PD.state.pipeData && PD.state.pipeData.name
+    ? PD.state.pipeData.name
+    : PD.state.selectedPipe.pipeName;
+  var url = "/api/projects/" +
+    encodeURIComponent(PD.state.selectedPipe.projectName) +
+    "/pipes/" + encodeURIComponent(pipeName) +
+    "/traces?limit=1";
+  m.request({ method: "GET", url: url }).then(function(data) {
+    if (data && data.length > 0) {
+      PD.state.drawerTrace = data[0];
+    }
+  }).catch(function() {
+    // Trace fetch is best-effort — if it fails, the drawer still shows
+    // the parsed stdout output or raw text.
+  });
+};
+
+// startOp — opens the drawer and resets it for a new operation.
+// Ref: Called by postAction before every fetch.
 PD.actions.startOp = function(type, label) {
-  PD.state.activeOp = { type: type, label: label, status: "running", output: "" };
+  PD.state.drawerOpen = true;
+  PD.state.drawerOutput = "";
+  PD.state.drawerOutputType = null;
+  PD.state.drawerLabel = label;
+  PD.state.drawerStatus = "running";
+  PD.state.drawerParsedOutput = null;
+  PD.state.drawerTrace = null;
   m.redraw();
 };
 
+// streamResponse — reads a streaming fetch Response body chunk-by-chunk
+// and appends each decoded text chunk to drawerOutput.
+// Ref: https://developer.mozilla.org/en-US/docs/Web/API/ReadableStreamDefaultReader/read
 PD.actions.streamResponse = function(response, onDone) {
   var reader = response.body.getReader();
   var decoder = new TextDecoder();
   function read() {
     reader.read().then(function(result) {
       if (result.done) {
-        if (PD.state.activeOp) PD.state.activeOp.status = "done";
-        if (onDone) onDone(PD.state.activeOp ? PD.state.activeOp.output : "");
+        PD.state.drawerStatus = "done";
+        if (onDone) onDone(PD.state.drawerOutput);
         m.redraw();
         return;
       }
-      if (PD.state.activeOp) PD.state.activeOp.output += decoder.decode(result.value);
+      PD.state.drawerOutput += decoder.decode(result.value);
       m.redraw();
       read();
     }).catch(function(err) {
-      if (PD.state.activeOp) {
-        PD.state.activeOp.status = "error";
-        PD.state.activeOp.output += "\nError: " + err.message;
-      }
+      PD.state.drawerStatus = "error";
+      PD.state.drawerOutput += "\nError: " + err.message;
       m.redraw();
     });
   }
   read();
 };
 
+// postAction — POST to a backend endpoint and route all output through the
+// drawer. Handles both JSON and streaming response types.
 PD.actions.postAction = function(url, body, label, onDone) {
   PD.actions.startOp(label, label);
   fetch(url, {
@@ -167,20 +236,17 @@ PD.actions.postAction = function(url, body, label, onDone) {
   }).then(function(res) {
     if (res.headers.get("content-type") && res.headers.get("content-type").includes("application/json")) {
       return res.json().then(function(data) {
-        if (PD.state.activeOp) {
-          PD.state.activeOp.output = JSON.stringify(data, null, 2);
-          PD.state.activeOp.status = "done";
-        }
+        PD.state.drawerOutput = JSON.stringify(data, null, 2);
+        PD.state.drawerParsedOutput = data;
+        PD.state.drawerStatus = "done";
         if (onDone) onDone(data);
         m.redraw();
       });
     }
     PD.actions.streamResponse(res, onDone);
   }).catch(function(err) {
-    if (PD.state.activeOp) {
-      PD.state.activeOp.status = "error";
-      PD.state.activeOp.output = "Error: " + err.message;
-    }
+    PD.state.drawerStatus = "error";
+    PD.state.drawerOutput = "Error: " + err.message;
     m.redraw();
   });
 };
@@ -197,32 +263,53 @@ PD.actions.llmAction = function(action, extraBody) {
   });
 };
 
+// runPipe — executes a full pipe run. Output streams into the drawer in
+// real-time. On completion the raw output is formatted as pretty-printed JSON
+// (when parseable) so the drawer shows a clean final result.
+// runPipe — executes a full pipe run. Output streams into the drawer in
+// real-time. On completion the output is parsed as JSON for jsonTree rendering,
+// and the most recent trace is fetched for structured input/output data.
 PD.actions.runPipe = function() {
   if (!PD.state.selectedPipe) return;
   PD.actions.postAction("/api/run", {
     project: PD.state.selectedPipe.projectName,
     pipe: PD.state.selectedPipe.pipeName
   }, "Running pipe", function(output) {
+    // Try to parse the final output as JSON so the drawer can render it
+    // with pd.jsonTree() instead of raw text.
     try {
       var parsed = typeof output === "string" ? JSON.parse(output) : output;
-      PD.state.runOutput = JSON.stringify(parsed, null, 2);
-      PD.state.runOutputType = "json";
+      PD.state.drawerOutput = JSON.stringify(parsed, null, 2);
+      PD.state.drawerOutputType = "json";
+      PD.state.drawerParsedOutput = parsed;
     } catch (_) {
-      PD.state.runOutput = typeof output === "string" ? output : JSON.stringify(output, null, 2);
-      PD.state.runOutputType = "stream";
+      PD.state.drawerOutput = typeof output === "string" ? output : JSON.stringify(output, null, 2);
+      PD.state.drawerOutputType = "stream";
     }
-    PD.state.viewMode = "output";
+    // Fetch the most recent trace for richer input/output data.
+    PD.actions.loadDrawerTrace();
     m.redraw();
   });
 };
 
+// runToStep — executes a partial pipe run up to a specific step. The
+// /api/run-step endpoint outputs the final state as JSON, so we parse it
+// for jsonTree rendering and also fetch the latest trace.
 PD.actions.runToStep = function(stepIndex) {
   if (!PD.state.selectedPipe) return;
   PD.actions.postAction("/api/run-step", {
     project: PD.state.selectedPipe.projectName,
     pipe: PD.state.selectedPipe.pipeName,
     stepIndex: stepIndex
-  }, "Running to step " + stepIndex);
+  }, "Running to step " + stepIndex, function(output) {
+    try {
+      var parsed = typeof output === "string" ? JSON.parse(output) : output;
+      PD.state.drawerParsedOutput = parsed;
+      PD.state.drawerOutputType = "json";
+    } catch (_) { /* non-JSON output — keep raw text */ }
+    PD.actions.loadDrawerTrace();
+    m.redraw();
+  });
 };
 
 PD.actions.openEditor = function() {
@@ -261,14 +348,44 @@ PD.actions.loadStepTraces = function(stepIndex) {
   }
   PD.state.showStepTraces = stepIndex;
   if (PD.state.stepTraces[stepIndex]) return;
+  // Use pipeData.name (the H1 heading, e.g. "Run All The Tests") rather than
+  // selectedPipe.pipeName (the filename stem, e.g. "testAll") because trace
+  // directories are named after the H1 heading.
+  // Ref: traceDashboard.ts scanTraces() → parts.slice(1, -1).join("/")
+  var pipeName = PD.state.pipeData && PD.state.pipeData.name
+    ? PD.state.pipeData.name
+    : PD.state.selectedPipe.pipeName;
   var url = "/api/projects/" +
     encodeURIComponent(PD.state.selectedPipe.projectName) +
-    "/pipes/" + encodeURIComponent(PD.state.selectedPipe.pipeName) +
+    "/pipes/" + encodeURIComponent(pipeName) +
     "/traces?step=" + stepIndex + "&limit=5";
   m.request({ method: "GET", url: url }).then(function(data) {
     PD.state.stepTraces[stepIndex] = data;
   }).catch(function() {
     PD.state.stepTraces[stepIndex] = [];
+  });
+};
+
+// ── Pipe-Level Trace Loading ──
+// Fetches the whole-pipeline input/output from the traces API (no ?step param).
+// Toggles the PipeToolbar I/O panel on repeated clicks.
+// Ref: buildandserve.ts traces endpoint, homeDashboard.ts recentPipeTraces
+PD.actions.loadPipeTraces = function() {
+  PD.state.showPipeTraces = !PD.state.showPipeTraces;
+  if (!PD.state.showPipeTraces) return;
+  if (PD.state.pipeTraces) return;
+  // Use pipeData.name (H1 heading) to match trace directory naming.
+  var pipeName = PD.state.pipeData && PD.state.pipeData.name
+    ? PD.state.pipeData.name
+    : PD.state.selectedPipe.pipeName;
+  var url = "/api/projects/" +
+    encodeURIComponent(PD.state.selectedPipe.projectName) +
+    "/pipes/" + encodeURIComponent(pipeName) +
+    "/traces?limit=5";
+  m.request({ method: "GET", url: url }).then(function(data) {
+    PD.state.pipeTraces = data;
+  }).catch(function() {
+    PD.state.pipeTraces = [];
   });
 };
 

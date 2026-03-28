@@ -10,7 +10,7 @@ import { pipeToMarkdown } from "../pipeToMarkdown.ts";
 import { reportErrors } from "./reportErrors.ts";
 import { scanTraces, readTrace, tracePage } from "./traceDashboard.ts";
 import { enrichProjects, readProjectsRegistry, scanProjectPipes, readPipeMarkdown, projectsPage } from "./projectsDashboard.ts";
-import { scanRecentPipes, readPipeIndex, recentStepTraces, homePage } from "./homeDashboard.ts";
+import { scanRecentPipes, readPipeIndex, recentStepTraces, recentPipeTraces, homePage } from "./homeDashboard.ts";
 import { findTargetStep, buildContextPrompt, callLLM } from "./llmCommand.ts";
 
 let _controller: ReadableStreamDefaultController<string> | null = null;
@@ -265,16 +265,27 @@ export async function serve(input: BuildInput){
       });
     }
 
-    // Step traces for a specific pipe
+    // Traces for a specific pipe.
+    // When ?step=N is present → return step-level before/after traces.
+    // When ?step is absent → return pipe-level input/output traces.
+    // Ref: homeDashboard.ts recentStepTraces / recentPipeTraces
     if (url.pathname.match(/^\/api\/projects\/[^/]+\/pipes\/[^/]+\/traces$/)) {
       const segments = url.pathname.split("/");
       const projectName = decodeURIComponent(segments[3]);
       const pipeName = decodeURIComponent(segments[5]);
       const stepParam = url.searchParams.get("step");
       const limitParam = url.searchParams.get("limit");
-      const stepIndex = stepParam !== null ? parseInt(stepParam) : 0;
       const limit = limitParam ? parseInt(limitParam) : 5;
-      const data = await recentStepTraces(projectName, pipeName, stepIndex, limit);
+
+      let data;
+      if (stepParam !== null) {
+        // Step-level traces: return before/after for the given step index.
+        const stepIndex = parseInt(stepParam);
+        data = await recentStepTraces(projectName, pipeName, stepIndex, limit);
+      } else {
+        // Pipe-level traces: return the whole-pipeline input/output.
+        data = await recentPipeTraces(projectName, pipeName, limit);
+      }
       return new Response(JSON.stringify(data), {
         headers: { "content-type": "application/json" },
       });
