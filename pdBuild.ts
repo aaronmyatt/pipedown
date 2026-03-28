@@ -6,7 +6,27 @@ import type {Step, WalkOptions, BuildInput} from "./pipedown.d.ts";
 import {defaultTemplateFiles} from "./defaultTemplateFiles.ts";
 import {exportPipe} from "./exportPipe.ts";
 
-const PD_DIR = `./.pd`;
+// ── Helpers ──
+
+/**
+ * Resolves the working directory for the current build. Uses input.cwd
+ * when provided (e.g. by the dashboard server building a different
+ * project), otherwise falls back to the process's Deno.cwd().
+ *
+ * @param input - The build input that may carry an overridden cwd
+ * @returns Absolute path to use as the project root
+ */
+const resolveCwd = (input: BuildInput): string => input.cwd || Deno.cwd();
+
+/**
+ * Returns the .pd output directory path relative to the resolved cwd.
+ * Kept as a function rather than a constant so it can be project-aware.
+ *
+ * @param input - The build input (used to resolve cwd)
+ * @returns Absolute path to the .pd directory
+ */
+const resolvePdDir = (input: BuildInput): string =>
+  std.join(resolveCwd(input), ".pd");
 
 const _walkOpts: WalkOptions = {
   exts: [".md"],
@@ -19,19 +39,36 @@ const _walkOpts: WalkOptions = {
   ]
 }
 
+/**
+ * Builds walk options for std.walk, merging base defaults with
+ * gitignore patterns and any global skip/exclude config.
+ *
+ * @param input    - Build input carrying globalConfig and optional match filter
+ * @param override - Additional WalkOptions to merge in
+ * @returns Merged WalkOptions ready for std.walk
+ */
 function walkOptions(input: BuildInput, override: WalkOptions = {}) {
   const walkOpts = Object.assign({}, _walkOpts, override);
   // .concat() returns a new array — must reassign to apply gitignore and global skip/exclude patterns
   walkOpts.skip = (walkOpts.skip || [])
-    .concat(respectGitIgnore())
+    .concat(respectGitIgnore(resolveCwd(input)))
     .concat(input.globalConfig?.skip || [])
     .concat(input.globalConfig?.exclude || []);
   if (input.match) walkOpts.match = [new RegExp(input.match)];
   return walkOpts;
 }
 
-const respectGitIgnore = () => {
-  const gitIgnorePath = std.join(Deno.cwd(), ".gitignore");
+/**
+ * Reads the .gitignore file from the given root directory and converts
+ * each glob pattern into a RegExp for use with std.walk's skip option.
+ * Returns an empty array if no .gitignore exists.
+ *
+ * @param rootDir - Absolute path to the project root directory
+ * @returns Array of RegExp patterns to skip during file walking
+ */
+const respectGitIgnore = (rootDir: string) => {
+  // Ref: https://jsr.io/@std/path/doc/glob-to-reg-exp/~
+  const gitIgnorePath = std.join(rootDir, ".gitignore");
   try {
     const gitIgnore = Deno.readTextFileSync(gitIgnorePath);
     return gitIgnore.split("\n").map((glob) => std.globToRegExp(glob));
@@ -41,28 +78,38 @@ const respectGitIgnore = () => {
   }
 };
 
+/**
+ * Walks the project directory for .md files, parses each into a Pipe
+ * object, and appends valid pipes (with at least one non-internal step)
+ * to input.pipes.
+ *
+ * Uses resolveCwd(input) as the walk root so the dashboard server can
+ * build projects in directories other than the process cwd.
+ *
+ * @param input - The build input to populate with parsed pipes
+ * @returns The mutated input with pipes[] populated
+ */
 async function parseMdFiles(input: BuildInput) {
   input.pipes = input.pipes || [];
 
-  for await (const entry of std.walk(Deno.cwd(), walkOptions(input))) {
+  // Walk from the resolved project root, not necessarily Deno.cwd().
+  const rootDir = resolveCwd(input);
+  const pdDir = resolvePdDir(input);
+
+  for await (const entry of std.walk(rootDir, walkOptions(input))) {
     const markdown = await Deno.readTextFile(entry.path);
     if (markdown === "") continue;
-    
+
     // the "executable markdown" will live in a directory with the same name as the file.
     // We will use {pipe.dir}/index.ts for the entry point.
     const fileName = utils.fileName(entry.path);
     pd.$p.set(input, '/markdown/'+fileName, markdown);
-    const dir = std.join(
-      PD_DIR,
-      std.parsePath(std.relative(Deno.cwd(), entry.path)).dir,
-      fileName,
-    );
-    const absoluteDir = std.join(
-      Deno.cwd(),
-      PD_DIR,
-      std.parsePath(std.relative(Deno.cwd(), entry.path)).dir,
-      fileName,
-    );
+
+    // dir is relative (for portability in generated output), absoluteDir
+    // is the fully-resolved path for code that needs it.
+    const relativeSubdir = std.parsePath(std.relative(rootDir, entry.path)).dir;
+    const dir = std.join(pdDir, relativeSubdir, fileName);
+    const absoluteDir = dir;
     const output = await mdToPipe({
       markdown,
       pipe: {

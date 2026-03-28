@@ -236,4 +236,12 @@ export interface BuildInput extends CliInput {
     warning?: string[];
     match?: string;
     markdownFilesProcesses?: number;
+
+    /**
+     * Override the working directory used by pdBuild for resolving .pd paths,
+     * walking .md files, and reading .gitignore. Defaults to Deno.cwd() when
+     * not provided. This allows the dashboard server to build any registered
+     * project without shelling out to a child process.
+     */
+    cwd?: string;
 }

@@ -10,6 +10,55 @@ import { loadPipeContext, findTargetStep, buildContextPrompt, callLLM } from "./
 
 let _controller: ReadableStreamDefaultController<string> | null = null;
 
+// ── Optimistic Project Build ──
+// Before any toolbar action (run, run-step, test, pack, etc.) we rebuild
+// the target project's .pd/ directory in-process. This ensures the compiled
+// .ts files are always in sync with the latest .md source, even if the user
+// edited markdown since the last build.
+//
+// pdBuild now accepts an optional `cwd` field on its input object, so we
+// can build any registered project without shelling out to a child process.
+// This is faster (no process spawn overhead) and shares the same module
+// cache as the dashboard server.
+
+/**
+ * Runs pdBuild in-process for the given project directory. The `cwd`
+ * field on BuildInput tells pdBuild where to walk for .md files, where
+ * to resolve .gitignore, and where to write .pd/ output.
+ *
+ * @param projectPath - Absolute path to the target project root
+ * @returns true if the build completed without errors, false otherwise
+ */
+async function buildProject(projectPath: string): Promise<boolean> {
+  try {
+    // Construct a minimal BuildInput with `cwd` pointing at the target
+    // project. pdBuild uses input.cwd (falling back to Deno.cwd()) for
+    // all path resolution, so this builds the correct project in-process.
+    const result = await pdBuild({
+      cwd: projectPath,
+      errors: [],
+    } as unknown as BuildInput);
+    if (result.errors && result.errors.length > 0) {
+      reportErrors(result);
+      console.error(
+        std.colors.brightRed(
+          `Build had ${result.errors.length} error(s) in ${projectPath}`,
+        ),
+      );
+      return false;
+    }
+    console.log(std.colors.brightGreen(`Built ${projectPath}`));
+    return true;
+  } catch (e) {
+    console.error(
+      std.colors.brightRed(
+        `Build error in ${projectPath}: ${(e as Error).message}`,
+      ),
+    );
+    return false;
+  }
+}
+
 const lazyIO = std.debounce(async (input = { errors: [] }) => {
   Object.assign(input, await pdBuild(input));
   _controller && _controller.enqueue("data: reload\n\n");
@@ -165,6 +214,8 @@ export async function serve(input: BuildInput){
         const { action, project: projectName, pipe: pipeName, stepIndex, prompt: userPrompt } = body;
         const project = await resolveProject(projectName);
         if (!project) return new Response("Project not found", { status: 404 });
+        // Optimistic rebuild: recompile .md → .pd/ before LLM reads pipe context
+        await buildProject(project.path);
 
         const steps = await loadPipeContext(pipeName, project.path);
         let result: string;
@@ -209,6 +260,8 @@ export async function serve(input: BuildInput){
         const body = await request.json();
         const project = await resolveProject(body.project);
         if (!project) return new Response("Project not found", { status: 404 });
+        // Optimistic rebuild: recompile .md → .pd/ before running
+        await buildProject(project.path);
         const pdPath = std.join(project.path, ".pd", body.pipe, "index.ts");
         const configPath = std.join(project.path, ".pd", "deno.json");
         return spawnAndStream(
@@ -225,6 +278,8 @@ export async function serve(input: BuildInput){
         const body = await request.json();
         const project = await resolveProject(body.project);
         if (!project) return new Response("Project not found", { status: 404 });
+        // Optimistic rebuild: recompile .md → .pd/ before running step
+        await buildProject(project.path);
 
         const pipeDir = std.join(project.path, ".pd", body.pipe);
         const indexJsonPath = std.join(pipeDir, "index.json");
@@ -279,6 +334,8 @@ console.log(JSON.stringify(input, null, 2));
         const body = await request.json();
         const project = await resolveProject(body.project);
         if (!project) return new Response("Project not found", { status: 404 });
+        // Optimistic rebuild: recompile .md → .pd/ before testing
+        await buildProject(project.path);
         return spawnAndStream(
           [Deno.execPath(), "test", "--unstable-kv", "-A", "--no-check"],
           project.path,
@@ -293,6 +350,8 @@ console.log(JSON.stringify(input, null, 2));
         const body = await request.json();
         const project = await resolveProject(body.project);
         if (!project) return new Response("Project not found", { status: 404 });
+        // Optimistic rebuild: recompile .md → .pd/ before packing
+        await buildProject(project.path);
         return spawnAndStream(
           [Deno.execPath(), "run", "-A", "--no-check", "jsr:@niceguyyo/pipedown", "pack"],
           project.path,
