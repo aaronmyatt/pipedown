@@ -28,5 +28,9 @@
     "release:minor": "cd deploy && pd build && pd run release.md --input '{\"bump\": \"minor\"}'",
     "release:major": "cd deploy && pd build && pd run release.md --input '{\"bump\": \"major\"}'",
     "release:dry": "cd deploy && pd build && pd run release.md --input '{\"bump\": \"patch\", \"dryRun\": true}'"
+  },
+  "allowScripts": {
+    "allow": [],
+    "deny": ["npm:esbuild@0.12.23", "npm:esbuild@0.2.12", "npm:esbuild@0.21.1", "npm:esbuild@0.23.1", "npm:esbuild@0.25.4", "npm:esbuild@0.27.4"]
   }
 }
