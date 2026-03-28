@@ -55,6 +55,8 @@ import { inspectCommand } from "./inspectCommand.ts";
 import { runStepCommand } from "./runStepCommand.ts";
 import { syncCommand } from "./syncCommand.ts";
 import { watchCommand } from "./watchCommand.ts";
+import { packCommand } from "./packCommand.ts";
+import { installCommand } from "./installCommand.ts";
 
 async function pdInit(input: CliInput) {
     try {
@@ -223,6 +225,8 @@ const funcs = [
     checkMinFlags(["run-step", "*", "*"], runStepCommand),
     checkMinFlags(["sync", "*"], syncCommand),
     checkMinFlags(["watch"], watchCommand),
+    checkMinFlags(["pack"], packCommand),
+    checkMinFlags(["install"], installCommand),
     checkMinFlags(["test"], testCommand),
     checkMinFlags(["test-update"], updateTestCommand),
     checkMinFlags(["t"], testCommand),
@@ -254,6 +258,14 @@ const flags: Args = std.parseArgs(Deno.args, {
         "trace",
         "record",
         "replay",
+        "dry-run",
+        "list",
+    ],
+    string: [
+        "out",
+        "step",
+        "instruction",
+        "i",
     ],
 });
 if (flags.version || flags.v) {
