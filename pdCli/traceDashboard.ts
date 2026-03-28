@@ -560,7 +560,8 @@ export function tracePage(): string {
         return m("div.layout", [
           m("div.topbar", [
             m("h1", "Pipedown Traces"),
-            m("a", { href: "/" }, "← Services")
+            m("a", { href: "/" }, "Services"),
+            m("a", { href: "/projects" }, "Projects")
           ]),
           m(Sidebar),
           m(Detail)

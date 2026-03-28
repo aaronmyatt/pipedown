@@ -4,6 +4,7 @@ import { std } from "../deps.ts";
 import { pdBuild } from "../pdBuild.ts";
 import { reportErrors } from "./reportErrors.ts";
 import { scanTraces, readTrace, tracePage } from "./traceDashboard.ts";
+import { enrichProjects, readProjectsRegistry, scanProjectPipes, readPipeMarkdown, projectsPage } from "./projectsDashboard.ts";
 
 let _controller: ReadableStreamDefaultController<string> | null = null;
 
@@ -228,7 +229,8 @@ const page = (scriptsPaths: string[]) =>
         return m("div.layout", [
           m("div.topbar", [
             m("h1", "Pipedown"),
-            m("a", { href: "/traces" }, "Traces →")
+            m("a", { href: "/projects" }, "Projects"),
+            m("a", { href: "/traces" }, "Traces")
           ]),
           m(PipeList),
           m(OutputView)
@@ -312,6 +314,76 @@ export async function serve(input: BuildInput){
 
   const handler = async (request: Request) => {
     const url = new URL(request.url);
+
+    // Projects API: list all projects enriched with mtime
+    if (url.pathname === "/api/projects") {
+      const raw = await readProjectsRegistry();
+      const enriched = await enrichProjects(raw);
+      return new Response(JSON.stringify(enriched), {
+        headers: { "content-type": "application/json" },
+      });
+    }
+
+    // Projects API: list pipes for a project
+    if (url.pathname.match(/^\/api\/projects\/[^/]+\/pipes$/)) {
+      const name = decodeURIComponent(url.pathname.split("/")[3]);
+      const raw = await readProjectsRegistry();
+      const project = raw.find((p) => p.name === name);
+      if (!project) {
+        return new Response("Project not found", { status: 404 });
+      }
+      try {
+        let pipes;
+        if (project.pipes) {
+          pipes = await Promise.all(project.pipes.map(async (p) => {
+            const absPath = std.join(project.path, p.path);
+            try {
+              const stat = await Deno.stat(absPath);
+              return { name: p.name, path: p.path, mtime: stat.mtime?.toISOString() || null };
+            } catch {
+              return { name: p.name, path: p.path, mtime: null };
+            }
+          }));
+          pipes.sort((a: { mtime: string | null }, b: { mtime: string | null }) =>
+            (b.mtime || "").localeCompare(a.mtime || ""));
+        } else {
+          pipes = await scanProjectPipes(project.path);
+        }
+        return new Response(JSON.stringify(pipes), {
+          headers: { "content-type": "application/json" },
+        });
+      } catch {
+        return new Response("Project directory not accessible", { status: 404 });
+      }
+    }
+
+    // Projects API: read a markdown file
+    if (url.pathname.match(/^\/api\/projects\/[^/]+\/files\/.+$/)) {
+      const segments = url.pathname.split("/");
+      const name = decodeURIComponent(segments[3]);
+      const filePath = decodeURIComponent(segments.slice(5).join("/"));
+      const raw = await readProjectsRegistry();
+      const project = raw.find((p) => p.name === name);
+      if (!project) {
+        return new Response("Project not found", { status: 404 });
+      }
+      try {
+        const content = await readPipeMarkdown(project.path, filePath);
+        return new Response(content, {
+          headers: { "content-type": "text/plain; charset=utf-8" },
+        });
+      } catch (e) {
+        const status = (e as Error).message?.includes("traversal") ? 403 : 404;
+        return new Response((e as Error).message || "File not found", { status });
+      }
+    }
+
+    // Projects dashboard page
+    if (url.pathname === "/projects") {
+      return new Response(projectsPage(), {
+        headers: { "content-type": "text/html" },
+      });
+    }
 
     // Trace API: list all traces
     if (url.pathname === "/api/traces") {
