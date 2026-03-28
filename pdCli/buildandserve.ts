@@ -487,7 +487,27 @@ console.log(JSON.stringify(input, null, 2));
       });
     }
 
-    // Static JS files
+    // Frontend static assets (CSS + JS)
+    if (url.pathname.startsWith("/frontend/")) {
+      const frontendDir = new URL("./frontend/", import.meta.url).pathname;
+      const filePath = std.join(frontendDir, url.pathname.replace("/frontend/", ""));
+      // Prevent path traversal
+      if (!filePath.startsWith(frontendDir)) {
+        return new Response("Forbidden", { status: 403 });
+      }
+      try {
+        const response = await std.serveFile(request, filePath);
+        const ext = url.pathname.split(".").pop();
+        if (ext === "css") response.headers.set("content-type", "text/css; charset=utf-8");
+        if (ext === "js") response.headers.set("content-type", "text/javascript; charset=utf-8");
+        response.headers.set("Access-Control-Allow-Origin", "*");
+        return response;
+      } catch {
+        return new Response("Not found", { status: 404 });
+      }
+    }
+
+    // Static JS files (legacy, serves from CWD)
     if (url.pathname.endsWith(".js")) {
       const pathname = url.pathname;
       const response = await std.serveFile(request, "." + pathname);

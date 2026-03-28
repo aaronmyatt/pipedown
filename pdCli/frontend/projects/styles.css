@@ -1,0 +1,97 @@
+.layout {
+  grid-template-rows: auto auto 1fr;
+}
+.breadcrumb {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: var(--size-1);
+  padding: var(--size-1) var(--size-4);
+  background: var(--surface-2);
+  border-block-end: var(--border-size-1) solid var(--surface-3);
+  font-size: var(--font-size-1);
+  color: var(--text-2);
+}
+.breadcrumb a {
+  color: var(--link);
+  text-decoration: none;
+  cursor: pointer;
+}
+.breadcrumb a:hover { text-decoration: underline; }
+.breadcrumb .sep { margin: 0 var(--size-1); color: var(--text-2); }
+.project-card {
+  padding: var(--size-2) var(--size-2);
+  border-radius: var(--radius-2);
+  margin-block-end: var(--size-1);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: var(--size-2);
+}
+.project-card:hover { background: var(--surface-3); }
+.project-card.active { background: var(--surface-4); }
+.project-card.stale { opacity: 0.5; }
+.project-card .caret {
+  font-size: var(--font-size-2);
+  color: var(--text-2);
+  flex-shrink: 0;
+  transition: transform 0.15s;
+}
+.project-card.active .caret { transform: rotate(90deg); }
+.project-info { flex: 1; min-width: 0; }
+.project-name {
+  font-weight: var(--font-weight-6);
+  font-size: var(--font-size-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.project-meta {
+  display: flex;
+  gap: var(--size-2);
+  margin-top: var(--size-1);
+  font-size: var(--font-size-0);
+  color: var(--text-2);
+}
+.badge-recent {
+  background: var(--green-2);
+  color: var(--green-9);
+}
+.pipe-list { list-style: none; padding: 0; margin: 0; }
+.pipe-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--size-2) var(--size-3);
+  border-radius: var(--radius-2);
+  cursor: pointer;
+  border-block-end: var(--border-size-1) solid var(--surface-2);
+}
+.pipe-item:hover { background: var(--surface-2); }
+.pipe-item.active { background: var(--surface-3); }
+.pipe-item-name {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-1);
+}
+.pipe-item-path {
+  font-size: var(--font-size-0);
+  color: var(--text-2);
+}
+.pipe-item-mtime {
+  font-size: var(--font-size-0);
+  color: var(--text-2);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+.project-heading {
+  display: flex;
+  align-items: baseline;
+  gap: var(--size-2);
+  margin-block-end: var(--size-3);
+}
+.project-heading h2 { margin: 0; font-size: var(--font-size-4); }
+.project-heading .path {
+  font-size: var(--font-size-0);
+  color: var(--text-2);
+  font-family: var(--font-mono);
+}

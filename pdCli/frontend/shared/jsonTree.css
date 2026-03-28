@@ -1,0 +1,17 @@
+.jt { font-family: var(--font-mono); font-size: var(--font-size-0); line-height: 1.6; max-width: 100%; }
+.jt-row {
+  display: flex; align-items: baseline; gap: 0;
+  border-radius: var(--radius-1); padding: 0 var(--size-1);
+}
+.jt-row.jt-clickable { cursor: pointer; user-select: none; }
+.jt-row.jt-clickable:hover { background: var(--surface-3); }
+.jt-toggle { width: 1.2em; flex-shrink: 0; color: var(--text-2); text-align: center; }
+.jt-key { color: var(--indigo-7); flex-shrink: 0; }
+.jt-colon { color: var(--text-2); margin: 0 0.3em; flex-shrink: 0; }
+.jt-string { color: var(--green-7); word-break: break-word; overflow-wrap: anywhere; white-space: pre-wrap; }
+.jt-number { color: var(--blue-7); }
+.jt-bool { color: var(--orange-7); }
+.jt-null { color: var(--text-2); font-style: italic; }
+.jt-preview { color: var(--text-2); font-style: italic; }
+.jt-bracket { color: var(--text-2); }
+.jt-children { padding-inline-start: 1.4em; }

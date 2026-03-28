@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "pd-dashboard",
+      "runtimeExecutable": "deno",
+      "runtimeArgs": ["run", "--no-check", "--unstable-kv", "-A", "pdCli/mod.ts"],
+      "port": 8888
+    }
+  ]
+}

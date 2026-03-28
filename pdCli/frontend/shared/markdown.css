@@ -1,0 +1,41 @@
+.md-viewer {
+  max-width: 80ch;
+  line-height: 1.7;
+  font-size: var(--font-size-1);
+}
+.md-viewer h1 { font-size: var(--font-size-5); margin: var(--size-4) 0 var(--size-2) 0; }
+.md-viewer h2 { font-size: var(--font-size-4); margin: var(--size-4) 0 var(--size-2) 0; border-block-end: var(--border-size-1) solid var(--surface-3); padding-block-end: var(--size-2); }
+.md-viewer h3 { font-size: var(--font-size-3); margin: var(--size-3) 0 var(--size-2) 0; }
+.md-viewer p { margin: var(--size-2) 0; }
+.md-viewer pre {
+  background: var(--surface-2);
+  padding: var(--size-3);
+  border-radius: var(--radius-2);
+  overflow-x: auto;
+  border: var(--border-size-1) solid var(--surface-3);
+}
+.md-viewer code {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-0);
+}
+.md-viewer :not(pre) > code {
+  background: var(--surface-2);
+  padding: 2px var(--size-1);
+  border-radius: var(--radius-1);
+}
+.md-viewer ul, .md-viewer ol { padding-inline-start: var(--size-5); }
+.md-viewer li { margin-block-end: var(--size-1); }
+.md-viewer blockquote {
+  border-inline-start: 3px solid var(--surface-4);
+  margin: var(--size-2) 0;
+  padding: var(--size-1) var(--size-3);
+  color: var(--text-2);
+}
+.md-viewer table { border-collapse: collapse; width: 100%; margin: var(--size-3) 0; }
+.md-viewer th, .md-viewer td {
+  border: var(--border-size-1) solid var(--surface-3);
+  padding: var(--size-1) var(--size-2);
+  text-align: left;
+}
+.md-viewer th { background: var(--surface-2); font-weight: var(--font-weight-6); }
+.md-viewer a { color: var(--link); }
