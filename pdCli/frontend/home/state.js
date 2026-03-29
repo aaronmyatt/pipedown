@@ -9,6 +9,12 @@ window.PD = {
     recentPipes: [],
     loading: true,
     searchQuery: "",
+
+    // ── Sidebar project groups ──
+    // Tracks which project headings in the "Projects" sidebar section are
+    // collapsed. Keys are project names; absent key = expanded (default).
+    // Ref: Sidebar.js — "Projects" section rendering
+    collapsedProjects: {},
     selectedPipe: null,
     pipeData: null,
     rawMarkdown: null,
@@ -139,6 +145,16 @@ PD.actions.loadRecentPipes = function() {
       message: err.message || "Failed to load pipes"
     };
   }).then(function() { m.redraw.sync(); });
+};
+
+// ── toggleProjectCollapse ──
+// Toggles the collapsed/expanded state of a project group in the
+// sidebar's "Projects" section. Used by the project heading buttons.
+// @param {string} projectName — the project group to toggle
+// Ref: Sidebar.js — project-group-header onclick
+PD.actions.toggleProjectCollapse = function(projectName) {
+  PD.state.collapsedProjects[projectName] =
+    !PD.state.collapsedProjects[projectName];
 };
 
 PD.utils.renderMarkdownWithAnnotations = function(raw, pipeData) {
@@ -835,6 +851,26 @@ PD.utils.inputPreview = function(obj, maxLen) {
   var str = JSON.stringify(obj);
   if (str.length <= maxLen) return str;
   return str.slice(0, maxLen - 1) + "\u2026";
+};
+
+// ── groupPipesByProject ──
+// Groups a flat array of pipe objects by their projectName field.
+// Returns an array of { projectName, pipes[] } objects sorted
+// alphabetically by project name. Used by the Sidebar component to
+// render the "Projects" section with collapsible project headings.
+// @param {Array} pipes — the (optionally filtered) recentPipes array
+// @return {Array} — [{ projectName: string, pipes: RecentPipe[] }, ...]
+// Ref: Sidebar.js — "Projects" section
+PD.utils.groupPipesByProject = function(pipes) {
+  var groups = {};
+  pipes.forEach(function(p) {
+    if (!groups[p.projectName]) groups[p.projectName] = [];
+    groups[p.projectName].push(p);
+  });
+  // Sort project names alphabetically for stable sidebar ordering.
+  return Object.keys(groups).sort().map(function(name) {
+    return { projectName: name, pipes: groups[name] };
+  });
 };
 
 // ── loadInputHistory ──

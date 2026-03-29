@@ -38,6 +38,83 @@
 }
 
 
+/* ── Sidebar section dividers ──
+   Visual separation between "Recent" and "Projects" sections in the
+   left sidebar. Each section gets an uppercase label header.
+   Ref: Sidebar.js — sidebar-section rendering */
+.sidebar-section {
+  margin-block-end: var(--size-3);
+}
+
+.sidebar-section-header {
+  font-size: var(--font-size-0);
+  font-weight: var(--font-weight-6);
+  color: var(--text-2);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: var(--size-1) 0;
+  margin: 0 0 var(--size-1) 0;
+  border-block-end: var(--border-size-1) solid var(--surface-3);
+}
+
+/* ── Collapsible project group ──
+   Each registered project gets a clickable header row that toggles
+   visibility of its pipe list in the "Projects" sidebar section.
+   Ref: Sidebar.js — project-group rendering */
+.project-group {
+  margin-block-end: var(--size-1);
+}
+
+.project-group-header {
+  display: flex;
+  align-items: center;
+  gap: var(--size-1);
+  width: 100%;
+  padding: var(--size-1) var(--size-2);
+  border: none;
+  background: none;
+  color: var(--text-1);
+  cursor: pointer;
+  font-size: var(--font-size-1);
+  font-family: var(--font-sans);
+  font-weight: var(--font-weight-6);
+  border-radius: var(--radius-2);
+  text-align: left;
+}
+
+.project-group-header:hover {
+  background: var(--surface-3);
+}
+
+/* Caret indicator — points right when collapsed, rotates 90deg
+   clockwise when expanded. CSS transition for smooth animation.
+   Ref: Open Props transitions — https://open-props.style/#easing */
+.project-group-caret {
+  display: inline-block;
+  font-size: var(--font-size-0);
+  transition: transform 0.15s;
+  color: var(--text-2);
+}
+
+.project-group-caret--expanded {
+  transform: rotate(90deg);
+}
+
+/* Pipe cards inside a project group are indented to visually nest
+   under the project header, reinforcing the hierarchy. */
+.project-group-pipes {
+  padding-inline-start: var(--size-2);
+}
+
+/* Pipe count badge inside the project group header — uses the same
+   surface tones as other badges for visual consistency. */
+.project-group-count {
+  margin-inline-start: auto;
+  font-size: var(--font-size-00);
+  font-weight: var(--font-weight-4);
+  color: var(--text-2);
+}
+
 /* Markdown viewer extra: position relative for toolbar overlays */
 .md-viewer {
   position: relative;

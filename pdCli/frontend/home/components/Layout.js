@@ -31,7 +31,6 @@ PD.components.Layout = {
           title: PD.state.sidebarOpen ? "Hide sidebar" : "Show sidebar"
         }, PD.state.sidebarOpen ? "\u25C0" : "\u2630"),
         m("h1", m("a", { href: "/" }, "Pipedown")),
-        m("a", { href: "/projects" }, "Projects"),
         m("a", { href: "/traces" }, "Traces"),
         // ── Spacer ──
         // Pushes the theme toggle to the far right of the topbar.
