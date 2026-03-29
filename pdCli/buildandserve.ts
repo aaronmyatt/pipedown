@@ -142,6 +142,32 @@ const lazyIO = std.debounce(async (input = { errors: [] }) => {
   input.errors = [];
 }, 200);
 
+// ── Template Helpers ──
+
+/**
+ * Ensures a standard template (e.g. trace.ts, cli.ts) exists in a pipe's
+ * `.pd/{pipeName}/` directory. Templates are only written there during build
+ * if the project has configured them (via `pd init`). This helper fills the
+ * gap by copying from pipedown's own source templates on first use.
+ *
+ * The templates use relative imports (`import pipe from "./index.ts"`) so
+ * they must live alongside the compiled index.ts/index.json in the pipe dir.
+ *
+ * @param pipeDir      - Absolute path to `.pd/{pipeName}/`
+ * @param templateName - File name of the template (e.g. "trace.ts", "cli.ts")
+ * @returns Absolute path to the template in the pipe directory
+ */
+async function ensureTemplate(pipeDir: string, templateName: string): Promise<string> {
+  const dest = std.join(pipeDir, templateName);
+  if (!await std.exists(dest)) {
+    // Ref: templates/ in the pipedown source tree — these are the canonical
+    // versions that `pd init` scaffolds into user projects.
+    const source = new URL(`../templates/${templateName}`, import.meta.url);
+    await Deno.copyFile(source, dest);
+  }
+  return dest;
+}
+
 // Helper to resolve a project path from the registry by name
 async function resolveProject(name: string): Promise<{ name: string; path: string } | null> {
   const raw = await readProjectsRegistry();
@@ -387,7 +413,10 @@ export async function serve(input: BuildInput){
         // Ref: syncCommand.ts for the same pattern
         if (pipeData.mdPath) {
           try {
+            console.log(pipeData);
             const markdown = pipeToMarkdown(pipeData);
+            console.log(std.colors.brightGreen(`Syncing LLM result back to ${pipeData.mdPath}`));
+            console.log(markdown);
             await Deno.writeTextFile(pipeData.mdPath, markdown);
             // Rebuild so the .pd/ directory (index.json, index.ts) stays in
             // sync with the updated markdown source
@@ -417,10 +446,19 @@ export async function serve(input: BuildInput){
         if (!project) return new Response("Project not found", { status: 404 });
         // Optimistic rebuild: recompile .md → .pd/ before running
         await buildProject(project.path);
-        const pdPath = std.join(project.path, ".pd", body.pipe, "index.ts");
+        const pipeDir = std.join(project.path, ".pd", body.pipe);
         const configPath = std.join(project.path, ".pd", "deno.json");
+
+        // Run the pipe via the standard trace.ts template — the same entry
+        // point the CLI uses (`pd run --trace`). trace.ts imports the
+        // compiled pipe, executes pipe.process(), writes a trace file to
+        // ~/.pipedown/traces/, and outputs JSON.
+        // Input is passed as a CLI arg; Deno.Command handles escaping.
+        // Ref: templates/trace.ts for the full implementation
+        const traceTsPath = await ensureTemplate(pipeDir, "trace.ts");
         return spawnAndStream(
-          [Deno.execPath(), "run", "--unstable-kv", "-A", "-c", configPath, "--no-check", pdPath],
+          [Deno.execPath(), "run", "--unstable-kv", "-A", "-c", configPath, "--no-check",
+           traceTsPath, "--input", body.input || "{}", "--json"],
           project.path,
         );
       } catch (e) {
@@ -437,48 +475,26 @@ export async function serve(input: BuildInput){
         await buildProject(project.path);
 
         const pipeDir = std.join(project.path, ".pd", body.pipe);
-        const indexJsonPath = std.join(pipeDir, "index.json");
-        const indexTsPath = std.join(pipeDir, "index.ts");
         const configPath = std.join(project.path, ".pd", "deno.json");
 
-        const pipeData = JSON.parse(await Deno.readTextFile(indexJsonPath));
-        const stepIndex = body.stepIndex;
-        if (stepIndex >= pipeData.steps.length) {
-          return new Response("Step index out of range", { status: 400 });
-        }
+        // Use the pdPipe runtime's built-in `input.stop` guard to halt
+        // execution after the target step index. When a step's index
+        // exceeds `input.stop`, the guard returns `input` unchanged.
+        // Ref: pdPipe/pdUtils.ts — `if (index > stop) return input;`
+        const inputObj = JSON.parse(body.input || "{}");
+        inputObj.stop = body.stepIndex;
+        const inputJson = JSON.stringify(inputObj);
 
-        const stepFuncNames = pipeData.steps
-          .slice(0, stepIndex + 1)
-          .map((s: { funcName: string }) => s.funcName);
-
-        const inputJson = body.input || "{}";
-        const escapedInput = inputJson.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
-
-        const evalScript = `
-import { ${stepFuncNames.join(", ")} } from "file://${indexTsPath}";
-import rawPipe from "file://${indexJsonPath}" with {type: "json"};
-const input = JSON.parse('${escapedInput}');
-const opts = rawPipe;
-const steps = [${stepFuncNames.join(", ")}];
-for (const step of steps) {
-  try { await step(input, opts); } catch (e) {
-    input.errors = input.errors || [];
-    input.errors.push({ func: step.name, message: e.message });
-  }
-}
-console.log(JSON.stringify(input, null, 2));
-`;
-        const tmpFile = std.join(pipeDir, `_run_step_${Date.now()}.ts`);
-        await Deno.writeTextFile(tmpFile, evalScript);
-        try {
-          return spawnAndStream(
-            [Deno.execPath(), "run", "--unstable-kv", "-A", "-c", configPath, "--no-check", tmpFile],
-            project.path,
-          );
-        } finally {
-          // Cleanup is tricky with streaming; schedule it
-          setTimeout(() => Deno.remove(tmpFile).catch(() => {}), 30000);
-        }
+        // Run via cli.ts (not trace.ts) — partial runs don't need trace
+        // files and the frontend intentionally skips loadDrawerTrace()
+        // for step runs to avoid showing stale trace data.
+        // Ref: state.js runToStep() comment
+        const cliTsPath = await ensureTemplate(pipeDir, "cli.ts");
+        return spawnAndStream(
+          [Deno.execPath(), "run", "--unstable-kv", "-A", "-c", configPath, "--no-check",
+           cliTsPath, "--input", inputJson, "--json"],
+          project.path,
+        );
       } catch (e) {
         return new Response("Error: " + (e as Error).message, { status: 500 });
       }
