@@ -131,7 +131,7 @@ body {
   text-decoration: underline;
 }
 .sidebar {
-  background: color-mix(in srgb, var(--surface-2) 92%, transparent);
+  background: var(--surface-1);
   padding: var(--size-3);
   overflow-y: auto;
   border-inline-end: var(--border-size-1) solid var(--shell-border);
