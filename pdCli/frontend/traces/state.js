@@ -1,6 +1,10 @@
 // Traces page state and data-fetching
 window.PD = {
   state: {
+    // ── Sidebar visibility ──
+    // Toggled by the hamburger button in the topbar.
+    sidebarOpen: true,
+
     traces: [],
     loading: true,
     expanded: {},

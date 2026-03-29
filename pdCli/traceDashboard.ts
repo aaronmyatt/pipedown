@@ -50,6 +50,7 @@ export function tracePage(): string {
   <link rel="stylesheet" href="/frontend/shared/jsonTree.css"/>
   <link rel="stylesheet" href="/frontend/traces/styles.css"/>
   <script src="https://unpkg.com/mithril/mithril.js"><\/script>
+  <script src="/frontend/shared/theme.js"><\/script>
 </head>
 <body>
   <div id="app"></div>

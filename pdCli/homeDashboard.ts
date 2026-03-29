@@ -129,6 +129,7 @@ export function homePage(): string {
   <link rel="stylesheet" href="https://unpkg.com/@highlightjs/cdn-assets@11.9.0/styles/github.min.css" media="(prefers-color-scheme: light)"/>
   <link rel="stylesheet" href="https://unpkg.com/@highlightjs/cdn-assets@11.9.0/styles/github-dark.min.css" media="(prefers-color-scheme: dark)"/>
   <script src="https://unpkg.com/@highlightjs/cdn-assets@11.9.0/highlight.min.js"><\/script>
+  <script src="/frontend/shared/theme.js"><\/script>
 </head>
 <body>
   <div id="app"></div>

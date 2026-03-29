@@ -1,6 +1,11 @@
 // Home page state, markdown renderer, data-fetching, and action helpers
 window.PD = {
   state: {
+    // ── Sidebar visibility ──
+    // Toggled by the hamburger button in the topbar.
+    // When false the sidebar column collapses to 0px via CSS transition.
+    sidebarOpen: true,
+
     recentPipes: [],
     loading: true,
     searchQuery: "",

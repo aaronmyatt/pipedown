@@ -7,7 +7,7 @@
   --page-bg-accent: rgba(57, 106, 74, 0.14);
   --page-bg-accent-2: rgba(126, 166, 118, 0.12);
   --surface-1: #f6faf6;
-  --surface-2: rgba(252, 254, 251, 0.78);
+  --surface-2: #fcfefb;
   --surface-3: #e4ede4;
   --surface-4: #cddacd;
   --text-1: #173223;
@@ -26,30 +26,32 @@
   --shell-border: rgba(84, 119, 92, 0.16);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --page-bg: #0d1612;
-    --page-bg-accent: rgba(110, 190, 150, 0.18);
-    --page-bg-accent-2: rgba(165, 214, 171, 0.14);
-    --surface-1: #15211b;
-    --surface-2: rgba(25, 37, 31, 0.78);
-    --surface-3: #1f3028;
-    --surface-4: #2c4337;
-    --text-1: #ebf5ee;
-    --text-2: #a7bbae;
-    --link: #9be5b2;
-    --green-1: #152019;
-    --green-2: #1d2d24;
-    --green-3: #294034;
-    --green-4: #72be95;
-    --green-5: #91d8af;
-    --green-6: #b6eaca;
-    --green-7: #d4f5df;
-    --green-8: #ecfcf1;
-    --green-9: #f7fff9;
-    --shell-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
-    --shell-border: rgba(150, 211, 172, 0.12);
-  }
+/* Dark mode tokens — applied via [data-theme="dark"] set by theme.js.
+   Previously used @media (prefers-color-scheme: dark); now driven by JS
+   so the user can override with a manual toggle.
+   Ref: theme.js — pdCli/frontend/shared/theme.js */
+[data-theme="dark"] {
+  --page-bg: #0d1612;
+  --page-bg-accent: rgba(110, 190, 150, 0.18);
+  --page-bg-accent-2: rgba(165, 214, 171, 0.14);
+  --surface-1: #15211b;
+  --surface-2: #19251f;
+  --surface-3: #1f3028;
+  --surface-4: #2c4337;
+  --text-1: #ebf5ee;
+  --text-2: #a7bbae;
+  --link: #9be5b2;
+  --green-1: #152019;
+  --green-2: #1d2d24;
+  --green-3: #294034;
+  --green-4: #72be95;
+  --green-5: #91d8af;
+  --green-6: #b6eaca;
+  --green-7: #d4f5df;
+  --green-8: #ecfcf1;
+  --green-9: #f7fff9;
+  --shell-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
+  --shell-border: rgba(150, 211, 172, 0.12);
 }
 
 html {
@@ -84,9 +86,7 @@ body {
   align-items: center;
   gap: var(--size-3);
   padding: var(--size-2) var(--size-4);
-  background: color-mix(in srgb, var(--surface-2) 88%, transparent);
-  -webkit-backdrop-filter: blur(18px) saturate(1.1);
-  backdrop-filter: blur(18px) saturate(1.1);
+  background: var(--surface-2);
   border-block-end: 2px solid transparent;
   box-shadow: var(--shell-shadow);
   /* Gradient bottom border — painted via background-image on the border area.
@@ -103,11 +103,18 @@ body {
 
 /* Brand heading — gradient text matching the pd-desktop logo treatment.
    Uses background-clip: text to fill the heading with a vivid green gradient.
+   The h1 wraps an <a> link so clicking navigates back to "/".
    Ref: https://developer.mozilla.org/en-US/docs/Web/CSS/background-clip#text */
 .topbar h1 {
   font-size: var(--font-size-3);
   font-weight: var(--font-weight-9);
   margin: 0;
+}
+/* Gradient must live on the <a> so background-clip: text works on the
+   actual text node. text-decoration: none removes the default underline.
+   Ref: https://developer.mozilla.org/en-US/docs/Web/CSS/background-clip */
+.topbar h1 a {
+  text-decoration: none;
   background: linear-gradient(
     135deg,
     var(--green-5) 0%,
@@ -130,13 +137,71 @@ body {
   color: var(--green-5);
   text-decoration: underline;
 }
+
+/* ── Sidebar toggle button ──
+   Minimal chrome-less button that shows ◀ (open) or ☰ (collapsed).
+   Placed as the first topbar child so it sits at the far left.
+   Ref: https://developer.mozilla.org/en-US/docs/Web/HTML/Element/button */
+.sidebar-toggle {
+  background: none;
+  border: none;
+  color: var(--text-2);
+  cursor: pointer;
+  font-size: var(--font-size-2);
+  padding: var(--size-1);
+  line-height: 1;
+  border-radius: var(--radius-2);
+  transition: background 0.15s, color 0.15s;
+}
+.sidebar-toggle:hover {
+  background: var(--surface-3);
+  color: var(--text-1);
+}
+
+/* ── Theme toggle button ──
+   Minimal button matching the sidebar toggle style. Displays a sun (light),
+   moon (dark), or half-circle (auto) icon.
+   Ref: theme.js — pdCli/frontend/shared/theme.js */
+.theme-toggle {
+  background: none;
+  border: none;
+  color: var(--text-2);
+  cursor: pointer;
+  font-size: var(--font-size-2);
+  padding: var(--size-1);
+  line-height: 1;
+  border-radius: var(--radius-2);
+  transition: background 0.15s, color 0.15s;
+}
+.theme-toggle:hover {
+  background: var(--surface-3);
+  color: var(--text-1);
+}
+
+/* ── Sidebar collapse animation ──
+   The layout grid transitions its column template so the sidebar slides
+   shut smoothly. The sidebar itself fades out to avoid clipped content.
+   Ref: https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_grid_layout */
+.layout {
+  transition: grid-template-columns 0.25s var(--ease-3);
+}
+.layout.sidebar-collapsed {
+  grid-template-columns: 0px 1fr;
+}
+.layout.sidebar-collapsed > .sidebar {
+  overflow: hidden;
+  opacity: 0;
+  padding: 0;
+  pointer-events: none;
+  border-inline-end: none;
+}
 .sidebar {
   background: var(--surface-1);
   padding: var(--size-3);
   overflow-y: auto;
   border-inline-end: var(--border-size-1) solid var(--shell-border);
-  -webkit-backdrop-filter: blur(14px) saturate(1.05);
-  backdrop-filter: blur(14px) saturate(1.05);
+  /* Transition sidebar opacity for a smooth fade when collapsing */
+  transition: opacity 0.2s var(--ease-3), padding 0.25s var(--ease-3);
 }
 .search-input {
   width: 100%;
