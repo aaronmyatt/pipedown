@@ -15,6 +15,87 @@ import { findTargetStep, buildContextPrompt, callLLM } from "./llmCommand.ts";
 
 let _controller: ReadableStreamDefaultController<string> | null = null;
 
+// ── Tauri Desktop IPC ──
+// When Pipedown Desktop (the Tauri app) is running, it listens on a Unix
+// domain socket at /tmp/pipedown.sock for event notifications. The pd server
+// sends newline-delimited JSON messages after operations complete (run, LLM,
+// test, pack). The Tauri app uses these to fire native macOS notifications.
+//
+// **Graceful degradation:** If the socket doesn't exist (Tauri not running),
+// the connection attempt silently fails and no events are sent. This means
+// `pd` works identically whether or not the desktop app is running.
+//
+// **Protocol:** Each message is a single JSON object followed by `\n`:
+//   { "type": "run_complete", "project": "myproj", "pipe": "fetch", "success": true, "message": "..." }
+//
+// Ref: https://docs.deno.com/runtime/reference/api/net/#unix-sockets
+// Ref: /Users/aaronmyatt/pipes/pd-desktop/src-tauri/src/ipc.rs for the Tauri-side listener
+
+const TAURI_SOCKET_PATH = "/tmp/pipedown.sock";
+
+/**
+ * Attempt to connect to the Tauri desktop app's Unix socket.
+ * Returns the connection if successful, or null if the socket doesn't exist
+ * (meaning the Tauri app isn't running).
+ *
+ * @returns A Deno.Conn object for writing events, or null
+ */
+async function connectToTauriSocket(): Promise<Deno.Conn | null> {
+  try {
+    // Deno.connect with transport: "unix" opens a Unix domain socket.
+    // This will throw if the socket file doesn't exist (Tauri not running).
+    // Ref: https://docs.deno.com/api/deno/~/Deno.connect
+    const conn = await Deno.connect({
+      transport: "unix",
+      path: TAURI_SOCKET_PATH,
+    });
+    return conn;
+  } catch {
+    // Socket doesn't exist or connection refused — Tauri app isn't running.
+    // This is the expected case for standalone `pd` usage.
+    return null;
+  }
+}
+
+/**
+ * Send an event notification to the Tauri desktop app via Unix socket.
+ *
+ * This is a fire-and-forget operation: if the socket isn't available or the
+ * write fails, the error is silently ignored. The pd server must never crash
+ * or block because of Tauri IPC issues.
+ *
+ * @param event - An object with at least a `type` field. Common types:
+ *   - `run_complete` — pipe finished executing
+ *   - `llm_complete` — LLM action finished
+ *   - `test_complete` — tests finished
+ *   - `pack_complete` — pack operation finished
+ *   - `error` — an operation failed
+ *
+ * Ref: /Users/aaronmyatt/pipes/pd-desktop/src-tauri/src/ipc.rs (IpcEvent struct)
+ */
+async function notifyTauri(event: {
+  type: string;
+  title?: string;
+  message?: string;
+  project?: string;
+  pipe?: string;
+  success?: boolean;
+}): Promise<void> {
+  try {
+    const conn = await connectToTauriSocket();
+    if (!conn) return; // Tauri not running — silently skip
+
+    // Encode the event as newline-delimited JSON (the IPC protocol)
+    const encoder = new TextEncoder();
+    const data = encoder.encode(JSON.stringify(event) + "\n");
+    await conn.write(data);
+    conn.close();
+  } catch {
+    // Silently ignore any write errors — the pd server must not be
+    // affected by Tauri IPC failures.
+  }
+}
+
 // ── Optimistic Project Build ──
 // Before any toolbar action (run, run-step, test, pack, etc.) we rebuild
 // the target project's .pd/ directory in-process. This ensures the compiled
@@ -175,7 +256,23 @@ async function resolveProject(name: string): Promise<{ name: string; path: strin
 }
 
 // Helper to run a shell command and stream output back
-function spawnAndStream(cmd: string[], cwd?: string): Response {
+/**
+ * Spawn a child process and stream its combined stdout+stderr as an HTTP response.
+ *
+ * The response is returned immediately (streaming), so the caller can send
+ * it to the HTTP client while the process is still running. The optional
+ * `onComplete` callback fires when the process finishes — this is used to
+ * notify the Tauri desktop app via Unix socket IPC.
+ *
+ * @param cmd      - Command and arguments array (e.g., ["deno", "run", ...])
+ * @param cwd      - Working directory for the child process
+ * @param onComplete - Optional callback invoked with the exit success status
+ *                     when the process finishes. Fire-and-forget; errors are ignored.
+ *
+ * Ref: https://docs.deno.com/api/deno/~/Deno.Command
+ * Ref: https://developer.mozilla.org/en-US/docs/Web/API/ReadableStream
+ */
+function spawnAndStream(cmd: string[], cwd?: string, onComplete?: (success: boolean) => void): Response {
   const process = new Deno.Command(cmd[0], {
     args: cmd.slice(1),
     stdout: "piped",
@@ -197,6 +294,17 @@ function spawnAndStream(cmd: string[], cwd?: string): Response {
       }
       await Promise.all([pump(child.stdout), pump(child.stderr)]);
       controller.close();
+
+      // After both streams are drained, the process has finished.
+      // Fire the completion callback (used for Tauri IPC notifications).
+      if (onComplete) {
+        try {
+          const status = await child.status;
+          onComplete(status.success);
+        } catch {
+          onComplete(false);
+        }
+      }
     },
   });
   return new Response(merged, {
@@ -428,10 +536,30 @@ export async function serve(input: BuildInput){
           }
         }
 
+        // Notify the Tauri desktop app that an LLM action completed.
+        // This triggers a native macOS notification so the user knows
+        // the (potentially slow) LLM operation has finished.
+        notifyTauri({
+          type: "llm_complete",
+          title: `LLM ${action} Complete`,
+          message: `${action} for ${pipeName}${synced ? " (synced)" : ""}`,
+          project: projectName,
+          pipe: pipeName,
+          success: true,
+        });
+
         return new Response(JSON.stringify({ result, synced }), {
           headers: { "content-type": "application/json" },
         });
       } catch (e) {
+        // Notify Tauri about the error too — the user might have switched
+        // to another app while waiting for the LLM response.
+        notifyTauri({
+          type: "error",
+          title: "LLM Action Failed",
+          message: (e as Error).message,
+          success: false,
+        });
         return new Response(JSON.stringify({ error: (e as Error).message }), {
           status: 500,
           headers: { "content-type": "application/json" },
@@ -460,6 +588,16 @@ export async function serve(input: BuildInput){
           [Deno.execPath(), "run", "--unstable-kv", "-A", "-c", configPath, "--no-check",
            traceTsPath, "--input", body.input || "{}", "--json"],
           project.path,
+          // Notify Tauri when the pipe run finishes (success or failure).
+          // The notification fires after the stream is fully consumed.
+          (success) => notifyTauri({
+            type: "run_complete",
+            title: success ? "Pipe Run Complete" : "Pipe Run Failed",
+            message: `${body.pipe}${success ? "" : " encountered errors"}`,
+            project: body.project,
+            pipe: body.pipe,
+            success,
+          }),
         );
       } catch (e) {
         return new Response("Error: " + (e as Error).message, { status: 500 });
@@ -494,6 +632,15 @@ export async function serve(input: BuildInput){
           [Deno.execPath(), "run", "--unstable-kv", "-A", "-c", configPath, "--no-check",
            cliTsPath, "--input", inputJson, "--json"],
           project.path,
+          // Notify Tauri when the step run finishes.
+          (success) => notifyTauri({
+            type: "run_complete",
+            title: success ? "Step Run Complete" : "Step Run Failed",
+            message: `${body.pipe} (step ${body.stepIndex})`,
+            project: body.project,
+            pipe: body.pipe,
+            success,
+          }),
         );
       } catch (e) {
         return new Response("Error: " + (e as Error).message, { status: 500 });
@@ -510,6 +657,14 @@ export async function serve(input: BuildInput){
         return spawnAndStream(
           [Deno.execPath(), "test", "--unstable-kv", "-A", "--no-check"],
           project.path,
+          // Notify Tauri when tests finish.
+          (success) => notifyTauri({
+            type: "test_complete",
+            title: success ? "Tests Passed" : "Tests Failed",
+            message: body.project,
+            project: body.project,
+            success,
+          }),
         );
       } catch (e) {
         return new Response("Error: " + (e as Error).message, { status: 500 });
@@ -526,6 +681,14 @@ export async function serve(input: BuildInput){
         return spawnAndStream(
           [Deno.execPath(), "run", "-A", "--no-check", "jsr:@niceguyyo/pipedown", "pack"],
           project.path,
+          // Notify Tauri when packing finishes.
+          (success) => notifyTauri({
+            type: "pack_complete",
+            title: success ? "Pack Complete" : "Pack Failed",
+            message: body.project,
+            project: body.project,
+            success,
+          }),
         );
       } catch (e) {
         return new Response("Error: " + (e as Error).message, { status: 500 });
@@ -772,8 +935,127 @@ export async function serve(input: BuildInput){
     });
   }
 
-  console.log('wat')
+  // ── Start Tauri Command Listener ──
+  // If the Tauri desktop app is running, it may send commands to this server
+  // via the Unix socket. We listen in the background — if the socket doesn't
+  // exist yet, we retry periodically (the Tauri app may start after pd).
+  //
+  // Commands arrive as newline-delimited JSON:
+  //   { "command": "run", "project": "myproj", "pipe": "fetchData" }
+  //
+  // We handle them by making internal HTTP requests to ourselves, which
+  // reuses all the existing route logic without duplication.
+  listenForTauriCommands(port);
 
   const server = Deno.serve({ handler, port, hostname });
   await server.finished.then(() => console.log("Server closed"));
+}
+
+/**
+ * Listen for incoming commands from the Tauri desktop app via Unix socket.
+ *
+ * This function connects to the Tauri socket and reads commands. If the
+ * socket isn't available (Tauri not running), it retries every 10 seconds.
+ * Commands are dispatched by making internal HTTP requests to the pd server's
+ * own API endpoints — this avoids duplicating route logic.
+ *
+ * @param serverPort - The port the pd HTTP server is listening on
+ *
+ * Ref: https://docs.deno.com/api/deno/~/Deno.connect
+ */
+async function listenForTauriCommands(serverPort: number): Promise<void> {
+  // Retry loop: keep trying to connect to the Tauri socket.
+  // The Tauri app may start before or after the pd server.
+  while (true) {
+    try {
+      const conn = await Deno.connect({
+        transport: "unix",
+        path: TAURI_SOCKET_PATH,
+      });
+      console.log(std.colors.brightCyan("Connected to Tauri desktop app"));
+
+      // Read commands from the socket. Each command is a JSON line.
+      const decoder = new TextDecoderStream();
+      const reader = conn.readable.pipeThrough(decoder).getReader();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+          console.log(std.colors.brightYellow("Tauri socket disconnected"));
+          break;
+        }
+
+        buffer += value;
+        // Process complete lines (newline-delimited JSON protocol)
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || ""; // Keep incomplete last line in buffer
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+
+          try {
+            const cmd = JSON.parse(trimmed);
+            // Dispatch the command by making an internal HTTP request.
+            // This reuses all existing route logic (validation, build, etc.)
+            await dispatchTauriCommand(cmd, serverPort);
+          } catch (e) {
+            console.error("Failed to parse Tauri command:", (e as Error).message);
+          }
+        }
+      }
+    } catch {
+      // Socket not available — Tauri isn't running. Wait and retry.
+    }
+
+    // Wait before retrying connection
+    await new Promise((resolve) => setTimeout(resolve, 10_000));
+  }
+}
+
+/**
+ * Dispatch a command received from the Tauri app by making an internal
+ * HTTP request to the pd server's own API.
+ *
+ * This approach avoids duplicating route logic — the Tauri command is
+ * translated to an API call, which goes through the same handler as
+ * browser-initiated requests.
+ *
+ * @param cmd - The parsed command object from the Tauri socket
+ * @param port - The pd server's HTTP port for internal requests
+ */
+// deno-lint-ignore no-explicit-any
+async function dispatchTauriCommand(cmd: any, port: number): Promise<void> {
+  const baseUrl = `http://127.0.0.1:${port}`;
+
+  try {
+    switch (cmd.command) {
+      case "run":
+        await fetch(`${baseUrl}/api/run`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ project: cmd.project, pipe: cmd.pipe, input: cmd.input }),
+        });
+        break;
+      case "test":
+        await fetch(`${baseUrl}/api/test`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ project: cmd.project }),
+        });
+        break;
+      case "pack":
+        await fetch(`${baseUrl}/api/pack`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ project: cmd.project }),
+        });
+        break;
+      default:
+        console.log(`Unknown Tauri command: ${cmd.command}`);
+    }
+  } catch (e) {
+    console.error(`Failed to dispatch Tauri command '${cmd.command}':`, (e as Error).message);
+  }
 }
