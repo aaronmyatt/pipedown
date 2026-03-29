@@ -8,6 +8,9 @@ async function writeDenoImportMap(input: BuildInput) {
     imports: {
       "/": "./",
       "./": "./",
+      // Pointer library alias — used by replEval.ts so it doesn't hardcode a JSR version.
+      // Ref: https://jsr.io/@pd/pointers
+      "$p": "jsr:@pd/pointers@0.1.1",
     },
     lint: {
       include: [

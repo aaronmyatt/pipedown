@@ -116,6 +116,35 @@ export async function callLLM(prompt: string): Promise<string> {
   return new TextDecoder().decode(stdout).trim();
 }
 
+/**
+ * Cleans raw LLM output by stripping markdown code fences and unwrapping
+ * JSON `{"code": "..."}` envelopes. The `llm` CLI with `-x code` may return
+ * either format depending on the model's behaviour.
+ * Ref: CommonMark spec § 4.5 — https://spec.commonmark.org/0.31.2/#fenced-code-blocks
+ * @param {string} text - Raw LLM output
+ * @returns {string} The extracted code string
+ */
+function cleanLLMOutput(text: string): string {
+  let cleaned = text.trim();
+
+  // Strip markdown code fences (```lang ... ```) — same logic as buildandserve.ts
+  const fenceMatch = cleaned.match(/^```\w*\s*\n([\s\S]*?)\n```\s*$/);
+  if (fenceMatch) cleaned = fenceMatch[1];
+
+  // Unwrap JSON envelope: {"code": "..."} — the `-x code` template
+  // can cause some models to wrap output in this format.
+  try {
+    const parsed = JSON.parse(cleaned);
+    if (parsed && typeof parsed === "object" && typeof parsed.code === "string") {
+      cleaned = parsed.code;
+    }
+  } catch {
+    // Not JSON — use as-is
+  }
+
+  return cleaned;
+}
+
 async function updateMarkdownFile(markdownFile: string, targetIndex: number, newCode: string) {
   const markdownPath = `${markdownFile}.md`;
   
@@ -257,8 +286,11 @@ export async function llmCommand(input: CliInput) {
     
     console.log(std.colors.brightBlue(`Calling LLM to improve: ${targetStep.name}...`));
     const contextPrompt = buildContextPrompt(steps, targetIndex, prompt);
-    const improvedCode = await callLLM(contextPrompt);
-    
+    const rawResult = await callLLM(contextPrompt);
+    // Clean the LLM output: strip code fences and unwrap {"code": "..."} envelopes
+    // before writing back to the markdown source file.
+    const improvedCode = cleanLLMOutput(rawResult);
+
     console.log(std.colors.brightBlue("Updating markdown file..."));
     await updateMarkdownFile(markdownFile, targetIndex, improvedCode);
     

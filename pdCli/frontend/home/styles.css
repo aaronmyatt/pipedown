@@ -234,6 +234,86 @@
   overflow-y: auto;
 }
 
+/* ── Drawer error styles ──
+   Visual treatment for the error state. Uses the same Open Props red tokens
+   (--red-2, --red-3, --red-9) as the traces page's .error-badge for
+   consistency across the dashboard.
+   Ref: Open Props colors — https://open-props.style/#colors */
+
+/* Header modifier — red-tinted background when the drawer is in error state */
+.run-drawer-header--error {
+  background: var(--red-2);
+  border-block-end-color: var(--red-4);
+}
+.run-drawer-header--error .run-drawer-label {
+  color: var(--red-9);
+}
+
+/* Error panel container — replaces the normal drawer body content */
+.drawer-error-panel {
+  white-space: normal;
+  font-family: var(--font-sans);
+}
+
+/* Title row: warning icon + "Request Failed" + status badge */
+.drawer-error-title {
+  display: flex;
+  align-items: center;
+  gap: var(--size-2);
+  font-size: var(--font-size-2);
+  font-weight: var(--font-weight-6);
+  margin-block-end: var(--size-3);
+}
+.drawer-error-icon {
+  font-size: var(--font-size-3);
+}
+
+/* Inline badge for HTTP status code (e.g. "500 Internal Server Error") */
+.drawer-error-status {
+  display: inline-block;
+  background: var(--red-3);
+  color: var(--red-9);
+  font-size: var(--font-size-0);
+  font-weight: var(--font-weight-5);
+  padding: var(--size-1) var(--size-2);
+  border-radius: var(--radius-2);
+  margin-inline-start: auto;
+}
+
+/* Error message body — monospace for readability of server error strings */
+.drawer-error-message {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-1);
+  background: var(--surface-1);
+  border-inline-start: var(--border-size-3) solid var(--red-4);
+  padding: var(--size-3);
+  border-radius: var(--radius-2);
+  margin-block-end: var(--size-3);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Collapsible raw output section for partial stream errors */
+.drawer-error-details {
+  margin-block-start: var(--size-3);
+  font-size: var(--font-size-0);
+  color: var(--text-2);
+}
+.drawer-error-details summary {
+  cursor: pointer;
+  font-weight: var(--font-weight-5);
+  margin-block-end: var(--size-2);
+}
+.drawer-error-details pre {
+  background: var(--surface-1);
+  padding: var(--size-2);
+  border-radius: var(--radius-2);
+  overflow-x: auto;
+  font-size: var(--font-size-0);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 /* Step traces popover */
 .step-traces {
   background: var(--surface-2);

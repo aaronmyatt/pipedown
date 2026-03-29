@@ -21,6 +21,7 @@ window.PD = {
     drawerStatus: "idle",   // "idle" | "running" | "done" | "error"
     drawerParsedOutput: null, // parsed JSON object from run stdout (for jsonTree)
     drawerTrace: null,        // { timestamp, input, output, durationMs, stepsTotal } from trace API
+    drawerError: null,        // { status, statusText, message } — structured error info for RunDrawer display
 
     showListDSL: {},
     stepTraces: {},
@@ -55,15 +56,48 @@ PD.utils.mdRenderer = window.markdownit({
   }
 });
 
+// ── parseErrorBody ──
+// Normalises both server error response formats into a single message string.
+// The /api/llm endpoint returns JSON `{ error: "..." }` while all other action
+// endpoints (/api/run, /api/run-step, /api/test, /api/pack) return plain text
+// prefixed with "Error: ".
+// Ref: buildandserve.ts route handlers — each endpoint's catch block
+PD.utils.parseErrorBody = function(bodyText) {
+  // Attempt JSON parse first — handles /api/llm's `{ error: "message" }` format.
+  try {
+    var parsed = JSON.parse(bodyText);
+    if (parsed && typeof parsed.error === "string") {
+      return parsed.error;
+    }
+  } catch (_) {
+    // Not JSON — fall through to plain text handling.
+  }
+  // Plain text response — return as-is (already includes "Error: " prefix from server).
+  return bodyText || "Unknown error";
+};
+
 // --- Data fetching ---
 PD.actions.loadRecentPipes = function() {
   PD.state.loading = true;
   m.request({ method: "GET", url: "/api/recent-pipes" }).then(function(data) {
     PD.state.recentPipes = data;
     PD.state.loading = false;
-  }).catch(function() {
+  }).catch(function(err) {
     PD.state.recentPipes = [];
     PD.state.loading = false;
+    // Surface the error in the drawer so the user knows why the pipe list
+    // is empty. m.request rejects with an Error whose message includes the
+    // HTTP status for server errors, or a network message for fetch failures.
+    // Ref: https://mithril.js.org/request.html#error-handling
+    PD.state.drawerOpen = true;
+    PD.state.drawerLabel = "Load pipes";
+    PD.state.drawerStatus = "error";
+    PD.state.drawerOutput = err.message || "Failed to load pipes";
+    PD.state.drawerError = {
+      status: (err.code || 0),
+      statusText: "Request Failed",
+      message: err.message || "Failed to load pipes"
+    };
   }).then(function() { m.redraw.sync(); });
 };
 
@@ -127,6 +161,7 @@ PD.actions.selectPipe = function(pipe) {
   PD.state.drawerStatus = "idle";
   PD.state.drawerParsedOutput = null;
   PD.state.drawerTrace = null;
+  PD.state.drawerError = null;
 
   var mdUrl = "/api/projects/" +
     encodeURIComponent(pipe.projectName) +
@@ -144,9 +179,20 @@ PD.actions.selectPipe = function(pipe) {
     PD.state.pipeData = results[1];
     PD.state.markdownHtml = PD.utils.renderMarkdownWithAnnotations(results[0], results[1]);
     PD.state.markdownLoading = false;
-  }).catch(function() {
+  }).catch(function(err) {
     PD.state.markdownHtml = null;
     PD.state.markdownLoading = false;
+    // The markdown fetch failed — surface the error in the drawer so the user
+    // understands why the pipe content area is blank.
+    PD.state.drawerOpen = true;
+    PD.state.drawerLabel = "Load pipe";
+    PD.state.drawerStatus = "error";
+    PD.state.drawerOutput = err.message || "Failed to load pipe";
+    PD.state.drawerError = {
+      status: (err.code || 0),
+      statusText: "Request Failed",
+      message: err.message || "Failed to load pipe"
+    };
   }).then(function() { m.redraw.sync(); });
 };
 
@@ -196,6 +242,7 @@ PD.actions.startOp = function(type, label) {
   PD.state.drawerStatus = "running";
   PD.state.drawerParsedOutput = null;
   PD.state.drawerTrace = null;
+  PD.state.drawerError = null;
   m.redraw();
 };
 
@@ -217,6 +264,14 @@ PD.actions.streamResponse = function(response, onDone) {
       m.redraw();
       read();
     }).catch(function(err) {
+      // Stream read errors (e.g. connection dropped mid-transfer). The drawer
+      // may already contain partial output from earlier chunks, so we append
+      // rather than replace.
+      PD.state.drawerError = {
+        status: 0,
+        statusText: "Stream Error",
+        message: err.message
+      };
       PD.state.drawerStatus = "error";
       PD.state.drawerOutput += "\nError: " + err.message;
       m.redraw();
@@ -227,6 +282,12 @@ PD.actions.streamResponse = function(response, onDone) {
 
 // postAction — POST to a backend endpoint and route all output through the
 // drawer. Handles both JSON and streaming response types.
+//
+// IMPORTANT: We check response.ok *before* content-type branching. The fetch
+// API does NOT reject on HTTP errors (4xx/5xx) — it only rejects on network
+// failures. Without the .ok check, a 500 response would flow through the
+// success path, streaming the error text but setting drawerStatus to "done".
+// Ref: https://developer.mozilla.org/en-US/docs/Web/API/Response/ok
 PD.actions.postAction = function(url, body, label, onDone) {
   PD.actions.startOp(label, label);
   fetch(url, {
@@ -234,6 +295,23 @@ PD.actions.postAction = function(url, body, label, onDone) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body)
   }).then(function(res) {
+    // ── HTTP error detection ──
+    // Must come before content-type branching: a 500 with content-type
+    // application/json (e.g. /api/llm errors) must be treated as an error,
+    // not parsed as success data.
+    if (!res.ok) {
+      return res.text().then(function(bodyText) {
+        var msg = PD.utils.parseErrorBody(bodyText);
+        PD.state.drawerError = {
+          status: res.status,
+          statusText: res.statusText,
+          message: msg
+        };
+        PD.state.drawerStatus = "error";
+        PD.state.drawerOutput = msg;
+        m.redraw.sync();
+      });
+    }
     if (res.headers.get("content-type") && res.headers.get("content-type").includes("application/json")) {
       return res.json().then(function(data) {
         PD.state.drawerOutput = JSON.stringify(data, null, 2);
@@ -245,6 +323,14 @@ PD.actions.postAction = function(url, body, label, onDone) {
     }
     PD.actions.streamResponse(res, onDone);
   }).catch(function(err) {
+    // Network-level failures (DNS, connection refused, CORS, etc.) land here.
+    // The fetch API only rejects for network errors, not HTTP status codes.
+    // Ref: https://developer.mozilla.org/en-US/docs/Web/API/Window/fetch#exceptions
+    PD.state.drawerError = {
+      status: 0,
+      statusText: "Network Error",
+      message: err.message
+    };
     PD.state.drawerStatus = "error";
     PD.state.drawerOutput = "Error: " + err.message;
     m.redraw();

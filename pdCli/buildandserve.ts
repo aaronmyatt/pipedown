@@ -616,7 +616,7 @@ export async function serve(input: BuildInput){
     // Projects dashboard page
     if (url.pathname === "/projects") {
       return new Response(projectsPage(), {
-        headers: { "content-type": "text/html" },
+        headers: { "content-type": "text/html", "cache-control": "no-store" },
       });
     }
 
@@ -654,7 +654,7 @@ export async function serve(input: BuildInput){
     // Trace dashboard page
     if (url.pathname === "/traces") {
       return new Response(tracePage(), {
-        headers: { "content-type": "text/html" },
+        headers: { "content-type": "text/html", "cache-control": "no-store" },
       });
     }
 
@@ -672,6 +672,13 @@ export async function serve(input: BuildInput){
         if (ext === "css") response.headers.set("content-type", "text/css; charset=utf-8");
         if (ext === "js") response.headers.set("content-type", "text/javascript; charset=utf-8");
         response.headers.set("Access-Control-Allow-Origin", "*");
+        // Disable caching in development so file edits are picked up immediately.
+        // serveFile sets etag/last-modified by default which causes 304 responses;
+        // removing them + setting no-store forces the browser to always fetch fresh.
+        // Ref: https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Cache-Control
+        response.headers.set("cache-control", "no-store");
+        response.headers.delete("etag");
+        response.headers.delete("last-modified");
         return response;
       } catch {
         return new Response("Not found", { status: 404 });
@@ -687,6 +694,10 @@ export async function serve(input: BuildInput){
         "Access-Control-Allow-Headers",
         "Origin, X-Requested-With, Content-Type, Accept, Range",
       );
+      // Disable caching for legacy JS files in development.
+      response.headers.set("cache-control", "no-store");
+      response.headers.delete("etag");
+      response.headers.delete("last-modified");
       return response;
     }
 
@@ -697,7 +708,7 @@ export async function serve(input: BuildInput){
 
     // Default: home dashboard (recent pipes with toolbar overlays)
     return new Response(homePage(), {
-      headers: { "content-type": "text/html" },
+      headers: { "content-type": "text/html", "cache-control": "no-store" },
     });
   }
 

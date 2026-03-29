@@ -56,10 +56,20 @@ PD.components.RunDrawer = {
     var isOpen = PD.state.drawerOpen;
 
     // Build the status indicator string that appears next to the label.
+    // When an error occurs and we have structured error info, include the
+    // HTTP status code for quick identification (e.g. "(error 500)").
     var statusText = "";
+    var isError = PD.state.drawerStatus === "error";
     if (PD.state.drawerStatus === "running") statusText = " ...";
     if (PD.state.drawerStatus === "done")    statusText = " (done)";
-    if (PD.state.drawerStatus === "error")   statusText = " (error)";
+    if (isError) {
+      var errStatus = PD.state.drawerError && PD.state.drawerError.status;
+      statusText = errStatus ? " (error " + errStatus + ")" : " (error)";
+    }
+
+    // Build the CSS class string. The header gets a red-tinted background
+    // when in error state via the run-drawer-header--error modifier class.
+    var headerClass = isError ? "run-drawer-header run-drawer-header--error" : "run-drawer-header";
 
     // Use a static selector (".run-drawer") and a dynamic `class` attr for
     // the "open" toggle. In Mithril v2 the `class` attr is merged with
@@ -68,7 +78,7 @@ PD.components.RunDrawer = {
     // and prevent class updates from reaching the DOM.
     // Ref: https://mithril.js.org/hyperscript.html#css-selectors
     return m(".run-drawer", { class: isOpen ? "open" : "" }, [
-      m(".run-drawer-header", [
+      m("div", { class: headerClass }, [
         m("span.run-drawer-label", [
           PD.state.drawerLabel,
           statusText
@@ -99,6 +109,50 @@ PD.utils.drawerBodyContent = function() {
   // While running, show raw streaming text so the user sees live progress.
   if (PD.state.drawerStatus === "running") {
     return PD.state.drawerOutput || "Running...";
+  }
+
+  // ── Error display ──
+  // When an operation fails (HTTP error, network error, or stream error),
+  // render a structured error panel with status code, message, and optional
+  // raw output for partial stream errors.
+  if (PD.state.drawerStatus === "error" && PD.state.drawerError) {
+    var err = PD.state.drawerError;
+    var sections = [];
+
+    // Title row: warning indicator + "Request Failed" + optional HTTP badge.
+    var titleChildren = [
+      m("span.drawer-error-icon", "\u26A0"),
+      m("span", " Request Failed")
+    ];
+    // Show the HTTP status code as an inline badge when available.
+    // A status of 0 indicates a network-level failure (DNS, CORS, etc.)
+    // rather than an HTTP response, so we show "Network" instead.
+    if (err.status) {
+      titleChildren.push(
+        m("span.drawer-error-status", err.status + " " + err.statusText)
+      );
+    } else {
+      titleChildren.push(
+        m("span.drawer-error-status", err.statusText || "Network Error")
+      );
+    }
+    sections.push(m("div.drawer-error-title", titleChildren));
+
+    // Error message body.
+    sections.push(m("div.drawer-error-message", err.message));
+
+    // If the drawer accumulated partial output before the error (e.g. a
+    // stream that broke mid-transfer), show it in a collapsible section
+    // so the user can inspect what arrived before the failure.
+    var rawOutput = PD.state.drawerOutput;
+    if (rawOutput && rawOutput !== err.message) {
+      sections.push(m("details.drawer-error-details", [
+        m("summary", "Raw output"),
+        m("pre", rawOutput)
+      ]));
+    }
+
+    return m("div.drawer-error-panel", sections);
   }
 
   // ── Trace data (richest view) ──
