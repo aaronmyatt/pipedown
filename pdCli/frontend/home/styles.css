@@ -11,7 +11,12 @@
   gap: var(--size-1);
 }
 .pipe-card:hover { background: var(--surface-3); }
-.pipe-card.active { background: var(--surface-4); }
+/* Active card gets a green left accent so the selection reads at a glance */
+.pipe-card.active {
+  background: var(--surface-4);
+  border-inline-start: 3px solid var(--green-6);
+  padding-inline-start: calc(var(--size-2) - 3px);
+}
 .pipe-card-name {
   font-family: var(--font-mono);
   font-size: var(--font-size-1);
@@ -26,9 +31,10 @@
   font-size: var(--font-size-0);
   color: var(--text-2);
 }
+/* Project badge — green tint matching the global accent palette */
 .badge-project {
-  background: var(--indigo-2);
-  color: var(--indigo-9);
+  background: var(--green-2);
+  color: var(--green-9);
 }
 
 
@@ -116,12 +122,17 @@
   white-space: nowrap;
 }
 .tb-btn:hover { background: var(--surface-3); }
+/* Primary action button — green accent with a subtle gradient for depth.
+   Matches the pd-desktop brand gradient (green-5 → green-7).
+   Ref: Open Props green scale — https://open-props.style/#green */
 .tb-btn.primary {
-  background: var(--indigo-3);
-  color: var(--indigo-9);
-  border-color: var(--indigo-4);
+  background: linear-gradient(135deg, var(--green-3), var(--green-4));
+  color: var(--green-9);
+  border-color: var(--green-5);
 }
-.tb-btn.primary:hover { background: var(--indigo-4); }
+.tb-btn.primary:hover {
+  background: linear-gradient(135deg, var(--green-4), var(--green-5));
+}
 
 /* Dropdown */
 .dropdown-wrapper { position: relative; display: inline-block; }
@@ -163,7 +174,8 @@
   color: var(--text-2);
 }
 .dsl-block .dsl-line { margin: var(--size-1) 0; }
-.dsl-key { color: var(--indigo-7); }
+/* DSL directive keys use a darker green to contrast with values (--green-7) */
+.dsl-key { color: var(--green-4); }
 .dsl-val { color: var(--green-7); }
 
 /* ── Right-hand sliding drawer ──
@@ -366,9 +378,9 @@
   box-sizing: border-box;
 }
 
-/* Focus ring matches the indigo accent used elsewhere in the dashboard */
+/* Focus ring — green accent consistent with the dashboard theme */
 .md-editor:focus {
-  outline: 2px solid var(--indigo-5);
+  outline: 2px solid var(--green-5);
   outline-offset: -2px;
 }
 
@@ -377,23 +389,26 @@
    The dashed style visually distinguishes it as a creation affordance
    rather than a navigation element. */
 
+/* New-pipe creation button — dashed green border signals an "add" affordance */
 .new-pipe-btn {
   width: 100%;
   padding: var(--size-2);
   margin-block-end: var(--size-3);
   border-radius: var(--radius-2);
-  border: var(--border-size-1) dashed var(--indigo-4);
+  border: var(--border-size-1) dashed var(--green-5);
   background: transparent;
-  color: var(--indigo-7);
+  color: var(--green-6);
   cursor: pointer;
   font-size: var(--font-size-1);
   font-family: var(--font-sans);
   font-weight: var(--font-weight-5);
+  transition: background 0.15s, border-style 0.15s;
 }
 
 .new-pipe-btn:hover {
-  background: var(--indigo-1);
+  background: var(--green-1);
   border-style: solid;
+  border-color: var(--green-6);
 }
 
 /* ── New Pipe Modal ──
@@ -449,7 +464,7 @@
 }
 
 .modal-input:focus {
-  outline: 2px solid var(--indigo-5);
+  outline: 2px solid var(--green-5);
   outline-offset: -2px;
 }
 

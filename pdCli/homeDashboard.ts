@@ -126,7 +126,8 @@ export function homePage(): string {
   <link rel="stylesheet" href="/frontend/home/styles.css"/>
   <script src="https://unpkg.com/mithril/mithril.js"><\/script>
   <script src="https://unpkg.com/markdown-it/dist/markdown-it.min.js"><\/script>
-  <link rel="stylesheet" href="https://unpkg.com/@highlightjs/cdn-assets@11.9.0/styles/github.min.css"/>
+  <link rel="stylesheet" href="https://unpkg.com/@highlightjs/cdn-assets@11.9.0/styles/github.min.css" media="(prefers-color-scheme: light)"/>
+  <link rel="stylesheet" href="https://unpkg.com/@highlightjs/cdn-assets@11.9.0/styles/github-dark.min.css" media="(prefers-color-scheme: dark)"/>
   <script src="https://unpkg.com/@highlightjs/cdn-assets@11.9.0/highlight.min.js"><\/script>
 </head>
 <body>

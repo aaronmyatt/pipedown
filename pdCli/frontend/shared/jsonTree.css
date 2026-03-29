@@ -6,7 +6,10 @@
 .jt-row.jt-clickable { cursor: pointer; user-select: none; }
 .jt-row.jt-clickable:hover { background: var(--surface-3); }
 .jt-toggle { width: 1.2em; flex-shrink: 0; color: var(--text-2); text-align: center; }
-.jt-key { color: var(--indigo-7); flex-shrink: 0; }
+/* Keys use a lighter green (--green-4) so they contrast with
+   string values (--green-7) while staying in the green palette.
+   Ref: Open Props green scale — https://open-props.style/#green */
+.jt-key { color: var(--green-4); flex-shrink: 0; }
 .jt-colon { color: var(--text-2); margin: 0 0.3em; flex-shrink: 0; }
 .jt-string { color: var(--green-7); word-break: break-word; overflow-wrap: anywhere; white-space: pre-wrap; }
 .jt-number { color: var(--blue-7); }

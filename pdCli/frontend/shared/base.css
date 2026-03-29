@@ -1,7 +1,71 @@
+/* Shared dashboard theme tokens.
+   Light mode uses deeper green accents; dark mode shifts to lighter mint-green
+   hues and softer surface separation to reduce contrast fatigue. */
+:root {
+  color-scheme: light dark;
+  --page-bg: #eef4ee;
+  --page-bg-accent: rgba(57, 106, 74, 0.14);
+  --page-bg-accent-2: rgba(126, 166, 118, 0.12);
+  --surface-1: #f6faf6;
+  --surface-2: rgba(252, 254, 251, 0.78);
+  --surface-3: #e4ede4;
+  --surface-4: #cddacd;
+  --text-1: #173223;
+  --text-2: #4d6656;
+  --link: #24583c;
+  --green-1: #edf5ed;
+  --green-2: #d8e8d7;
+  --green-3: #bad3b8;
+  --green-4: #6f9871;
+  --green-5: #4b7a53;
+  --green-6: #2f633e;
+  --green-7: #245235;
+  --green-8: #1c4129;
+  --green-9: #132f1e;
+  --shell-shadow: 0 18px 42px rgba(20, 43, 29, 0.08);
+  --shell-border: rgba(84, 119, 92, 0.16);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --page-bg: #0d1612;
+    --page-bg-accent: rgba(110, 190, 150, 0.18);
+    --page-bg-accent-2: rgba(165, 214, 171, 0.14);
+    --surface-1: #15211b;
+    --surface-2: rgba(25, 37, 31, 0.78);
+    --surface-3: #1f3028;
+    --surface-4: #2c4337;
+    --text-1: #ebf5ee;
+    --text-2: #a7bbae;
+    --link: #9be5b2;
+    --green-1: #152019;
+    --green-2: #1d2d24;
+    --green-3: #294034;
+    --green-4: #72be95;
+    --green-5: #91d8af;
+    --green-6: #b6eaca;
+    --green-7: #d4f5df;
+    --green-8: #ecfcf1;
+    --green-9: #f7fff9;
+    --shell-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
+    --shell-border: rgba(150, 211, 172, 0.12);
+  }
+}
+
+html {
+  min-height: 100%;
+  background: var(--page-bg);
+}
+
 body {
   margin: 0;
   font-family: var(--font-sans);
-  background: var(--surface-1);
+  min-height: 100vh;
+  background-color: var(--page-bg);
+  background-image:
+    radial-gradient(circle at top left, var(--page-bg-accent), transparent 34%),
+    radial-gradient(circle at top right, var(--page-bg-accent-2), transparent 30%),
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-1) 38%, transparent), transparent 58%);
   color: var(--text-1);
 }
 .layout {
@@ -10,27 +74,69 @@ body {
   grid-template-rows: auto 1fr;
   min-height: 100vh;
 }
+/* ── Topbar ──
+   Spans the full grid width. A subtle green gradient underline echoes the
+   pd-desktop splash branding (--green-5 → --green-9 at 135deg).
+   Ref: Open Props green scale — https://open-props.style/#green */
 .topbar {
   grid-column: 1 / -1;
   display: flex;
   align-items: center;
   gap: var(--size-3);
   padding: var(--size-2) var(--size-4);
-  background: var(--surface-2);
-  border-block-end: var(--border-size-1) solid var(--surface-3);
+  background: color-mix(in srgb, var(--surface-2) 88%, transparent);
+  -webkit-backdrop-filter: blur(18px) saturate(1.1);
+  backdrop-filter: blur(18px) saturate(1.1);
+  border-block-end: 2px solid transparent;
+  box-shadow: var(--shell-shadow);
+  /* Gradient bottom border — painted via background-image on the border area.
+     The first layer is the solid surface fill; the second is the green gradient
+     that only shows through the 2px bottom border.
+     Ref: https://developer.mozilla.org/en-US/docs/Web/CSS/border-image */
+  border-image: linear-gradient(
+    90deg,
+    var(--green-5) 0%,
+    var(--green-7) 50%,
+    var(--green-9) 100%
+  ) 1;
 }
-.topbar h1 { font-size: var(--font-size-3); margin: 0; }
+
+/* Brand heading — gradient text matching the pd-desktop logo treatment.
+   Uses background-clip: text to fill the heading with a vivid green gradient.
+   Ref: https://developer.mozilla.org/en-US/docs/Web/CSS/background-clip#text */
+.topbar h1 {
+  font-size: var(--font-size-3);
+  font-weight: var(--font-weight-9);
+  margin: 0;
+  background: linear-gradient(
+    135deg,
+    var(--green-5) 0%,
+    var(--green-7) 60%,
+    var(--green-9) 100%
+  );
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Nav links pick up the green accent instead of the default --link blue */
 .topbar a {
-  color: var(--link);
+  color: var(--green-6);
   text-decoration: none;
   font-size: var(--font-size-1);
+  transition: color 0.15s;
 }
-.topbar a:hover { text-decoration: underline; }
+.topbar a:hover {
+  color: var(--green-5);
+  text-decoration: underline;
+}
 .sidebar {
-  background: var(--surface-2);
+  background: color-mix(in srgb, var(--surface-2) 92%, transparent);
   padding: var(--size-3);
   overflow-y: auto;
-  border-inline-end: var(--border-size-1) solid var(--surface-3);
+  border-inline-end: var(--border-size-1) solid var(--shell-border);
+  -webkit-backdrop-filter: blur(14px) saturate(1.05);
+  backdrop-filter: blur(14px) saturate(1.05);
 }
 .search-input {
   width: 100%;
@@ -44,11 +150,17 @@ body {
   margin-block-end: var(--size-3);
   box-sizing: border-box;
 }
+/* Green focus ring on the search field — consistent with the accent colour */
+.search-input:focus {
+  outline: 2px solid var(--green-5);
+  outline-offset: -2px;
+}
 .search-input::placeholder { color: var(--text-2); }
 .detail {
   padding: var(--size-4);
   overflow: auto;
   min-width: 0;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface-1) 72%, transparent), transparent 45%);
 }
 .empty-state {
   display: flex;
@@ -60,10 +172,12 @@ body {
   gap: var(--size-2);
 }
 .empty-state p { font-size: var(--font-size-2); }
+/* Generic badge — light green tint instead of neutral surface */
 .badge {
   padding: 1px var(--size-1);
   border-radius: var(--radius-1);
-  background: var(--surface-3);
+  background: color-mix(in srgb, var(--green-3) 60%, var(--surface-1));
+  color: var(--green-9);
   font-size: var(--font-size-00);
   font-family: var(--font-mono);
 }
