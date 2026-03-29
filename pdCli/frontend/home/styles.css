@@ -162,6 +162,116 @@
 }
 .dropdown-item:hover { background: var(--surface-3); }
 
+/* ── Split button group ──
+   Pairs a primary action button with a narrow dropdown toggle (▾) that
+   opens an input history menu. The two buttons share a single visual
+   border-radius so they look like one control.
+   Ref: Open Props radius — https://open-props.style/#radius */
+.split-btn-group {
+  display: inline-flex;
+  position: relative;
+}
+/* Remove the right radius from the left button and left radius from the
+   toggle so the pair shares a smooth outer border-radius. */
+.split-btn-group > .tb-btn:first-child {
+  border-start-end-radius: 0;
+  border-end-end-radius: 0;
+  border-inline-end: none;
+}
+.split-btn-group > .split-toggle {
+  border-start-start-radius: 0;
+  border-end-start-radius: 0;
+  padding-inline: var(--size-1);
+  min-width: 0;
+  /* Subtle left divider between the main button and toggle */
+  border-inline-start: var(--border-size-1) solid color-mix(in srgb, var(--green-6) 40%, transparent);
+}
+
+/* ── Input dropdown menu ──
+   Extends the standard .dropdown-menu with wider min-width and
+   scrollable height for potentially long input history lists.
+   Overrides the default .dropdown-menu `right: 0` to `left: 0` so
+   the menu opens rightward — the Run button sits near the left of
+   the toolbar, and opening leftward would push it behind the sidebar.
+   Uses z-index: 30 to sit above the sidebar's grid stacking context
+   (sidebar is z-index: auto within the CSS grid layout).
+   Ref: CSS stacking contexts — https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_positioned_layout/Stacking_context */
+.input-dropdown {
+  min-width: 260px;
+  max-width: 400px;
+  max-height: 320px;
+  overflow-y: auto;
+  left: 0;
+  right: auto;
+  z-index: 30;
+}
+
+/* Divider between "Custom Input..." and history items */
+.dropdown-divider {
+  height: 0;
+  border-block-start: var(--border-size-1) solid var(--surface-3);
+  margin-block: var(--size-1);
+}
+
+/* Monospace truncated preview of a JSON input object */
+.input-preview {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-00);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+  max-width: 340px;
+  color: var(--green-7);
+}
+
+/* ── Drawer input editor ──
+   Styles for the JSON editor mode inside the RunDrawer.
+   The textarea fills the available drawer body height. */
+.input-editor-textarea {
+  width: 100%;
+  min-height: 200px;
+  flex: 1;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-1);
+  line-height: 1.6;
+  background: var(--surface-1);
+  color: var(--text-1);
+  border: var(--border-size-1) solid var(--surface-4);
+  border-radius: var(--radius-2);
+  padding: var(--size-3);
+  resize: vertical;
+  tab-size: 2;
+  box-sizing: border-box;
+}
+.input-editor-textarea:focus {
+  outline: 2px solid var(--green-5);
+  outline-offset: -2px;
+}
+
+/* Validation status line below the textarea */
+.input-editor-status {
+  font-size: var(--font-size-0);
+  padding: var(--size-1) 0;
+}
+.input-editor-status--valid {
+  color: var(--green-6);
+}
+.input-editor-status--error {
+  color: var(--red-4);
+  font-family: var(--font-mono);
+}
+
+/* Action bar at the bottom of the input editor */
+.input-editor-actions {
+  display: flex;
+  gap: var(--size-2);
+  justify-content: flex-end;
+  padding-block-start: var(--size-2);
+  border-block-start: var(--border-size-1) solid var(--surface-3);
+  margin-block-start: var(--size-2);
+}
+
 /* DSL directive display */
 .dsl-block {
   background: var(--surface-2);

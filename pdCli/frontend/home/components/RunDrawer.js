@@ -1,8 +1,12 @@
 // ── RunDrawer Component ──
 // Right-hand sliding drawer panel that displays output from all operations
-// (pipe runs, step runs, LLM actions, tests, pack). Replaces the old
-// bottom-fixed OperationPanel and the view-mode output tab system with a
-// single unified output surface.
+// (pipe runs, step runs, LLM actions, tests, pack) AND an interactive JSON
+// editor for custom pipeline input.
+//
+// The drawer operates in two modes controlled by PD.state.drawerMode:
+//   - null (default): shows operation output (streaming text, jsonTree, errors)
+//   - "input": shows a JSON textarea where the user can define custom input
+//     and execute the pipe with it
 //
 // The drawer is always in the DOM (required for the CSS slide transition)
 // but lives offscreen via `transform: translateX(100%)` when closed. The
@@ -20,6 +24,8 @@ PD.components.RunDrawer = {
     vnode.state._onKeyDown = function(e) {
       if (e.key === "Escape" && PD.state.drawerOpen) {
         PD.actions.closeDrawer();
+        // Also clear input mode so reopening doesn't show stale editor state.
+        PD.state.drawerMode = null;
         // Mithril auto-redraws after DOM event handlers, but this keydown
         // is registered on document (outside Mithril's event delegation),
         // so we trigger a manual synchronous redraw.
@@ -41,8 +47,9 @@ PD.components.RunDrawer = {
   // running so the user always sees the latest output as it streams in.
   // Once the operation finishes ("done" or "error") we stop scrolling so
   // the user can freely scroll up through the output.
+  // Skip auto-scroll in input editor mode — the user is typing, not watching.
   onupdate: function(vnode) {
-    if (PD.state.drawerStatus === "running") {
+    if (PD.state.drawerStatus === "running" && PD.state.drawerMode !== "input") {
       var body = vnode.dom.querySelector(".run-drawer-body");
       if (body) {
         body.scrollTop = body.scrollHeight;
@@ -54,7 +61,30 @@ PD.components.RunDrawer = {
     // Always render the wrapper div so CSS transitions work. The `.open`
     // class controls visibility via transform.
     var isOpen = PD.state.drawerOpen;
+    var isInputMode = PD.state.drawerMode === "input";
 
+    // ── Input editor mode ──
+    // When the user opened "Custom Input...", render the JSON editor view
+    // with a textarea, validation status, and a Run button.
+    if (isInputMode) {
+      return m(".run-drawer", { class: isOpen ? "open" : "" }, [
+        m("div.run-drawer-header", [
+          m("span.run-drawer-label", PD.state.drawerLabel || "Custom Input"),
+          m("button.run-drawer-close", {
+            onclick: function() {
+              PD.actions.closeDrawer();
+              PD.state.drawerMode = null;
+            },
+            title: "Close drawer (Esc)"
+          }, "\u00D7")
+        ]),
+        m(".run-drawer-body", { style: "display: flex; flex-direction: column;" },
+          PD.utils.drawerInputEditorContent()
+        )
+      ]);
+    }
+
+    // ── Normal output mode ──
     // Build the status indicator string that appears next to the label.
     // When an error occurs and we have structured error info, include the
     // HTTP status code for quick identification (e.g. "(error 500)").
@@ -91,6 +121,142 @@ PD.components.RunDrawer = {
       m(".run-drawer-body", PD.utils.drawerBodyContent())
     ]);
   }
+};
+
+// ── drawerInputEditorContent ──
+// Renders the JSON editor view inside the drawer body when drawerMode is
+// "input". Contains:
+//   1. A brief instruction line
+//   2. A <textarea> bound to PD.state.drawerInputBuffer
+//   3. Real-time JSON validation feedback
+//   4. A "Run" primary button that parses and executes
+//   5. Clickable history items below for quick selection
+//
+// The textarea uses Tab to insert spaces (like the markdown editor) and
+// Cmd/Ctrl+Enter as a shortcut to execute.
+// Ref: https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent/key
+PD.utils.drawerInputEditorContent = function() {
+  // Validate the current buffer in real-time so the user sees parse errors
+  // before clicking Run.
+  var validationResult = null;
+  try {
+    JSON.parse(PD.state.drawerInputBuffer);
+    validationResult = { valid: true };
+  } catch (e) {
+    validationResult = { valid: false, message: e.message };
+  }
+
+  // Check if the drawer has a non-input error to display (e.g. from a failed
+  // parse attempt via executeFromDrawer).
+  var parseError = PD.state.drawerError && PD.state.drawerError.statusText === "Invalid JSON"
+    ? PD.state.drawerError.message
+    : null;
+
+  var sections = [];
+
+  // ── Instruction ──
+  sections.push(m("div", {
+    style: "font-family: var(--font-sans); font-size: var(--font-size-0); color: var(--text-2); margin-block-end: var(--size-2);"
+  }, "Enter JSON to use as pipeline input. Select a past input below or edit freely."));
+
+  // ── Textarea ──
+  // The textarea is the primary input surface. It supports Tab for indent
+  // and Cmd/Ctrl+Enter to run.
+  sections.push(m("textarea.input-editor-textarea", {
+    value: PD.state.drawerInputBuffer,
+    oninput: function(e) {
+      PD.state.drawerInputBuffer = e.target.value;
+      // Clear any previous parse error when the user types.
+      if (PD.state.drawerError && PD.state.drawerError.statusText === "Invalid JSON") {
+        PD.state.drawerError = null;
+      }
+    },
+    onkeydown: function(e) {
+      // Tab inserts two spaces instead of moving focus — same behaviour
+      // as the markdown editor for consistency.
+      // Ref: https://developer.mozilla.org/en-US/docs/Web/API/HTMLTextAreaElement/selectionStart
+      if (e.key === "Tab") {
+        e.preventDefault();
+        var ta = e.target;
+        var start = ta.selectionStart;
+        var end = ta.selectionEnd;
+        PD.state.drawerInputBuffer =
+          PD.state.drawerInputBuffer.substring(0, start) +
+          "  " +
+          PD.state.drawerInputBuffer.substring(end);
+        // Mithril will update the textarea value on next redraw, but we need
+        // to restore cursor position after that redraw.
+        requestAnimationFrame(function() {
+          ta.selectionStart = ta.selectionEnd = start + 2;
+        });
+      }
+      // Cmd/Ctrl+Enter runs the pipe with the current input.
+      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        PD.actions.executeFromDrawer();
+      }
+    },
+    placeholder: '{\n  "key": "value"\n}',
+    spellcheck: false
+  }));
+
+  // ── Validation status ──
+  if (parseError) {
+    sections.push(m("div.input-editor-status.input-editor-status--error", parseError));
+  } else if (!validationResult.valid) {
+    sections.push(m("div.input-editor-status.input-editor-status--error", validationResult.message));
+  } else {
+    sections.push(m("div.input-editor-status.input-editor-status--valid", "\u2713 Valid JSON"));
+  }
+
+  // ── Action bar ──
+  sections.push(m("div.input-editor-actions", [
+    m("button.tb-btn", {
+      onclick: function() {
+        PD.actions.closeDrawer();
+        PD.state.drawerMode = null;
+      }
+    }, "Cancel"),
+    m("button.tb-btn.primary", {
+      onclick: PD.actions.executeFromDrawer,
+      disabled: !validationResult.valid,
+      title: validationResult.valid ? "Run with this input (Cmd+Enter)" : "Fix JSON errors first"
+    }, PD.state.drawerInputTarget != null
+      ? "Run to step " + PD.state.drawerInputTarget
+      : "Run Pipe"
+    )
+  ]));
+
+  // ── Past inputs quick-pick ──
+  // Show clickable history items below the editor so the user can load
+  // a past input into the textarea with one click.
+  var history = PD.state.inputHistory;
+  if (history && history.length > 0) {
+    sections.push(m("div", {
+      style: "margin-block-start: var(--size-3); border-block-start: var(--border-size-1) solid var(--surface-3); padding-block-start: var(--size-2);"
+    }, [
+      m("div", {
+        style: "font-family: var(--font-sans); font-size: var(--font-size-0); color: var(--text-2); margin-block-end: var(--size-1); font-weight: var(--font-weight-5);"
+      }, "Past inputs"),
+      history.map(function(inputObj, i) {
+        return m("button.dropdown-item.input-history-item", {
+          title: "Click to load into editor",
+          onclick: function() {
+            // Load the selected past input into the textarea for editing
+            // rather than executing immediately — the user opened the editor
+            // because they want to review/modify before running.
+            PD.state.drawerInputBuffer = JSON.stringify(inputObj, null, 2);
+            // Clear any stale parse errors.
+            if (PD.state.drawerError && PD.state.drawerError.statusText === "Invalid JSON") {
+              PD.state.drawerError = null;
+            }
+          }
+        }, m("code.input-preview", PD.utils.inputPreview(inputObj)));
+      })
+    ]));
+  }
+
+  return sections;
 };
 
 // ── drawerBodyContent ──

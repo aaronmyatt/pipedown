@@ -1,7 +1,11 @@
 // Home PipeToolbar component
 // Renders pipe-level action buttons and an optional I/O panel that displays
 // the whole-pipeline input/output from the most recent trace files.
-// Ref: state.js PD.actions.loadPipeTraces, homeDashboard.ts recentPipeTraces
+// The "Run" button is a split button: the left half runs with no input (or
+// the currently staged input), the right "▾" half opens a dropdown showing
+// unique past inputs from trace history and a "Custom Input..." option that
+// opens the drawer's JSON editor.
+// Ref: state.js PD.actions.loadPipeTraces, PD.actions.runPipeWithInput
 PD.components.PipeToolbar = {
   view: function() {
     if (!PD.state.pipeData || !PD.state.selectedPipe) return null;
@@ -11,7 +15,36 @@ PD.components.PipeToolbar = {
         m("button.tb-btn", { onclick: function() { PD.actions.llmAction("description"); } }, "Description"),
         m("button.tb-btn", { onclick: function() { PD.actions.llmAction("schema"); } }, "Schema"),
         m("button.tb-btn", { onclick: function() { PD.actions.llmAction("tests"); } }, "Tests"),
-        m("button.tb-btn.primary", { onclick: PD.actions.runPipe }, "Run"),
+        // ── Split Run button ──
+        // Left half: runs the pipe with no custom input (default behaviour).
+        // Right half (▾): opens the input history dropdown.
+        // The .split-btn-group wrapper removes inner border-radii so the
+        // pair reads as one control.
+        // Ref: styles.css .split-btn-group
+        m(".split-btn-group", [
+          m("button.tb-btn.primary", { onclick: PD.actions.runPipe }, "Run"),
+          m("button.tb-btn.primary.split-toggle", {
+            onclick: function(e) {
+              e.stopPropagation();
+              PD.state.inputDropdownOpen = !PD.state.inputDropdownOpen;
+              // Close any step-level input dropdown that might be open.
+              PD.state.inputDropdownStep = null;
+              // Lazy-load input history on first open.
+              if (PD.state.inputDropdownOpen) {
+                PD.actions.loadInputHistory();
+              }
+            },
+            title: "Run with past input or custom JSON"
+          }, "\u25BE"),
+          // ── Input history dropdown ──
+          // Positioned below the split button via .dropdown-wrapper conventions.
+          // Contains "Custom Input..." at top, divider, then unique past inputs.
+          PD.state.inputDropdownOpen ? m(".dropdown-menu.input-dropdown", {
+            // Prevent clicks inside the dropdown from bubbling to Layout's
+            // click-outside handler which would close it prematurely.
+            onclick: function(e) { e.stopPropagation(); }
+          }, PD.utils.renderInputDropdownItems(null)) : null
+        ]),
         // ── Edit / Save / Cancel toggle ──
         // In read mode: "Edit" enters the textarea editor.
         // In edit mode: "Save" persists changes, "Cancel" discards them.

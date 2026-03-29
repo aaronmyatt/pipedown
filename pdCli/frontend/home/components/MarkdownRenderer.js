@@ -94,12 +94,17 @@ function injectStepToolbars(container) {
   // using the "Code" button to have the LLM generate the code block.
   container.querySelectorAll("h2.pd-step-boundary").forEach(function(heading) {
     var wrapper = heading.parentNode;
-    if (wrapper.querySelector(".toolbar-overlay")) return;
 
-    var toolbar = document.createElement("div");
-    toolbar.className = "toolbar-overlay";
-    toolbar.innerHTML = "";
-    wrapper.appendChild(toolbar);
+    // Re-use existing toolbar div if present (required for split-button
+    // dropdown state updates), or create a new one. Unlike the old guard
+    // that returned early, we always m.render() below so the dropdown
+    // toggle reflects the current PD.state.inputDropdownStep value.
+    var toolbar = wrapper.querySelector(".toolbar-overlay");
+    if (!toolbar) {
+      toolbar = document.createElement("div");
+      toolbar.className = "toolbar-overlay";
+      wrapper.appendChild(toolbar);
+    }
 
     var isExecutable = heading.hasAttribute("data-step-index");
 
@@ -109,11 +114,47 @@ function injectStepToolbars(container) {
       var step = PD.state.pipeData.steps[idx];
       if (!step) return;
 
+      // ── Step toolbar: split "Run to here" button with input dropdown ──
+      // Same split-button pattern as the pipe-level Run button in PipeToolbar.
+      // The left half runs to this step with no custom input; the right "▾"
+      // opens a dropdown of past inputs and a "Custom Input..." editor option.
+      // Ref: PD.utils.renderInputDropdownItems, state.js inputDropdownStep
       m.render(toolbar, [
         m("button.tb-btn", { onclick: function() { PD.actions.llmAction("step-title", { stepIndex: idx }); } }, "Title"),
         m("button.tb-btn", { onclick: function() { PD.actions.llmAction("step-description", { stepIndex: idx }); } }, "Describe"),
         m("button.tb-btn", { onclick: function() { PD.actions.llmAction("step-code", { stepIndex: idx }); } }, "Code"),
-        m("button.tb-btn.primary", { onclick: function() { PD.actions.runToStep(idx); } }, "Run to here"),
+        m(".split-btn-group", [
+          m("button.tb-btn.primary", { onclick: function() { PD.actions.runToStep(idx); } }, "Run to here"),
+          m("button.tb-btn.primary.split-toggle", {
+            onclick: function(e) {
+              e.stopPropagation();
+              // Toggle this step's dropdown; close pipe-level dropdown and
+              // any other step dropdown that might be open.
+              PD.state.inputDropdownOpen = false;
+              PD.state.inputDropdownStep = PD.state.inputDropdownStep === idx ? null : idx;
+              // Lazy-load input history on first open.
+              if (PD.state.inputDropdownStep === idx) {
+                PD.actions.loadInputHistory();
+              }
+              // Step toolbars are rendered via m.render (outside the Mithril
+              // auto-redraw tree), so we need to manually re-render all step
+              // extras and toolbars to update the dropdown visibility.
+              // Ref: https://mithril.js.org/render.html
+              m.redraw();
+              // Re-inject toolbars after redraw to pick up the new dropdown state.
+              // Use requestAnimationFrame so the DOM has been updated first.
+              requestAnimationFrame(function() {
+                var mdViewer = document.querySelector(".md-viewer");
+                if (mdViewer) injectStepToolbars(mdViewer);
+              });
+            },
+            title: "Run to here with past input or custom JSON"
+          }, "\u25BE"),
+          // Render the dropdown if this step's toggle is active.
+          PD.state.inputDropdownStep === idx ? m(".dropdown-menu.input-dropdown", {
+            onclick: function(e) { e.stopPropagation(); }
+          }, PD.utils.renderInputDropdownItems(idx)) : null
+        ]),
         m("button.tb-btn", {
           onclick: function() { PD.actions.toggleDSL(idx); m.redraw(); },
           style: PD.utils.buildDSLLines(step.config).length === 0 ? "opacity: 0.4; pointer-events: none;" : ""

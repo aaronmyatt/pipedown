@@ -47,7 +47,26 @@ window.PD = {
     showNewPipeModal: false,
     newPipeName: "",       // user-entered pipe name
     newPipeProject: null,  // selected project name for the new file
-    newPipeCreating: false // true while the create POST is in flight
+    newPipeCreating: false, // true while the create POST is in flight
+
+    // ── Input history & JSON builder ──
+    // The input dropdown attaches to the Run / "Run to here" split buttons,
+    // showing unique past inputs from trace history plus a "Custom Input..."
+    // option that opens a JSON editor in the drawer.
+    // Ref: PipeToolbar.js split button, MarkdownRenderer.js step toolbar injection
+    inputDropdownOpen: false,      // pipe-level Run dropdown visibility
+    inputDropdownStep: null,       // step-level: which step's dropdown is open (index), null = none
+    inputHistory: null,            // array of unique input objects for current pipe (deduped)
+    inputHistoryLoading: false,    // trace fetch in progress
+
+    // ── Drawer input editor mode ──
+    // When drawerMode is "input", the RunDrawer shows a JSON textarea instead
+    // of normal operation output. The user edits JSON, then clicks Run.
+    // drawerInputTarget tracks whether the run targets the full pipe (null)
+    // or a specific step (step index number).
+    drawerMode: null,              // null (normal output) | "input" (JSON editor)
+    drawerInputBuffer: "{}",       // JSON text being edited in the drawer textarea
+    drawerInputTarget: null        // null = full pipe run, number = step index for run-to-step
   },
   actions: {},
   utils: {},
@@ -181,6 +200,15 @@ PD.actions.selectPipe = function(pipe) {
   PD.state.showPipeTraces = false;
   PD.state.pipeTraces = null;
   PD.state.pipeDropdownOpen = false;
+
+  // Reset input history — stale when switching pipes.
+  PD.state.inputDropdownOpen = false;
+  PD.state.inputDropdownStep = null;
+  PD.state.inputHistory = null;
+  PD.state.inputHistoryLoading = false;
+  PD.state.drawerMode = null;
+  PD.state.drawerInputBuffer = "{}";
+  PD.state.drawerInputTarget = null;
 
   // Close the drawer when switching pipes so stale output doesn't linger.
   PD.state.drawerOpen = false;
@@ -740,4 +768,295 @@ PD.utils.buildDSLLines = function(config) {
   if (config.stop !== undefined) lines.push(["stop", "" + config.stop]);
   if (config.only !== undefined) lines.push(["only", "" + config.only]);
   return lines;
+};
+
+// ── Input History & JSON Builder ──
+// These utilities and actions support the input history dropdown and the
+// interactive JSON editor in the RunDrawer. Past inputs are extracted from
+// trace files and deduplicated so the user can quickly re-run a pipe with
+// previously used data.
+
+// ── deduplicateInputs ──
+// Takes an array of trace objects (each with an .input property) and returns
+// an array of unique input objects, most recent first. Deduplication compares
+// a "cleaned" version of each input — internal pipedown metadata keys (/flags,
+// /mode) are stripped before comparison so two runs that differ only in runtime
+// flags show as the same user input.
+// Ref: templates/trace.ts — enriches input with /flags and /mode before execution
+PD.utils.deduplicateInputs = function(traces) {
+  if (!traces || !traces.length) return [];
+  var seen = {};
+  var results = [];
+
+  traces.forEach(function(t) {
+    if (!t.input || typeof t.input !== "object") return;
+
+    // Strip internal pipedown metadata that the user didn't provide.
+    // These are injected by the CLI (trace.ts) before execution and
+    // aren't meaningful as "user input".
+    var cleaned = {};
+    Object.keys(t.input).forEach(function(k) {
+      if (k !== "flags" && k !== "mode") {
+        cleaned[k] = t.input[k];
+      }
+    });
+
+    // Skip empty inputs — they represent the default "{}" case which the
+    // user can already trigger with the plain Run button.
+    if (Object.keys(cleaned).length === 0) return;
+
+    // Deduplicate by JSON string comparison. JSON.stringify with sorted keys
+    // ensures consistent ordering regardless of object property order.
+    // Ref: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/JSON/stringify#the_replacer_parameter
+    var key = JSON.stringify(cleaned, Object.keys(cleaned).sort());
+    if (!seen[key]) {
+      seen[key] = true;
+      results.push(cleaned);
+    }
+  });
+
+  return results;
+};
+
+// ── inputPreview ──
+// Returns a truncated single-line preview string for an input object,
+// suitable for display in the dropdown menu. Keeps it short enough to
+// fit in a dropdown item without wrapping.
+// @param {object} obj — the input object to preview
+// @param {number} [maxLen=60] — maximum character length before truncation
+// @return {string} — e.g. '{ "url": "https://ex...", "count": 5 }'
+PD.utils.inputPreview = function(obj, maxLen) {
+  maxLen = maxLen || 60;
+  var str = JSON.stringify(obj);
+  if (str.length <= maxLen) return str;
+  return str.slice(0, maxLen - 1) + "\u2026";
+};
+
+// ── loadInputHistory ──
+// Fetches recent traces for the currently selected pipe and extracts
+// unique input values. Called when the user opens the input dropdown
+// for the first time (lazy loading). Results are cached in
+// PD.state.inputHistory until the pipe changes.
+// Ref: buildandserve.ts — GET /api/projects/{project}/pipes/{pipe}/traces
+PD.actions.loadInputHistory = function() {
+  if (PD.state.inputHistoryLoading || PD.state.inputHistory) return;
+  if (!PD.state.selectedPipe) return;
+
+  PD.state.inputHistoryLoading = true;
+
+  // Use pipeData.name (H1 heading) to match trace directory naming,
+  // same convention as loadPipeTraces and loadDrawerTrace.
+  var pipeName = PD.state.pipeData && PD.state.pipeData.name
+    ? PD.state.pipeData.name
+    : PD.state.selectedPipe.pipeName;
+
+  // Fetch more traces (20) to increase the chance of finding diverse inputs.
+  var url = "/api/projects/" +
+    encodeURIComponent(PD.state.selectedPipe.projectName) +
+    "/pipes/" + encodeURIComponent(pipeName) +
+    "/traces?limit=20";
+
+  m.request({ method: "GET", url: url }).then(function(data) {
+    PD.state.inputHistory = PD.utils.deduplicateInputs(data);
+    PD.state.inputHistoryLoading = false;
+  }).catch(function() {
+    PD.state.inputHistory = [];
+    PD.state.inputHistoryLoading = false;
+  });
+};
+
+// ── runPipeWithInput ──
+// Executes a full pipe run with a custom input object. Delegates to the
+// same postAction/loadDrawerTrace flow as runPipe, but includes the
+// input field in the POST body.
+// The /api/run endpoint passes the input string as a --input CLI argument
+// to the trace.ts subprocess.
+// Ref: buildandserve.ts /api/run — accepts { project, pipe, input? }
+// @param {object} inputObj — the JSON object to use as pipeline input
+PD.actions.runPipeWithInput = function(inputObj) {
+  if (!PD.state.selectedPipe) return;
+
+  // Transition drawer from input editor mode to normal output mode.
+  PD.state.drawerMode = null;
+
+  PD.actions.postAction("/api/run", {
+    project: PD.state.selectedPipe.projectName,
+    pipe: PD.state.selectedPipe.pipeName,
+    input: JSON.stringify(inputObj)
+  }, "Running pipe", function(output) {
+    // Same completion handler as runPipe — parse JSON and load trace.
+    try {
+      var parsed = typeof output === "string" ? JSON.parse(output) : output;
+      PD.state.drawerOutput = JSON.stringify(parsed, null, 2);
+      PD.state.drawerOutputType = "json";
+      PD.state.drawerParsedOutput = parsed;
+    } catch (_) {
+      PD.state.drawerOutput = typeof output === "string" ? output : JSON.stringify(output, null, 2);
+      PD.state.drawerOutputType = "stream";
+    }
+    PD.actions.loadDrawerTrace();
+    // Invalidate cached input history so next dropdown open fetches fresh data
+    // that includes the trace from this run.
+    PD.state.inputHistory = null;
+    m.redraw();
+  });
+};
+
+// ── runToStepWithInput ──
+// Executes a partial pipe run up to a specific step with custom input.
+// Same as runToStep but includes the input field in the POST body.
+// Ref: buildandserve.ts /api/run-step — accepts { project, pipe, stepIndex, input? }
+// @param {number} stepIndex — the step to run up to
+// @param {object} inputObj — the JSON object to use as pipeline input
+PD.actions.runToStepWithInput = function(stepIndex, inputObj) {
+  if (!PD.state.selectedPipe) return;
+
+  // Transition drawer from input editor mode to normal output mode.
+  PD.state.drawerMode = null;
+
+  PD.actions.postAction("/api/run-step", {
+    project: PD.state.selectedPipe.projectName,
+    pipe: PD.state.selectedPipe.pipeName,
+    stepIndex: stepIndex,
+    input: JSON.stringify(inputObj)
+  }, "Running to step " + stepIndex, function(output) {
+    // Same completion handler as runToStep.
+    try {
+      var parsed = typeof output === "string" ? JSON.parse(output) : output;
+      PD.state.drawerParsedOutput = parsed;
+      PD.state.drawerOutputType = "json";
+    } catch (_) { /* non-JSON output — keep raw text */ }
+    // Invalidate cached input history.
+    PD.state.inputHistory = null;
+    m.redraw();
+  });
+};
+
+// ── openInputEditor ──
+// Opens the RunDrawer in "input" mode — a JSON textarea where the user
+// can define or edit custom input before executing. Pre-fills with the
+// first item from input history (if available) or empty object.
+// @param {number|null} target — null for full pipe, step index for run-to-step
+PD.actions.openInputEditor = function(target) {
+  PD.state.drawerMode = "input";
+  PD.state.drawerInputTarget = target;
+  PD.state.drawerOpen = true;
+  PD.state.drawerLabel = target != null ? "Custom Input (step " + target + ")" : "Custom Input";
+  PD.state.drawerStatus = "idle";
+  PD.state.drawerError = null;
+
+  // Pre-fill with the most recent non-empty input from history, or "{}".
+  if (PD.state.inputHistory && PD.state.inputHistory.length > 0) {
+    PD.state.drawerInputBuffer = JSON.stringify(PD.state.inputHistory[0], null, 2);
+  } else {
+    PD.state.drawerInputBuffer = "{\n  \n}";
+  }
+  m.redraw();
+};
+
+// ── executeFromDrawer ──
+// Called when the user clicks "Run" in the drawer's input editor mode.
+// Parses the JSON buffer and dispatches to the appropriate run action
+// based on drawerInputTarget.
+PD.actions.executeFromDrawer = function() {
+  var json;
+  try {
+    json = JSON.parse(PD.state.drawerInputBuffer);
+  } catch (e) {
+    // Surface the parse error inline — don't close the editor.
+    PD.state.drawerError = {
+      status: 0,
+      statusText: "Invalid JSON",
+      message: e.message
+    };
+    m.redraw();
+    return;
+  }
+
+  var target = PD.state.drawerInputTarget;
+  if (target != null) {
+    PD.actions.runToStepWithInput(target, json);
+  } else {
+    PD.actions.runPipeWithInput(json);
+  }
+};
+
+// ── closeInputDropdowns ──
+// Utility to close all input-related dropdowns. Called by Layout's
+// click-outside handler and by dropdown item onclick handlers.
+PD.actions.closeInputDropdowns = function() {
+  PD.state.inputDropdownOpen = false;
+  PD.state.inputDropdownStep = null;
+};
+
+// ── renderInputDropdown ──
+// Shared Mithril vnode factory that builds the input history dropdown menu.
+// Used by both PipeToolbar (target=null) and step toolbars (target=stepIndex).
+// Returns an array of vnodes to render inside a .dropdown-menu container.
+// @param {number|null} target — null for full pipe, step index for run-to-step
+// @return {Array} — Mithril vnodes for dropdown items
+PD.utils.renderInputDropdownItems = function(target) {
+  var items = [];
+
+  // ── "Custom Input..." option — always shown at top ──
+  // Opens the JSON editor in the RunDrawer for freeform input editing.
+  items.push(
+    m("button.dropdown-item.input-custom-item", {
+      onclick: function(e) {
+        e.stopPropagation();
+        PD.actions.closeInputDropdowns();
+        PD.actions.loadInputHistory();
+        PD.actions.openInputEditor(target);
+      }
+    }, [
+      m("span", { style: "margin-inline-end: var(--size-1);" }, "\u270E"),
+      "Custom Input\u2026"
+    ])
+  );
+
+  // ── Divider ──
+  items.push(m("div.dropdown-divider"));
+
+  // ── Loading state ──
+  if (PD.state.inputHistoryLoading) {
+    items.push(m("div.dropdown-item.input-loading", {
+      style: "color: var(--text-2); font-style: italic; cursor: default;"
+    }, "Loading history\u2026"));
+    return items;
+  }
+
+  // ── History items ──
+  var history = PD.state.inputHistory;
+  if (!history || history.length === 0) {
+    items.push(m("div.dropdown-item.input-empty", {
+      style: "color: var(--text-2); font-style: italic; cursor: default;"
+    }, "No input history"));
+    return items;
+  }
+
+  // NOTE: Mithril requires that sibling vnodes in a flat array either ALL
+  // have keys or NONE have keys — mixing causes a "vnodes must either all
+  // have keys or none have keys" TypeError. Since the items above (Custom
+  // Input button, divider, loading/empty) are unkeyed, history items must
+  // also be unkeyed. This is safe because the dropdown is destroyed and
+  // recreated on every open rather than being patched incrementally.
+  // Ref: https://mithril.js.org/keys.html#key-restrictions
+  history.forEach(function(inputObj, i) {
+    items.push(
+      m("button.dropdown-item.input-history-item", {
+        title: JSON.stringify(inputObj, null, 2),
+        onclick: function(e) {
+          e.stopPropagation();
+          PD.actions.closeInputDropdowns();
+          if (target != null) {
+            PD.actions.runToStepWithInput(target, inputObj);
+          } else {
+            PD.actions.runPipeWithInput(inputObj);
+          }
+        }
+      }, m("code.input-preview", PD.utils.inputPreview(inputObj)))
+    );
+  });
+
+  return items;
 };
