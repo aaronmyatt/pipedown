@@ -77,7 +77,19 @@ window.PD = {
     // or a specific step (step index number).
     drawerMode: null,              // null (normal output) | "input" (JSON editor)
     drawerInputBuffer: "{}",       // JSON text being edited in the drawer textarea
-    drawerInputTarget: null        // null = full pipe run, number = step index for run-to-step
+    drawerInputTarget: null,       // null = full pipe run, number = step index for run-to-step
+
+    // ── Extract mode ──
+    // When extractMode is true, step toolbars show checkboxes instead of action
+    // buttons. The user selects steps to extract into a new sub-pipe, names it,
+    // and confirms. The extraction API creates the new .md file and modifies
+    // the parent pipe to replace the extracted steps with a delegation step.
+    // Ref: ExtractBar.js — floating action bar at viewport bottom
+    // Ref: MarkdownRenderer.js — toolbar rendering changes in extract mode
+    extractMode: false,            // true when step selection UI is active
+    extractSelected: {},           // { [stepIndex]: true } — selected steps
+    extractName: "",               // user-entered name for the new sub-pipe
+    extracting: false              // true while the POST /api/extract is in flight
   },
   actions: {},
   utils: {},
@@ -1100,4 +1112,98 @@ PD.utils.renderInputDropdownItems = function(target) {
   });
 
   return items;
+};
+
+// ── Extract Mode Actions ──
+// These actions control the step-extraction workflow. The user enters extract
+// mode by clicking "Extract" on any step toolbar, selects additional steps via
+// checkboxes, names the new pipe, and confirms. The API creates the new .md
+// file and modifies the parent.
+// Ref: POST /api/extract in buildandserve.ts
+// Ref: ExtractBar.js — floating action bar component
+
+/**
+ * Enter extract mode with one step pre-selected.
+ *
+ * Activates the extraction UI: step toolbars switch to checkbox mode and
+ * the ExtractBar floating action bar appears at the bottom of the viewport.
+ *
+ * @param {number} stepIndex - The step index that was clicked (pre-selected)
+ */
+PD.actions.enterExtractMode = function(stepIndex) {
+  PD.state.extractMode = true;
+  PD.state.extractSelected = {};
+  PD.state.extractSelected[stepIndex] = true;
+  PD.state.extractName = "";
+  PD.state.extracting = false;
+  // Close any open dropdowns to avoid visual clutter during selection
+  PD.actions.closeInputDropdowns();
+  m.redraw();
+};
+
+/**
+ * Exit extract mode and reset all extract-related state.
+ *
+ * Called when the user clicks Cancel, or after a successful extraction.
+ */
+PD.actions.exitExtractMode = function() {
+  PD.state.extractMode = false;
+  PD.state.extractSelected = {};
+  PD.state.extractName = "";
+  PD.state.extracting = false;
+  m.redraw();
+};
+
+/**
+ * Toggle a step's selection in extract mode.
+ *
+ * If the step is already selected, deselects it. Otherwise, selects it.
+ * The step-section in MarkdownRenderer receives an `.extract-selected`
+ * CSS class for visual highlighting.
+ *
+ * @param {number} stepIndex - The step index to toggle
+ */
+PD.actions.toggleExtractStep = function(stepIndex) {
+  if (PD.state.extractSelected[stepIndex]) {
+    delete PD.state.extractSelected[stepIndex];
+  } else {
+    PD.state.extractSelected[stepIndex] = true;
+  }
+  m.redraw();
+};
+
+/**
+ * Perform the extraction: call POST /api/extract with selected steps and name.
+ *
+ * Validates that at least one step is selected and a name is provided.
+ * On success, exits extract mode, refreshes the pipe view, and reloads
+ * the recent pipes list (the new pipe should appear in the sidebar).
+ */
+PD.actions.performExtract = function() {
+  var selected = Object.keys(PD.state.extractSelected)
+    .filter(function(k) { return PD.state.extractSelected[k]; })
+    .map(Number)
+    .sort(function(a, b) { return a - b; });
+
+  if (selected.length === 0) return;
+  if (!PD.state.extractName.trim()) return;
+  if (!PD.state.selectedPipe) return;
+
+  PD.state.extracting = true;
+  m.redraw();
+
+  var body = {
+    project: PD.state.selectedPipe.projectName,
+    pipe: PD.state.selectedPipe.pipeName,
+    stepIndices: selected,
+    newName: PD.state.extractName.trim()
+  };
+
+  // Use postAction to route output through the drawer panel.
+  // On success (onDone callback), exit extract mode and refresh everything.
+  PD.actions.postAction("/api/extract", body, "Extract steps", function() {
+    PD.actions.exitExtractMode();
+    PD.actions.refreshPipe();
+    PD.actions.loadRecentPipes();
+  });
 };

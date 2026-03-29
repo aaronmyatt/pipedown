@@ -12,6 +12,10 @@ import { scanTraces, readTrace, tracePage } from "./traceDashboard.ts";
 import { enrichProjects, readProjectsRegistry, scanProjectPipes, readPipeMarkdown, projectsPage } from "./projectsDashboard.ts";
 import { scanRecentPipes, readPipeIndex, recentStepTraces, recentPipeTraces, homePage } from "./homeDashboard.ts";
 import { findTargetStep, buildContextPrompt, callLLM } from "./llmCommand.ts";
+// performExtraction splits a pipe's steps into a new sub-pipe and rewrites
+// the parent with a delegation step. Used by POST /api/extract.
+// Ref: extractSteps.ts — parseStepIndices, buildExtractedPipe, buildReplacementStep
+import { performExtraction, toKebabCase } from "../extractSteps.ts";
 
 let _controller: ReadableStreamDefaultController<string> | null = null;
 
@@ -564,6 +568,114 @@ export async function serve(input: BuildInput){
           status: 500,
           headers: { "content-type": "application/json" },
         });
+      }
+    }
+
+    // ── Extract steps into a new sub-pipe ──
+    // POST /api/extract — splits selected steps out of a parent pipe into a
+    // new .md file and replaces them with a delegation step in the parent.
+    // Follows the same resolve → build → mutate → write → rebuild pattern as
+    // /api/llm above.
+    // Ref: extractSteps.ts — performExtraction orchestrates the whole operation
+    if (request.method === "POST" && url.pathname === "/api/extract") {
+      try {
+        const body = await request.json();
+        const { project: projectName, pipe: pipeName, stepIndices, newName } = body;
+
+        if (!projectName || !pipeName || !stepIndices || !newName) {
+          return new Response(
+            JSON.stringify({ error: "Missing required fields: project, pipe, stepIndices, newName" }),
+            { status: 400, headers: { "content-type": "application/json" } },
+          );
+        }
+
+        const project = await resolveProject(projectName);
+        if (!project) return new Response("Project not found", { status: 404 });
+
+        // Optimistic rebuild: ensure .pd/ is current before reading pipe data
+        await buildProject(project.path);
+
+        // Load the full Pipe object from index.json — includes rawSource,
+        // sourceMap, mdPath, config, and all step metadata needed for extraction.
+        const pipeDir = std.join(project.path, ".pd", pipeName);
+        const indexJsonPath = std.join(pipeDir, "index.json");
+        let pipeData;
+        try {
+          pipeData = JSON.parse(await Deno.readTextFile(indexJsonPath));
+        } catch {
+          return new Response(
+            JSON.stringify({ error: `Pipe "${pipeName}" not found (run pd build first)` }),
+            { status: 404, headers: { "content-type": "application/json" } },
+          );
+        }
+
+        // ── Determine output path for the new pipe file ──
+        // Created as a sibling of the parent .md file (same directory).
+        const parentMdPath = pipeData.mdPath;
+        if (!parentMdPath) {
+          return new Response(
+            JSON.stringify({ error: "Pipe has no mdPath — cannot determine source location" }),
+            { status: 500, headers: { "content-type": "application/json" } },
+          );
+        }
+
+        const parentDir = std.dirname(parentMdPath);
+        const newFileName = toKebabCase(newName) + ".md";
+        const newFilePath = std.join(parentDir, newFileName);
+
+        // ── File collision guard ──
+        // Refuse to overwrite to prevent accidental data loss.
+        if (await std.exists(newFilePath)) {
+          return new Response(
+            JSON.stringify({ error: `File already exists: ${newFileName}. Choose a different name.` }),
+            { status: 409, headers: { "content-type": "application/json" } },
+          );
+        }
+
+        // ── Perform the extraction ──
+        const { newPipeMarkdown, modifiedParentMarkdown } = performExtraction(
+          pipeData,
+          stepIndices,
+          newName,
+        );
+
+        // ── Write both files ──
+        await Deno.writeTextFile(newFilePath, newPipeMarkdown);
+        await Deno.writeTextFile(parentMdPath, modifiedParentMarkdown);
+
+        // ── Rebuild so .pd/ reflects both the new and modified pipes ──
+        await buildProject(project.path);
+
+        // ── Notify SSE clients to refresh the UI ──
+        if (_controller) {
+          _controller.enqueue("data: reload\n\n");
+        }
+
+        // Notify the Tauri desktop app about the extraction
+        notifyTauri({
+          type: "llm_complete",
+          title: "Extract Complete",
+          message: `Extracted ${stepIndices.length} step(s) from ${pipeName} → ${newFileName}`,
+          project: projectName,
+          pipe: pipeName,
+          success: true,
+        });
+
+        return new Response(
+          JSON.stringify({ success: true, newPipePath: newFilePath, parentModified: true }),
+          { headers: { "content-type": "application/json" } },
+        );
+      } catch (e) {
+        notifyTauri({
+          type: "error",
+          title: "Extract Failed",
+          message: (e as Error).message,
+          success: false,
+        });
+        return new Response(
+          JSON.stringify({ error: (e as Error).message }),
+          { status: 500, headers: { "content-type": "application/json" } },
+        );
       }
     }
 

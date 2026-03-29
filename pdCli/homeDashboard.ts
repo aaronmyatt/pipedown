@@ -143,6 +143,7 @@ export function homePage(): string {
   <script src="/frontend/home/components/MarkdownEditor.js"><\/script>
   <script src="/frontend/home/components/MainContent.js"><\/script>
   <script src="/frontend/home/components/NewPipeModal.js"><\/script>
+  <script src="/frontend/home/components/ExtractBar.js"><\/script>
   <script src="/frontend/home/components/RunDrawer.js"><\/script>
   <script src="/frontend/home/components/Layout.js"><\/script>
   <script src="/frontend/home/app.js"><\/script>

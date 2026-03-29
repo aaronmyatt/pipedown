@@ -659,3 +659,89 @@
   gap: var(--size-2);
   justify-content: flex-end;
 }
+
+/* ── Extract Mode ──
+   Styles for the step-extraction workflow: floating action bar at the
+   bottom of the viewport, step-section selection highlighting, and
+   the checkbox toolbar that replaces normal step buttons.
+   Ref: ExtractBar.js — floating action bar component
+   Ref: MarkdownRenderer.js — checkbox rendering in extract mode */
+
+/* ── Extract Bar ──
+   Fixed-position bar at the viewport bottom. Uses the same surface and
+   shadow conventions as the drawer and topbar.
+   z-index sits above the drawer (which is 100) so the bar is always visible. */
+.extract-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--size-3);
+  padding: var(--size-3) var(--size-4);
+  background: var(--surface-1);
+  border-block-start: 1px solid var(--surface-3);
+  box-shadow: var(--shadow-3);
+  z-index: 200;
+}
+
+/* Selected step count label */
+.extract-count {
+  font-size: var(--font-size-1);
+  font-weight: var(--font-weight-6);
+  color: var(--text-1);
+  white-space: nowrap;
+}
+
+/* Name input — grows to fill available space */
+.extract-name-input {
+  flex: 1;
+  min-width: 200px;
+  max-width: 400px;
+  padding: var(--size-1) var(--size-2);
+  border: 1px solid var(--surface-4);
+  border-radius: var(--radius-2);
+  background: var(--surface-2);
+  color: var(--text-1);
+  font-size: var(--font-size-1);
+  font-family: var(--font-sans);
+}
+
+.extract-name-input:focus {
+  outline: 2px solid var(--green-5);
+  outline-offset: -2px;
+}
+
+.extract-name-input::placeholder {
+  color: var(--text-2);
+}
+
+/* ── Step section highlighting during extract mode ──
+   When a step is selected for extraction, its .step-section container
+   receives a prominent left border and subtle background tint. */
+.step-section.extract-selected {
+  border-inline-start: 3px solid var(--blue-6, var(--green-6));
+  background: var(--blue-1, var(--surface-2));
+  border-radius: var(--radius-2);
+}
+
+/* ── Extract checkbox in step toolbar ──
+   Replaces the normal toolbar buttons during extract mode. The label
+   spans the full toolbar width so the entire area is clickable. */
+.extract-checkbox {
+  display: flex;
+  align-items: center;
+  gap: var(--size-1);
+  cursor: pointer;
+  font-size: var(--font-size-0);
+  color: var(--text-2);
+  user-select: none;
+}
+
+.extract-checkbox input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: var(--green-6);
+}

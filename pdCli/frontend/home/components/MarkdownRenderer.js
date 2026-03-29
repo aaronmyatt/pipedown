@@ -114,10 +114,56 @@ function injectStepToolbars(container) {
       var step = PD.state.pipeData.steps[idx];
       if (!step) return;
 
-      // ── Step toolbar: split "Run to here" button with input dropdown ──
-      // Same split-button pattern as the pipe-level Run button in PipeToolbar.
-      // The left half runs to this step with no custom input; the right "▾"
-      // opens a dropdown of past inputs and a "Custom Input..." editor option.
+      // ── Extract mode: step-section highlighting ──
+      // When extract mode is active, add/remove the `extract-selected` class
+      // on the step's .step-section container for visual highlighting.
+      // Ref: styles.css — `.step-section.extract-selected` border/outline
+      var stepSection = wrapper.closest(".step-section");
+      if (stepSection) {
+        if (PD.state.extractMode && PD.state.extractSelected[idx]) {
+          stepSection.classList.add("extract-selected");
+        } else {
+          stepSection.classList.remove("extract-selected");
+        }
+      }
+
+      // ── Extract mode: checkbox toolbar ──
+      // In extract mode, replace the normal action buttons with a simple
+      // checkbox toggle. Clicking the checkbox or the step section toggles
+      // the step's selection state.
+      // Ref: PD.actions.toggleExtractStep in state.js
+      if (PD.state.extractMode) {
+        var isSelected = !!PD.state.extractSelected[idx];
+        m.render(toolbar, [
+          m("label.extract-checkbox", {
+            onclick: function(e) {
+              e.stopPropagation();
+              PD.actions.toggleExtractStep(idx);
+              // Re-inject toolbars after state change to update checkbox and
+              // step-section highlight classes.
+              requestAnimationFrame(function() {
+                var mdViewer = document.querySelector(".md-viewer");
+                if (mdViewer) injectStepToolbars(mdViewer);
+              });
+            }
+          }, [
+            m("input[type=checkbox]", {
+              checked: isSelected,
+              // Prevent default so the label onclick handles the toggle.
+              // Without this, the checkbox fires twice (label + input).
+              onclick: function(e) { e.preventDefault(); }
+            }),
+            m("span", isSelected ? " Selected" : " Select for extraction")
+          ])
+        ]);
+
+        // Skip the extras section in extract mode — no DSL/trace panels needed
+        return;
+      }
+
+      // ── Normal mode: full step toolbar ──
+      // Split "Run to here" button with input dropdown, LLM buttons, and
+      // the Extract button that enters extraction mode.
       // Ref: PD.utils.renderInputDropdownItems, state.js inputDropdownStep
       m.render(toolbar, [
         m("button.tb-btn", { onclick: function() { PD.actions.llmAction("step-title", { stepIndex: idx }); } }, "Title"),
@@ -159,7 +205,22 @@ function injectStepToolbars(container) {
           onclick: function() { PD.actions.toggleDSL(idx); m.redraw(); },
           style: PD.utils.buildDSLLines(step.config).length === 0 ? "opacity: 0.4; pointer-events: none;" : ""
         }, "DSL"),
-        m("button.tb-btn", { onclick: function() { PD.actions.loadStepTraces(idx); m.redraw(); } }, "I/O")
+        m("button.tb-btn", { onclick: function() { PD.actions.loadStepTraces(idx); m.redraw(); } }, "I/O"),
+        // ── Extract button ──
+        // Enters extract mode with this step pre-selected. The step toolbars
+        // switch to checkbox mode and the ExtractBar appears at the bottom.
+        // Ref: PD.actions.enterExtractMode in state.js
+        m("button.tb-btn", {
+          onclick: function() {
+            PD.actions.enterExtractMode(idx);
+            // Re-inject toolbars after entering extract mode to switch
+            // all step toolbars from normal to checkbox rendering.
+            requestAnimationFrame(function() {
+              var mdViewer = document.querySelector(".md-viewer");
+              if (mdViewer) injectStepToolbars(mdViewer);
+            });
+          }
+        }, "Extract")
       ]);
 
       var extraId = "step-extra-" + idx;

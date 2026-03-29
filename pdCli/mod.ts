@@ -58,6 +58,7 @@ import { syncCommand } from "./syncCommand.ts";
 import { watchCommand } from "./watchCommand.ts";
 import { packCommand } from "./packCommand.ts";
 import { installCommand } from "./installCommand.ts";
+import { extractCommand } from "./extractCommand.ts";
 
 async function pdInit(input: CliInput) {
     try {
@@ -227,6 +228,7 @@ const funcs = [
     checkMinFlags(["watch"], watchCommand),
     checkMinFlags(["pack"], packCommand),
     checkMinFlags(["install"], installCommand),
+    checkMinFlags(["extract", "*", "*", "*"], extractCommand),
     checkMinFlags(["test"], testCommand),
     checkMinFlags(["test-update"], updateTestCommand),
     checkMinFlags(["t"], testCommand),

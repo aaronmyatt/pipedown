@@ -54,7 +54,13 @@ PD.components.Layout = {
       // Renders as a fixed overlay when PD.state.showNewPipeModal is true.
       // Placed outside the layout flow so it covers the entire viewport.
       // Ref: PD.actions.openNewPipeModal in state.js
-      m(PD.components.NewPipeModal)
+      m(PD.components.NewPipeModal),
+      // ── Extract Bar ──
+      // Fixed-position bar at the bottom of the viewport, visible only during
+      // extract mode (PD.state.extractMode === true). Shows selected step count,
+      // name input, Extract and Cancel buttons.
+      // Ref: PD.actions.enterExtractMode in state.js
+      m(PD.components.ExtractBar)
     ]);
   }
 };
