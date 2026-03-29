@@ -109,6 +109,7 @@ export async function callLLM(prompt: string): Promise<string> {
   
   if (code !== 0) {
     const errorText = new TextDecoder().decode(stderr);
+    console.error(std.colors.brightRed(`LLM command error: ${errorText}`));
     throw new Error(`LLM command failed: ${errorText}`);
   }
   
