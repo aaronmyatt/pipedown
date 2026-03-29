@@ -294,7 +294,15 @@ PD.actions.runPipe = function() {
 
 // runToStep — executes a partial pipe run up to a specific step. The
 // /api/run-step endpoint outputs the final state as JSON, so we parse it
-// for jsonTree rendering and also fetch the latest trace.
+// for jsonTree rendering.
+//
+// Unlike a full runPipe(), the run-step eval script does NOT produce
+// trace files, so we intentionally skip loadDrawerTrace() here.
+// Loading traces would fetch stale data from a *previous* full run,
+// overriding the correct partial output and making it look like the
+// entire pipe executed.
+// Ref: buildandserve.ts /api/run-step — generates a temp script that
+//      imports only the selected step functions and runs them in a loop.
 PD.actions.runToStep = function(stepIndex) {
   if (!PD.state.selectedPipe) return;
   PD.actions.postAction("/api/run-step", {
@@ -307,7 +315,8 @@ PD.actions.runToStep = function(stepIndex) {
       PD.state.drawerParsedOutput = parsed;
       PD.state.drawerOutputType = "json";
     } catch (_) { /* non-JSON output — keep raw text */ }
-    PD.actions.loadDrawerTrace();
+    // No loadDrawerTrace() — partial runs don't generate traces, so
+    // fetching would return stale data from a prior full run.
     m.redraw();
   });
 };
