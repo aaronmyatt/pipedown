@@ -16,8 +16,10 @@ eventSource.onmessage = function(event) {
     PD.actions.loadRecentPipes();
     // Don't re-fetch and re-render while the user is editing — their
     // editBuffer would be overwritten by the stale rawMarkdown.
+    // Use refreshPipe() instead of selectPipe() to preserve the user's
+    // scroll position in the .detail container.
     if (PD.state.selectedPipe && !PD.state.editMode) {
-      PD.actions.selectPipe(PD.state.selectedPipe);
+      PD.actions.refreshPipe();
     }
   }
 };

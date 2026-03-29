@@ -366,6 +366,57 @@ PD.actions.postAction = function(url, body, label, onDone) {
   });
 };
 
+// ── refreshPipe ──
+// Lightweight re-fetch of the currently selected pipe's markdown and index
+// data. Unlike selectPipe(), this does NOT reset state or clear the rendered
+// HTML — the existing content stays visible (no loading flash) and, critically,
+// the scroll position of the .detail container is captured before the fetch and
+// restored after the redraw completes.
+//
+// Use this instead of selectPipe() when the *same* pipe's content has changed
+// on disk (e.g. after an LLM action or SSE reload) and the user should stay
+// at the same scroll position.
+// Ref: https://developer.mozilla.org/en-US/docs/Web/API/Element/scrollTop
+PD.actions.refreshPipe = function() {
+  var pipe = PD.state.selectedPipe;
+  if (!pipe) return;
+
+  // Capture scroll position of the .detail container before re-rendering.
+  // document.querySelector is safe here — there is exactly one .detail element
+  // in the home page layout (rendered by MainContent).
+  var detailEl = document.querySelector(".detail");
+  var savedScroll = detailEl ? detailEl.scrollTop : 0;
+
+  var mdUrl = "/api/projects/" +
+    encodeURIComponent(pipe.projectName) +
+    "/files/" + encodeURIComponent(pipe.pipePath);
+
+  var indexUrl = "/api/projects/" +
+    encodeURIComponent(pipe.projectName) +
+    "/pipes/" + encodeURIComponent(pipe.pipeName) + "/index";
+
+  // Fetch both resources in parallel — same requests as selectPipe() but
+  // without resetting markdownHtml/pipeData to null first.
+  // Ref: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise/all
+  Promise.all([
+    m.request({ method: "GET", url: mdUrl, extract: function(xhr) { return xhr.responseText; } }),
+    m.request({ method: "GET", url: indexUrl }).catch(function() { return null; })
+  ]).then(function(results) {
+    PD.state.rawMarkdown = results[0];
+    PD.state.pipeData = results[1];
+    PD.state.markdownHtml = PD.utils.renderMarkdownWithAnnotations(results[0], results[1]);
+    PD.state.markdownLoading = false;
+  }).catch(function() {
+    // On error, fall through — the existing content stays visible.
+  }).then(function() {
+    m.redraw.sync();
+    // Restore scroll position after the synchronous redraw has updated the DOM.
+    // The .detail element may have been replaced by Mithril's diff, so re-query it.
+    var el = document.querySelector(".detail");
+    if (el) el.scrollTop = savedScroll;
+  });
+};
+
 PD.actions.llmAction = function(action, extraBody) {
   if (!PD.state.selectedPipe) return;
   var body = Object.assign({
@@ -373,8 +424,11 @@ PD.actions.llmAction = function(action, extraBody) {
     project: PD.state.selectedPipe.projectName,
     pipe: PD.state.selectedPipe.pipeName
   }, extraBody || {});
+  // After the LLM finishes, refresh the pipe content in place (preserving
+  // scroll position) rather than doing a full selectPipe() which resets
+  // the view to the top.
   PD.actions.postAction("/api/llm", body, "LLM: " + action, function() {
-    PD.actions.selectPipe(PD.state.selectedPipe);
+    PD.actions.refreshPipe();
   });
 };
 
