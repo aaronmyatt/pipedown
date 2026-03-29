@@ -12,7 +12,19 @@ PD.components.PipeToolbar = {
         m("button.tb-btn", { onclick: function() { PD.actions.llmAction("schema"); } }, "Schema"),
         m("button.tb-btn", { onclick: function() { PD.actions.llmAction("tests"); } }, "Tests"),
         m("button.tb-btn.primary", { onclick: PD.actions.runPipe }, "Run"),
-        m("button.tb-btn", { onclick: PD.actions.openEditor }, "Edit"),
+        // ── Edit / Save / Cancel toggle ──
+        // In read mode: "Edit" enters the textarea editor.
+        // In edit mode: "Save" persists changes, "Cancel" discards them.
+        // Ref: PD.actions.enterEditMode / saveEdit / exitEditMode in state.js
+        PD.state.editMode
+          ? [
+              m("button.tb-btn.primary", {
+                onclick: PD.actions.saveEdit,
+                disabled: PD.state.editSaving
+              }, PD.state.editSaving ? "Saving..." : "Save"),
+              m("button.tb-btn", { onclick: PD.actions.exitEditMode }, "Cancel")
+            ]
+          : m("button.tb-btn", { onclick: PD.actions.enterEditMode }, "Edit"),
         // I/O button — toggles pipe-level trace display below.
         // Ref: state.js PD.actions.loadPipeTraces
         m("button.tb-btn", { onclick: PD.actions.loadPipeTraces }, "I/O"),
@@ -26,6 +38,9 @@ PD.components.PipeToolbar = {
           PD.state.pipeDropdownOpen ? m(".dropdown-menu", [
             m("button.dropdown-item", { onclick: function() { PD.state.pipeDropdownOpen = false; PD.actions.runTests(); } }, "Run Tests"),
             m("button.dropdown-item", { onclick: function() { PD.state.pipeDropdownOpen = false; PD.actions.runPack(); } }, "Pack"),
+            // "Open in Editor" moved here from the main toolbar — the primary
+            // "Edit" button now toggles the in-browser editor instead.
+            m("button.dropdown-item", { onclick: function() { PD.state.pipeDropdownOpen = false; PD.actions.openEditor(); } }, "Open in Editor"),
             m("a.dropdown-item", { href: "/traces", style: "text-decoration: none; color: var(--text-1);" }, "See Traces")
           ]) : null
         ])

@@ -331,3 +331,130 @@
   font-weight: var(--font-weight-5);
   margin-block-end: var(--size-1);
 }
+
+/* ── Markdown Editor ──
+   Textarea-based editing surface shown when PD.state.editMode is true.
+   Uses monospace font and comfortable spacing for markdown authoring.
+   Ref: Open Props font tokens — https://open-props.style/#typography */
+
+.md-editor-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-2);
+}
+
+/* Status bar above the textarea — shows "unsaved changes" or keyboard hints */
+.md-editor-status {
+  font-size: var(--font-size-0);
+  color: var(--text-2);
+  padding: var(--size-1) 0;
+}
+
+.md-editor {
+  width: 100%;
+  min-height: 70vh;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-1);
+  line-height: 1.6;
+  background: var(--surface-2);
+  color: var(--text-1);
+  border: var(--border-size-1) solid var(--surface-4);
+  border-radius: var(--radius-2);
+  padding: var(--size-3);
+  resize: vertical;
+  tab-size: 2;
+  box-sizing: border-box;
+}
+
+/* Focus ring matches the indigo accent used elsewhere in the dashboard */
+.md-editor:focus {
+  outline: 2px solid var(--indigo-5);
+  outline-offset: -2px;
+}
+
+/* ── New Pipe Button ──
+   Dashed-border button in the sidebar for creating new pipe files.
+   The dashed style visually distinguishes it as a creation affordance
+   rather than a navigation element. */
+
+.new-pipe-btn {
+  width: 100%;
+  padding: var(--size-2);
+  margin-block-end: var(--size-3);
+  border-radius: var(--radius-2);
+  border: var(--border-size-1) dashed var(--indigo-4);
+  background: transparent;
+  color: var(--indigo-7);
+  cursor: pointer;
+  font-size: var(--font-size-1);
+  font-family: var(--font-sans);
+  font-weight: var(--font-weight-5);
+}
+
+.new-pipe-btn:hover {
+  background: var(--indigo-1);
+  border-style: solid;
+}
+
+/* ── New Pipe Modal ──
+   Full-viewport overlay with a centered dialog box for entering the
+   new pipe's name and target project.
+   Ref: Open Props shadows — https://open-props.style/#shadows */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: color-mix(in srgb, var(--surface-1) 80%, transparent);
+  backdrop-filter: blur(4px);
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-box {
+  background: var(--surface-2);
+  border: var(--border-size-1) solid var(--surface-3);
+  border-radius: var(--radius-3);
+  padding: var(--size-5);
+  min-width: 400px;
+  max-width: 500px;
+  box-shadow: var(--shadow-4);
+}
+
+.modal-box h2 {
+  margin: 0 0 var(--size-3) 0;
+  font-size: var(--font-size-3);
+}
+
+.modal-label {
+  display: block;
+  font-size: var(--font-size-0);
+  color: var(--text-2);
+  margin-block-end: var(--size-1);
+  font-weight: var(--font-weight-5);
+}
+
+.modal-input {
+  width: 100%;
+  padding: var(--size-2);
+  border-radius: var(--radius-2);
+  border: var(--border-size-1) solid var(--surface-4);
+  background: var(--surface-1);
+  color: var(--text-1);
+  font-size: var(--font-size-1);
+  font-family: var(--font-sans);
+  margin-block-end: var(--size-3);
+  box-sizing: border-box;
+}
+
+.modal-input:focus {
+  outline: 2px solid var(--indigo-5);
+  outline-offset: -2px;
+}
+
+.modal-actions {
+  display: flex;
+  gap: var(--size-2);
+  justify-content: flex-end;
+}

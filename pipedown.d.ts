@@ -102,6 +102,10 @@ export type Step = {
     };
     /** The code content at parse time, for detecting modifications during round-trip. */
     originalCode?: string;
+    /** The step name at parse time, for detecting title modifications during round-trip. */
+    originalName?: string;
+    /** The description at parse time, for detecting description modifications during round-trip. */
+    originalDescription?: string;
 };
 
 /** Configuration for conditional step execution. */
@@ -174,6 +178,8 @@ export type Pipe = {
     schema?: string;
     /** Prose description between the H1 heading and the first step/config block. */
     pipeDescription?: string;
+    /** The pipe-level description at parse time, for detecting mutations during round-trip. */
+    originalPipeDescription?: string;
     /** The original markdown source text, for lossless round-trip reconstruction. */
     rawSource?: string;
 };

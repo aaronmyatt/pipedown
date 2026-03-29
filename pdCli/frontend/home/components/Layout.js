@@ -11,7 +11,12 @@ PD.components.Layout = {
       ]),
       m(PD.components.Sidebar),
       m(PD.components.MainContent),
-      m(PD.components.RunDrawer)
+      m(PD.components.RunDrawer),
+      // ── New Pipe Modal ──
+      // Renders as a fixed overlay when PD.state.showNewPipeModal is true.
+      // Placed outside the layout flow so it covers the entire viewport.
+      // Ref: PD.actions.openNewPipeModal in state.js
+      m(PD.components.NewPipeModal)
     ]);
   }
 };

@@ -255,6 +255,241 @@ input.also_old = "original";
 
   // --- Fallback mode ---
 
+  // --- Title mutations in lossless mode ---
+
+  await t.step("lossless: splices in changed step title", async () => {
+    const source = `# My Pipeline
+
+## Original Title
+
+\`\`\`ts
+input.x = 1;
+\`\`\`
+`;
+    const result = await parse(source);
+    result.pipe.steps[0].name = "New Title";
+
+    const reconstructed = pipeToMarkdown(result.pipe);
+    assertEquals(reconstructed.includes("## New Title"), true);
+    assertEquals(reconstructed.includes("## Original Title"), false);
+    // Code should still be present
+    assertEquals(reconstructed.includes("input.x = 1;"), true);
+  });
+
+  await t.step("lossless: preserves other steps when one title changes", async () => {
+    const source = `# Pipeline
+
+## Step One
+
+First description.
+
+\`\`\`ts
+input.a = 1;
+\`\`\`
+
+## Step Two
+
+Second description.
+
+\`\`\`ts
+input.b = 2;
+\`\`\`
+`;
+    const result = await parse(source);
+    // Only mutate step 1's title
+    result.pipe.steps[0].name = "Renamed Step";
+
+    const reconstructed = pipeToMarkdown(result.pipe);
+    assertEquals(reconstructed.includes("## Renamed Step"), true);
+    assertEquals(reconstructed.includes("## Step One"), false);
+    // Step 2 should be completely unchanged
+    assertEquals(reconstructed.includes("## Step Two"), true);
+    assertEquals(reconstructed.includes("Second description."), true);
+  });
+
+  // --- Description mutations in lossless mode ---
+
+  await t.step("lossless: splices in changed step description", async () => {
+    const source = `# Pipeline
+
+## Step One
+
+Old description here.
+
+\`\`\`ts
+input.x = 1;
+\`\`\`
+`;
+    const result = await parse(source);
+    result.pipe.steps[0].description = "New LLM-generated description.";
+
+    const reconstructed = pipeToMarkdown(result.pipe);
+    assertEquals(reconstructed.includes("New LLM-generated description."), true);
+    assertEquals(reconstructed.includes("Old description here."), false);
+    assertEquals(reconstructed.includes("## Step One"), true);
+    assertEquals(reconstructed.includes("input.x = 1;"), true);
+  });
+
+  await t.step("lossless: adds description where none existed", async () => {
+    const source = `# Pipeline
+
+## Step One
+
+\`\`\`ts
+input.x = 1;
+\`\`\`
+`;
+    const result = await parse(source);
+    // Step originally has no description — add one
+    result.pipe.steps[0].description = "Newly added description.";
+
+    const reconstructed = pipeToMarkdown(result.pipe);
+    assertEquals(reconstructed.includes("Newly added description."), true);
+    assertEquals(reconstructed.includes("## Step One"), true);
+    assertEquals(reconstructed.includes("input.x = 1;"), true);
+  });
+
+  await t.step("lossless: description change preserves DSL directives", async () => {
+    const source = `# Pipeline
+
+## Guarded Step
+- check: /auth
+- and: /verified
+- \`\`\`ts
+  input.allowed = true;
+  \`\`\`
+`;
+    const result = await parse(source);
+    // Add a description to a step that has DSL directives but no description
+    result.pipe.steps[0].description = "Only runs when authenticated and verified.";
+
+    const reconstructed = pipeToMarkdown(result.pipe);
+    assertEquals(reconstructed.includes("Only runs when authenticated and verified."), true);
+    // DSL directives must be preserved
+    assertEquals(reconstructed.includes("- check: /auth"), true);
+    assertEquals(reconstructed.includes("- and: /verified"), true);
+    assertEquals(reconstructed.includes("## Guarded Step"), true);
+  });
+
+  await t.step("lossless: description change preserves other steps formatting", async () => {
+    const source = `# Rich Pipe
+
+A **bold** description with [links](http://example.com).
+
+## Step One
+
+> Note that this step has important notes.
+> Multiple lines of blockquote.
+
+Some more description.
+
+\`\`\`ts
+input.x = 1;
+\`\`\`
+
+## Step Two
+
+Another description.
+
+\`\`\`ts
+input.y = 2;
+\`\`\`
+`;
+    const result = await parse(source);
+    // Only mutate step 2's description — step 1's blockquotes must survive
+    result.pipe.steps[1].description = "Replaced description.";
+
+    const reconstructed = pipeToMarkdown(result.pipe);
+    // Step 2 should have new description
+    assertEquals(reconstructed.includes("Replaced description."), true);
+    assertEquals(reconstructed.includes("Another description."), false);
+    // Step 1's rich formatting must be preserved verbatim
+    assertEquals(reconstructed.includes("> Note that this step has important notes."), true);
+    assertEquals(reconstructed.includes("> Multiple lines of blockquote."), true);
+    assertEquals(reconstructed.includes("Some more description."), true);
+  });
+
+  // --- Pipe-level description mutations ---
+
+  await t.step("lossless: splices in changed pipe-level description", async () => {
+    const source = `# My Pipeline
+
+Old pipe description.
+
+## Step One
+
+\`\`\`ts
+input.x = 1;
+\`\`\`
+`;
+    const result = await parse(source);
+    result.pipe.pipeDescription = "New LLM-generated pipe description.";
+
+    const reconstructed = pipeToMarkdown(result.pipe);
+    assertEquals(reconstructed.includes("New LLM-generated pipe description."), true);
+    assertEquals(reconstructed.includes("Old pipe description."), false);
+    assertEquals(reconstructed.includes("# My Pipeline"), true);
+    assertEquals(reconstructed.includes("## Step One"), true);
+  });
+
+  await t.step("lossless: pipe description change preserves schema block", async () => {
+    const source = `# Schema Pipe
+
+Old pipe description.
+
+\`\`\`zod
+import { z } from "npm:zod";
+export const schema = z.object({ name: z.string() });
+\`\`\`
+
+## Process
+
+\`\`\`ts
+input.count = input.count + 1;
+\`\`\`
+`;
+    const result = await parse(source);
+    result.pipe.pipeDescription = "New description.";
+
+    const reconstructed = pipeToMarkdown(result.pipe);
+    assertEquals(reconstructed.includes("New description."), true);
+    assertEquals(reconstructed.includes("Old pipe description."), false);
+    // Schema block must be preserved
+    assertEquals(reconstructed.includes("```zod"), true);
+    assertEquals(reconstructed.includes("z.object({ name: z.string() })"), true);
+  });
+
+  // --- Combined mutations ---
+
+  await t.step("lossless: title + description + code all changed on same step", async () => {
+    const source = `# Pipeline
+
+## Old Title
+
+Old description.
+
+\`\`\`ts
+input.old = true;
+\`\`\`
+`;
+    const result = await parse(source);
+    result.pipe.steps[0].name = "New Title";
+    result.pipe.steps[0].description = "New description.";
+    result.pipe.steps[0].code = "input.new = true;\n";
+
+    const reconstructed = pipeToMarkdown(result.pipe);
+    assertEquals(reconstructed.includes("## New Title"), true);
+    assertEquals(reconstructed.includes("## Old Title"), false);
+    assertEquals(reconstructed.includes("New description."), true);
+    assertEquals(reconstructed.includes("Old description."), false);
+    assertEquals(reconstructed.includes("input.new = true;"), true);
+    assertEquals(reconstructed.includes("input.old = true;"), false);
+    // H1 still there
+    assertEquals(reconstructed.includes("# Pipeline"), true);
+  });
+
+  // --- Fallback mode ---
+
   await t.step("falls back to field reconstruction when no rawSource", async () => {
     const pipe: Pipe = {
       name: "Fallback Pipe",

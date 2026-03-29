@@ -260,6 +260,7 @@ const flags: Args = std.parseArgs(Deno.args, {
         "replay",
         "dry-run",
         "list",
+        "build",
     ],
     string: [
         "out",

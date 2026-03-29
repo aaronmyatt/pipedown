@@ -31,7 +31,23 @@ window.PD = {
     // Toggled by the "I/O" button in PipeToolbar; displays the whole-pipeline
     // input/output from the most recent trace files.
     showPipeTraces: false,
-    pipeTraces: null
+    pipeTraces: null,
+
+    // ── Markdown editor mode ──
+    // When editMode is true, the main content area shows a textarea with the
+    // raw markdown instead of the rendered view. The user can edit and save
+    // changes back to the .md file on disk.
+    editMode: false,
+    editBuffer: null,     // raw markdown text being edited (copy of rawMarkdown)
+    editDirty: false,     // true when editBuffer differs from rawMarkdown
+    editSaving: false,    // true while the save POST is in flight
+
+    // ── New Pipe modal ──
+    // Controls the "create a new pipe" dialog opened from the sidebar.
+    showNewPipeModal: false,
+    newPipeName: "",       // user-entered pipe name
+    newPipeProject: null,  // selected project name for the new file
+    newPipeCreating: false // true while the create POST is in flight
   },
   actions: {},
   utils: {},
@@ -141,6 +157,19 @@ PD.utils.renderMarkdownWithAnnotations = function(raw, pipeData) {
 };
 
 PD.actions.selectPipe = function(pipe) {
+  // ── Unsaved changes guard ──
+  // If the user is mid-edit with unsaved changes, confirm before switching
+  // pipes. This prevents accidental loss of work.
+  // Ref: https://developer.mozilla.org/en-US/docs/Web/API/Window/confirm
+  if (PD.state.editMode && PD.state.editDirty) {
+    if (!confirm("You have unsaved changes. Discard them?")) return;
+  }
+  // Reset edit mode when switching pipes — the new pipe starts in read mode.
+  PD.state.editMode = false;
+  PD.state.editBuffer = null;
+  PD.state.editDirty = false;
+  PD.state.editSaving = false;
+
   PD.state.selectedPipe = pipe;
   PD.state.markdownLoading = true;
   PD.state.markdownHtml = null;
@@ -481,6 +510,167 @@ PD.actions.loadPipeTraces = function() {
     PD.state.pipeTraces = data;
   }).catch(function() {
     PD.state.pipeTraces = [];
+  });
+};
+
+// ── Edit Mode Actions ──
+// These actions control the read/edit toggle for in-browser markdown editing.
+// The edit buffer is a copy of rawMarkdown — changes are only persisted when
+// the user explicitly saves. The POST endpoint writes the file, triggers a
+// rebuild, and sends an SSE reload.
+
+// enterEditMode — switches to the textarea editor, copying the current raw
+// markdown into an editable buffer.
+PD.actions.enterEditMode = function() {
+  PD.state.editMode = true;
+  PD.state.editBuffer = PD.state.rawMarkdown || "";
+  PD.state.editDirty = false;
+};
+
+// exitEditMode — discards any unsaved changes and returns to the rendered
+// markdown view. Does NOT write anything to disk.
+PD.actions.exitEditMode = function() {
+  PD.state.editMode = false;
+  PD.state.editBuffer = null;
+  PD.state.editDirty = false;
+  PD.state.editSaving = false;
+};
+
+// saveEdit — POSTs the edited markdown back to the server, which writes
+// the file, rebuilds .pd/, and sends an SSE reload. After a successful save,
+// re-selects the pipe to refresh the rendered view.
+// Ref: POST /api/projects/{name}/files/{path} in buildandserve.ts
+PD.actions.saveEdit = function() {
+  if (PD.state.editSaving || !PD.state.selectedPipe) return;
+  PD.state.editSaving = true;
+  m.redraw();
+
+  var pipe = PD.state.selectedPipe;
+  var url = "/api/projects/" +
+    encodeURIComponent(pipe.projectName) +
+    "/files/" + encodeURIComponent(pipe.pipePath);
+
+  // Send as plain text — the server reads the body with request.text().
+  // Using text/plain avoids JSON-encoding the markdown content.
+  fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain" },
+    body: PD.state.editBuffer
+  }).then(function(res) {
+    if (!res.ok) throw new Error("Save failed: " + res.statusText);
+    // Exit edit mode and re-select the pipe to refresh markdown + pipeData.
+    PD.state.editMode = false;
+    PD.state.editBuffer = null;
+    PD.state.editDirty = false;
+    PD.state.editSaving = false;
+    PD.actions.selectPipe(pipe);
+  }).catch(function(err) {
+    PD.state.editSaving = false;
+    // Surface the error in the drawer so the user knows why the save failed.
+    PD.state.drawerOpen = true;
+    PD.state.drawerLabel = "Save error";
+    PD.state.drawerStatus = "error";
+    PD.state.drawerOutput = err.message || "Failed to save";
+    m.redraw();
+  });
+};
+
+// ── New Pipe Modal Actions ──
+// These actions control the "create new pipe" dialog and handle file creation.
+
+// openNewPipeModal — shows the modal, defaulting the project selector to the
+// currently selected pipe's project or the first available project.
+PD.actions.openNewPipeModal = function() {
+  PD.state.showNewPipeModal = true;
+  PD.state.newPipeName = "";
+  PD.state.newPipeCreating = false;
+  // Default to the current pipe's project, or the first project in the list.
+  if (PD.state.selectedPipe) {
+    PD.state.newPipeProject = PD.state.selectedPipe.projectName;
+  } else if (PD.state.recentPipes.length > 0) {
+    PD.state.newPipeProject = PD.state.recentPipes[0].projectName;
+  } else {
+    PD.state.newPipeProject = null;
+  }
+};
+
+PD.actions.closeNewPipeModal = function() {
+  PD.state.showNewPipeModal = false;
+  PD.state.newPipeName = "";
+  PD.state.newPipeProject = null;
+  PD.state.newPipeCreating = false;
+};
+
+// createNewPipe — sanitises the user-entered name, builds a template markdown
+// string, POSTs it to the write endpoint, reloads the pipe list, and
+// auto-selects the new pipe in edit mode so the user can start writing.
+PD.actions.createNewPipe = function() {
+  if (PD.state.newPipeCreating || !PD.state.newPipeName.trim() || !PD.state.newPipeProject) return;
+  PD.state.newPipeCreating = true;
+  m.redraw();
+
+  // Sanitise the pipe name into a safe filename: lowercase, replace spaces
+  // and non-alphanumeric chars with hyphens, collapse consecutive hyphens,
+  // and strip leading/trailing hyphens.
+  var displayName = PD.state.newPipeName.trim();
+  var safeName = displayName
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  if (!safeName) safeName = "new-pipe";
+  var fileName = safeName + ".md";
+
+  // Build the template markdown. The H1 heading uses the user-provided name
+  // (preserving their casing), and two placeholder steps give them a starting
+  // structure to fill in.
+  var template = "# " + displayName + "\n\n" +
+    "Describe what this pipe does.\n\n" +
+    "## Step One\n\n" +
+    "Describe what this step does.\n\n" +
+    "```ts\n// Your code here\n```\n\n" +
+    "## Step Two\n\n" +
+    "Describe what this step does.\n\n" +
+    "```ts\n// Your code here\n```\n";
+
+  var projectName = PD.state.newPipeProject;
+  var url = "/api/projects/" +
+    encodeURIComponent(projectName) +
+    "/files/" + encodeURIComponent(fileName);
+
+  fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain" },
+    body: template
+  }).then(function(res) {
+    if (!res.ok) throw new Error("Create failed: " + res.statusText);
+    PD.actions.closeNewPipeModal();
+    // Reload the pipe list so the new pipe appears in the sidebar.
+    // After reloading, find and select the new pipe, then enter edit mode.
+    PD.actions.loadRecentPipes();
+    // Give the pipe list a moment to update (loadRecentPipes is async),
+    // then find and select the newly created pipe.
+    // Ref: setTimeout ensures we run after the m.redraw from loadRecentPipes.
+    setTimeout(function() {
+      var match = PD.state.recentPipes.find(function(p) {
+        return p.projectName === projectName && p.pipePath === fileName;
+      });
+      if (match) {
+        PD.actions.selectPipe(match);
+        // Enter edit mode after a short delay so selectPipe's async fetches
+        // have time to populate rawMarkdown.
+        setTimeout(function() {
+          PD.actions.enterEditMode();
+          m.redraw();
+        }, 300);
+      }
+    }, 500);
+  }).catch(function(err) {
+    PD.state.newPipeCreating = false;
+    PD.state.drawerOpen = true;
+    PD.state.drawerLabel = "Create pipe error";
+    PD.state.drawerStatus = "error";
+    PD.state.drawerOutput = err.message || "Failed to create pipe";
+    m.redraw();
   });
 };
 

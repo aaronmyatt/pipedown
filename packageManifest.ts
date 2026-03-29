@@ -225,3 +225,50 @@ export async function resolvePackageFiles(
 
   return files;
 }
+
+/**
+ * Resolve esbuild build artifacts from the .pd/ directory for inclusion
+ * in a package archive. Collects compiled JS bundles (index.{format}.js)
+ * and generated TypeScript entry points (index.ts) — the distributable
+ * outputs of `pd build` when pipes declare a `build: []` config.
+ *
+ * Deliberately excludes build-time metadata (index.json, index.md),
+ * the project-specific import map (deno.json), REPL helpers (replEval.ts),
+ * and generated template wrappers (cli.ts, server.ts, etc.).
+ *
+ * Ref: esbuild output naming convention in exportPipe.ts —
+ *   outfile: `index.${format}.js` (e.g., index.esm.js, index.cjs.js)
+ * Ref: https://esbuild.github.io/api/#outfile
+ *
+ * @param dir - Absolute path to the project root directory
+ * @returns Array of absolute paths to build artifacts in .pd/
+ */
+export async function resolveBuildArtifacts(
+  dir: string,
+): Promise<string[]> {
+  const files: string[] = [];
+  const pdDir = std.join(dir, ".pd");
+
+  // If .pd/ doesn't exist, no build has been run — return empty.
+  if (!await std.exists(pdDir)) return files;
+
+  // Walk .pd/ looking for compiled JS bundles and generated TS entry points.
+  // The regex matches esbuild output like index.esm.js, index.cjs.js, index.iife.js.
+  // Ref: https://jsr.io/@std/fs/doc/walk/~
+  for await (const entry of std.walk(pdDir, { includeDirs: false })) {
+    const name = std.basename(entry.path);
+
+    // Compiled JS bundles from esbuild (index.esm.js, index.cjs.js, etc.)
+    if (/^index\.\w+\.js$/.test(name)) {
+      files.push(entry.path);
+    }
+
+    // Generated TypeScript entry point — useful for Deno consumers
+    // who can import directly without needing the bundled output.
+    if (name === "index.ts") {
+      files.push(entry.path);
+    }
+  }
+
+  return files;
+}

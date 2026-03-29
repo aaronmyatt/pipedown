@@ -592,6 +592,66 @@ export async function serve(input: BuildInput){
       }
     }
 
+    // ── Projects API: write a markdown file ──
+    // POST /api/projects/{name}/files/{path}
+    // Accepts raw markdown text in the request body, writes it to disk,
+    // rebuilds the project's .pd/ directory, and notifies SSE clients.
+    // Used by both "Save edits" (overwrite existing) and "New Pipe" (create new).
+    // Ref: readPipeMarkdown in projectsDashboard.ts for the path-traversal guard
+    if (
+      request.method === "POST" &&
+      url.pathname.match(/^\/api\/projects\/[^/]+\/files\/.+$/)
+    ) {
+      const segments = url.pathname.split("/");
+      const name = decodeURIComponent(segments[3]);
+      const filePath = decodeURIComponent(segments.slice(5).join("/"));
+      const raw = await readProjectsRegistry();
+      const project = raw.find((p) => p.name === name);
+      if (!project) {
+        return new Response("Project not found", { status: 404 });
+      }
+      try {
+        // Resolve the absolute path and verify it doesn't escape the project
+        // directory. std.join normalises ".." segments, then std.relative
+        // confirms the result is still within the project root.
+        // Ref: https://jsr.io/@std/path/doc/~/join
+        const absPath = std.join(project.path, filePath);
+        const rel = std.relative(project.path, absPath);
+        if (rel.startsWith("..")) {
+          return new Response("Path traversal not allowed", { status: 403 });
+        }
+
+        const content = await request.text();
+
+        // Ensure parent directories exist — important when creating files in
+        // subdirectories that don't yet exist (e.g. "subdir/new-pipe.md").
+        // Ref: https://docs.deno.com/api/deno/~/Deno.mkdir
+        const parentDir = std.dirname(absPath);
+        await Deno.mkdir(parentDir, { recursive: true });
+
+        await Deno.writeTextFile(absPath, content);
+
+        // Rebuild the project so .pd/ reflects the new/updated markdown.
+        await buildProject(project.path);
+
+        // Notify SSE clients immediately — the file watcher's debounce
+        // would add a ~200ms delay, so we send an explicit reload event.
+        // Ref: _controller is the SSE stream controller (line 16)
+        try {
+          _controller?.enqueue("data: reload\n\n");
+        } catch { /* SSE client may have disconnected — ignore */ }
+
+        return new Response(JSON.stringify({ ok: true }), {
+          headers: { "content-type": "application/json" },
+        });
+      } catch (e) {
+        return new Response(
+          JSON.stringify({ error: (e as Error).message || "Write failed" }),
+          { status: 500, headers: { "content-type": "application/json" } },
+        );
+      }
+    }
+
     // Projects API: read a markdown file
     if (url.pathname.match(/^\/api\/projects\/[^/]+\/files\/.+$/)) {
       const segments = url.pathname.split("/");

@@ -6,9 +6,9 @@ import type { Pipe, Step, PipeConfig } from "./pipedown.d.ts";
  * Two modes:
  * 1. **Lossless** — when `pipe.rawSource` and step `sourceMap` data are available
  *    (i.e., the Pipe was parsed from a markdown file), reconstructs by joining
- *    raw source segments. Only code blocks that have changed are spliced in.
- *    All prose, formatting, blockquotes, dividers, and non-code content are
- *    preserved verbatim.
+ *    raw source segments. Changed titles, descriptions, and code blocks are
+ *    spliced into the original source. DSL directives, formatting, blockquotes,
+ *    dividers, and non-modified content are preserved verbatim.
  *
  * 2. **Lossy fallback** — when raw source data is absent (e.g., Pipe was constructed
  *    programmatically or loaded from index.json without rawSource), reconstructs
@@ -34,6 +34,46 @@ function canReconstructLosslessly(pipe: Pipe): boolean {
   );
 }
 
+/**
+ * Tests whether a raw source line is a pipedown list DSL directive.
+ *
+ * Directives are markdown list items that control conditional step execution
+ * (check, and, or, not, route, flags, stop, only, mock). They must be
+ * preserved verbatim during description replacement.
+ * Ref: mdToPipe.ts setupChecks() regex at line ~207
+ *
+ * @param line - A single line from the raw markdown source
+ * @returns true if the line is a DSL directive that should be preserved
+ */
+function isDSLDirective(line: string): boolean {
+  return /^\s*-\s*(?:check|when|if|flags|or|and|not|route|stop|only|mock)[:\s]/.test(line);
+}
+
+/**
+ * Finds the end of the pipe-level description region in the header section.
+ *
+ * The description sits between the H1 heading and the first structural block
+ * (fenced code block like ```zod or ```json, or the header end). This helper
+ * scans forward from the H1 to locate the first line that begins a fenced
+ * code block, returning that line index — or `headerEnd` if no structural
+ * block is found.
+ *
+ * @param sourceLines - All lines from the raw source
+ * @param h1Line      - The 0-indexed line of the H1 heading
+ * @param headerEnd   - The line where the first step's section begins
+ * @returns The line index of the first structural block (or headerEnd)
+ */
+function findHeaderDescriptionEnd(
+  sourceLines: string[],
+  h1Line: number,
+  headerEnd: number,
+): number {
+  for (let i = h1Line + 1; i < headerEnd; i++) {
+    if (/^\s*```/.test(sourceLines[i])) return i;
+  }
+  return headerEnd;
+}
+
 function losslessReconstruct(pipe: Pipe): string {
   const sourceLines = pipe.rawSource!.split("\n");
   const output: string[] = [];
@@ -57,25 +97,134 @@ function losslessReconstruct(pipe: Pipe): string {
     stepBoundaries.push({ start, end });
   }
 
-  // Header: everything before the first step's section
+  // ── Header section (everything before the first step) ──
   const headerEnd = stepBoundaries[0].start;
   if (headerEnd > 0) {
-    output.push(...sourceLines.slice(0, headerEnd));
+    const pipeDescChanged =
+      pipe.originalPipeDescription !== undefined &&
+      pipe.pipeDescription !== pipe.originalPipeDescription;
+
+    if (pipeDescChanged) {
+      // Splice in the new pipe-level description while preserving the H1
+      // heading, schema blocks, config blocks, and other structural content.
+      //
+      // Strategy: find the H1 line, then locate the description region
+      // (prose between H1 and the first structural block like ```zod).
+      // Replace only that region with the new description text.
+      let h1Line = -1;
+      for (let i = 0; i < headerEnd; i++) {
+        if (/^#\s/.test(sourceLines[i])) { h1Line = i; break; }
+      }
+
+      if (h1Line >= 0) {
+        // Emit everything up to and including the H1 heading
+        output.push(...sourceLines.slice(0, h1Line + 1));
+
+        // Find where the description region ends (first ``` block or headerEnd)
+        const descEnd = findHeaderDescriptionEnd(sourceLines, h1Line, headerEnd);
+
+        // Emit new description (with surrounding blank lines for readability)
+        output.push("");
+        if (pipe.pipeDescription) {
+          output.push(pipe.pipeDescription);
+          output.push("");
+        }
+
+        // Emit structural content after the description region (schema, config, etc.)
+        if (descEnd < headerEnd) {
+          output.push(...sourceLines.slice(descEnd, headerEnd));
+        }
+      } else {
+        // No H1 found — fall back to emitting header verbatim
+        output.push(...sourceLines.slice(0, headerEnd));
+      }
+    } else {
+      output.push(...sourceLines.slice(0, headerEnd));
+    }
   }
 
-  // Each step section
+  // ── Each step section ──
+  // Each step is divided into four regions that can be independently spliced:
+  //   Region 1: Heading line (sourceMap.headingLine)
+  //   Region 2: Between heading and code block (description + DSL directives)
+  //   Region 3: Code block (fence-open, code content, fence-close)
+  //   Region 4: Trailing content (after code block to section end)
   for (let i = 0; i < pipe.steps.length; i++) {
     const step = pipe.steps[i];
     const { start, end } = stepBoundaries[i];
+    const headingLine = step.sourceMap?.headingLine;
     const codeStart = step.sourceMap!.codeStartLine!;
     const codeEnd = step.sourceMap!.codeEndLine!;
 
+    // Detect which fields have changed since parse time
+    const nameChanged =
+      step.originalName !== undefined && step.name !== step.originalName;
+    const descChanged =
+      step.originalDescription !== undefined
+        ? step.description !== step.originalDescription
+        // When originalDescription is undefined but description is now set,
+        // a new description has been added (e.g., LLM generated one where
+        // none existed before)
+        : step.description !== undefined && step.description !== step.originalDescription;
     const codeChanged =
       step.originalCode !== undefined && step.code !== step.originalCode;
 
+    // Fast path: nothing changed — copy entire section verbatim
+    if (!nameChanged && !descChanged && !codeChanged) {
+      output.push(...sourceLines.slice(start, end));
+      continue;
+    }
+
+    // ── Region 1: Heading line ──
+    if (headingLine !== undefined) {
+      if (nameChanged) {
+        // Replace the heading line with the new title, preserving the level
+        const level = step.headingLevel || 2;
+        output.push(`${"#".repeat(level)} ${step.name}`);
+      } else {
+        output.push(sourceLines[headingLine]);
+      }
+
+      // ── Region 2: Between heading and code block ──
+      // This region may contain: blank lines, description prose, and DSL
+      // directive list items (- check:, - and:, etc.). When the description
+      // has changed, we replace all non-directive lines with the new text
+      // while preserving directive lines in their original form.
+      if (descChanged) {
+        // Collect DSL directive lines from the original region — these must
+        // be preserved regardless of description changes.
+        const directives: string[] = [];
+        for (let j = headingLine + 1; j < codeStart; j++) {
+          if (isDSLDirective(sourceLines[j])) {
+            directives.push(sourceLines[j]);
+          }
+        }
+
+        // Emit the new description with clean formatting
+        output.push("");
+        if (step.description) {
+          output.push(step.description);
+          output.push("");
+        }
+
+        // Re-emit preserved DSL directives (these control conditional
+        // execution and must survive description replacement)
+        for (const d of directives) {
+          output.push(d);
+        }
+      } else {
+        // Description unchanged — emit original lines between heading and code
+        output.push(...sourceLines.slice(headingLine + 1, codeStart));
+      }
+    } else {
+      // No heading — emit everything from section start up to the code block
+      output.push(...sourceLines.slice(start, codeStart));
+    }
+
+    // ── Region 3: Code block ──
     if (codeChanged) {
-      // Emit everything from step start up to and including the fence-open line
-      output.push(...sourceLines.slice(start, codeStart + 1));
+      // Emit the fence-open line verbatim (preserves language tag and indent)
+      output.push(sourceLines[codeStart]);
 
       // Detect indentation from the original content lines (for list-indented blocks)
       const codeIndent = detectCodeIndent(sourceLines, codeStart, codeEnd, step.originalCode!);
@@ -86,12 +235,14 @@ function losslessReconstruct(pipe: Pipe): string {
         output.push(codeIndent + codeLine);
       }
 
-      // Emit fence-close line and everything after it until the next step
-      // codeEnd is exclusive (line after fence-close), so codeEnd - 1 is the fence-close line
-      output.push(...sourceLines.slice(codeEnd - 1, end));
+      // Emit fence-close line (codeEnd is exclusive, so codeEnd - 1 is the ``` line)
+      output.push(sourceLines[codeEnd - 1]);
+
+      // ── Region 4: Trailing content after code block ──
+      output.push(...sourceLines.slice(codeEnd, end));
     } else {
-      // Unchanged: copy the entire section verbatim
-      output.push(...sourceLines.slice(start, end));
+      // Code unchanged — emit original code block and trailing content
+      output.push(...sourceLines.slice(codeStart, end));
     }
   }
 

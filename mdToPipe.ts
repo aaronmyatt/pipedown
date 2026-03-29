@@ -136,6 +136,10 @@ const findSteps = (input: mdToPipeInput) => {
         }
 
         step.name = headingText(input.tokens, headingRange[0]) || "anonymous" + step.range[0];
+        // Preserve the original name at parse time for lossless round-trip
+        // reconstruction — allows pipeToMarkdown to detect title mutations
+        // and splice in the new heading text while preserving other formatting.
+        step.originalName = step.name;
 
         // Capture heading line number from token.map for lossless round-trip
         if (headingToken?.map) {
@@ -149,6 +153,10 @@ const findSteps = (input: mdToPipeInput) => {
         const descParts = collectInlineText(input.tokens, headingRange[1] + 1, step.range[0]);
         if (descParts.length > 0) {
           step.description = descParts.join("\n");
+          // Preserve original description for lossless round-trip — allows
+          // pipeToMarkdown to detect description mutations and splice in
+          // new prose while preserving DSL directive lines.
+          step.originalDescription = step.description;
         }
       } else {
         step.name = "anonymous" + step.range[0];
@@ -174,6 +182,10 @@ const findPipeDescription = (input: mdToPipeInput) => {
   const descParts = collectInlineText(input.tokens, firstHeading[1] + 1, firstBlock);
   if (descParts.length > 0) {
     input.pipe.pipeDescription = descParts.join("\n");
+    // Preserve original pipe description for lossless round-trip — allows
+    // pipeToMarkdown to detect pipe-level description mutations and splice
+    // the new text into the header while preserving schema/config blocks.
+    input.pipe.originalPipeDescription = input.pipe.pipeDescription;
   }
 };
 

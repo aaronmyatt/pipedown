@@ -17,12 +17,20 @@ PD.components.Sidebar = {
     if (pipes.length === 0) {
       return m("div.sidebar", [
         m(PD.components.SearchBar),
+        // Show the new-pipe button even in the empty state — it's the primary
+        // action when no pipes exist yet.
+        m("button.new-pipe-btn", { onclick: PD.actions.openNewPipeModal }, "+ New Pipe"),
         m("p", { style: "color: var(--text-2); font-size: var(--font-size-1)" },
           PD.state.searchQuery ? "No matching pipes." : "No pipes found. Register a project first.")
       ]);
     }
     return m("div.sidebar", [
       m(PD.components.SearchBar),
+      // ── New Pipe button ──
+      // Creates a new pipe markdown file via a modal dialog. Placed between
+      // the search bar and the pipe list so it's always visible.
+      // Ref: PD.actions.openNewPipeModal in state.js
+      m("button.new-pipe-btn", { onclick: PD.actions.openNewPipeModal }, "+ New Pipe"),
       pipes.map(function(pipe) {
         var isActive = PD.state.selectedPipe &&
           PD.state.selectedPipe.projectName === pipe.projectName &&
