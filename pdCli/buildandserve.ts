@@ -9,7 +9,7 @@ import { pdBuild } from "../pdBuild.ts";
 import { pipeToMarkdown } from "../pipeToMarkdown.ts";
 import { reportErrors } from "./reportErrors.ts";
 import { scanTraces, readTrace, tracePage } from "./traceDashboard.ts";
-import { enrichProjects, readProjectsRegistry, scanProjectPipes, readPipeMarkdown, projectsPage } from "./projectsDashboard.ts";
+import { enrichProjects, readProjectsRegistry, scanProjectPipes, readPipeMarkdown, projectsPage, readGlobalConfig, writeGlobalConfig, createProject } from "./projectsDashboard.ts";
 import { scanRecentPipes, readPipeIndex, recentStepTraces, recentPipeTraces, homePage } from "./homeDashboard.ts";
 import { findTargetStep, buildContextPrompt, callLLM } from "./llmCommand.ts";
 // performExtraction splits a pipe's steps into a new sub-pipe and rewrites
@@ -825,8 +825,70 @@ export async function serve(input: BuildInput){
 
     // --- Existing API routes ---
 
-    // Projects API: list all projects enriched with mtime
-    if (url.pathname === "/api/projects") {
+    // ── Global Config API ──
+    // GET /api/config — returns ~/.pipedown/config.json contents.
+    // PUT /api/config — merges the JSON body into existing config and persists.
+    // Ref: readGlobalConfig / writeGlobalConfig in projectsDashboard.ts
+    if (url.pathname === "/api/config") {
+      if (request.method === "GET") {
+        const config = await readGlobalConfig();
+        return new Response(JSON.stringify(config), {
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (request.method === "PUT") {
+        try {
+          const patch = await request.json();
+          const merged = await writeGlobalConfig(patch);
+          return new Response(JSON.stringify(merged), {
+            headers: { "content-type": "application/json" },
+          });
+        } catch (e) {
+          return new Response(
+            JSON.stringify({ error: (e as Error).message }),
+            { status: 500, headers: { "content-type": "application/json" } },
+          );
+        }
+      }
+    }
+
+    // ── Create Project API ──
+    // POST /api/projects — scaffolds a new project directory under the
+    // configured newProjectDir and registers it in projects.json.
+    // Body: { "name": "My Project" }
+    // Returns the enriched project entry on success.
+    // Ref: createProject in projectsDashboard.ts
+    if (request.method === "POST" && url.pathname === "/api/projects") {
+      try {
+        const body = await request.json();
+        if (!body.name || typeof body.name !== "string" || !body.name.trim()) {
+          return new Response(
+            JSON.stringify({ error: "Project name is required" }),
+            { status: 400, headers: { "content-type": "application/json" } },
+          );
+        }
+        const entry = await createProject(body.name.trim());
+
+        // Return enriched version so frontend has all display fields
+        const enriched = await enrichProjects([entry]);
+        return new Response(JSON.stringify(enriched[0]), {
+          headers: { "content-type": "application/json" },
+        });
+      } catch (e) {
+        const msg = (e as Error).message;
+        // createProject throws "ALREADY_EXISTS" when the directory is taken
+        const status = msg === "ALREADY_EXISTS" ? 409 : 500;
+        return new Response(
+          JSON.stringify({ error: status === 409 ? "A project with that name already exists" : msg }),
+          { status, headers: { "content-type": "application/json" } },
+        );
+      }
+    }
+
+    // Projects API: list all projects enriched with mtime.
+    // The GET guard is required because POST /api/projects (above) handles
+    // project creation — without it this route would swallow POST requests.
+    if (request.method === "GET" && url.pathname === "/api/projects") {
       const raw = await readProjectsRegistry();
       const enriched = await enrichProjects(raw);
       return new Response(JSON.stringify(enriched), {
