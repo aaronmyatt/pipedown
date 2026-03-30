@@ -20,6 +20,39 @@ Examples:
   pd llm myScript "API Call" "Optimize this API call for better performance"
 `;
 
+// ── Shared Pipedown System Prompt ──
+// Reads LLM.md from the project root at runtime so there's a single source
+// of truth for what Pipedown is and how it works. The file is cached after
+// the first read to avoid repeated disk I/O within a single process.
+// Ref: /LLM.md
+
+let _cachedSystemPrompt: string | null = null;
+
+/**
+ * Loads the Pipedown system prompt from LLM.md at the project root.
+ * The result is cached in memory so subsequent calls in the same process
+ * return instantly without hitting the filesystem again.
+ * Ref: https://docs.deno.com/api/deno/~/Deno.readTextFile
+ * @returns The contents of LLM.md, or a short fallback if the file is missing.
+ */
+export async function getPipedownSystemPrompt(): Promise<string> {
+  if (_cachedSystemPrompt) return _cachedSystemPrompt;
+
+  // LLM.md lives at the project root — same directory the user runs `pd` from.
+  // We resolve relative to CWD, matching how PD_DIR (`./.pd`) is resolved.
+  const llmMdPath = std.join(Deno.cwd(), "LLM.md");
+  try {
+    _cachedSystemPrompt = await Deno.readTextFile(llmMdPath);
+  } catch {
+    // Fallback: if LLM.md doesn't exist (e.g. running outside a pipedown
+    // project), provide a minimal one-liner so prompts still work.
+    _cachedSystemPrompt =
+      "You are an expert assistant for Pipedown — a framework that transforms markdown files into executable TypeScript/JavaScript pipelines running on Deno.";
+  }
+  return _cachedSystemPrompt;
+}
+
+
 export async function loadPipeContext(markdownFile: string, projectPath?: string) {
   const baseDir = projectPath ? std.join(projectPath, ".pd") : PD_DIR;
   const pipeDir = std.join(baseDir, markdownFile);
@@ -57,28 +90,41 @@ export function findTargetStep(steps: any[], target: string) {
   return { step: steps[stepIndex], index: stepIndex };
 }
 
-export function buildContextPrompt(steps: any[], targetIndex: number, userPrompt: string) {
-  // Get preceding steps for context
+export async function buildContextPrompt(steps: any[], targetIndex: number, userPrompt: string) {
+  // Get preceding steps for context — the LLM needs to understand what data
+  // transformations have already occurred so it can generate code that reads
+  // from the correct `input` properties set by earlier steps.
   const precedingSteps = steps.slice(0, targetIndex);
   const targetStep = steps[targetIndex];
-  
-  const contextJson = JSON.stringify(precedingSteps, null, 2);
-  
-  return `You are helping to improve a codeblock in a markdown-based pipeline system.
+  const systemPrompt = await getPipedownSystemPrompt();
 
-Context - Previous steps in this pipeline:
+  const contextJson = JSON.stringify(precedingSteps, null, 2);
+
+  return `${systemPrompt}
+
+## Your Task
+
+You are improving a single step's code within a Pipedown pipeline.
+
+### Context — Previous steps in this pipeline:
 ${contextJson}
 
-Current codeblock to improve:
+### Current step to improve:
 Name: ${targetStep.name}
 Current code:
-\`\`\`
+\`\`\`ts
 ${targetStep.code}
 \`\`\`
 
-User request: ${userPrompt}
+### User request: ${userPrompt}
 
-Please provide only the improved code without any explanation or markdown formatting.`;
+### Rules:
+- Output ONLY the improved TypeScript/JavaScript code — no explanations, no markdown fences.
+- The code runs inside an async function with \`input\` and \`opts\` in scope. Do NOT declare or import them.
+- Read data from \`input\` properties set by preceding steps; write results back onto \`input\`.
+- Use \`$p.get(opts, '/config/key')\` to read pipeline configuration.
+- Imports (npm:, jsr:, URLs) go at the top of the code block.
+- Do not wrap code in a function or module — it executes inline.`;
 }
 
 export async function callLLM(prompt: string): Promise<string> {
@@ -285,13 +331,14 @@ export async function llmCommand(input: CliInput) {
     const { step: targetStep, index: targetIndex } = findTargetStep(steps, target);
     
     console.log(std.colors.brightBlue(`Calling LLM to improve: ${targetStep.name}...`));
-    const contextPrompt = buildContextPrompt(steps, targetIndex, prompt);
+    const contextPrompt = await buildContextPrompt(steps, targetIndex, prompt);
     const rawResult = await callLLM(contextPrompt);
     // Clean the LLM output: strip code fences and unwrap {"code": "..."} envelopes
     // before writing back to the markdown source file.
     const improvedCode = cleanLLMOutput(rawResult);
 
     console.log(std.colors.brightBlue("Updating markdown file..."));
+    console.log(std.colors.brightGreen("Improved code:\n") + std.colors.dim(improvedCode));
     await updateMarkdownFile(markdownFile, targetIndex, improvedCode);
     
     console.log(std.colors.brightGreen("✓ Successfully updated codeblock!"));

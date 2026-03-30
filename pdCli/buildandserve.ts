@@ -11,7 +11,7 @@ import { reportErrors } from "./reportErrors.ts";
 import { scanTraces, readTrace, tracePage } from "./traceDashboard.ts";
 import { enrichProjects, readProjectsRegistry, scanProjectPipes, readPipeMarkdown, projectsPage, readGlobalConfig, writeGlobalConfig, createProject } from "./projectsDashboard.ts";
 import { scanRecentPipes, readPipeIndex, recentStepTraces, recentPipeTraces, homePage } from "./homeDashboard.ts";
-import { findTargetStep, buildContextPrompt, callLLM } from "./llmCommand.ts";
+import { findTargetStep, buildContextPrompt, callLLM, getPipedownSystemPrompt } from "./llmCommand.ts";
 // performExtraction splits a pipe's steps into a new sub-pipe and rewrites
 // the parent with a delegation step. Used by POST /api/extract.
 // Ref: extractSteps.ts — parseStepIndices, buildExtractedPipe, buildReplacementStep
@@ -187,12 +187,17 @@ function stripCodeFences(text: string): string {
  * @returns A formatted context string to prepend to any step-level prompt
  */
 // deno-lint-ignore no-explicit-any
-function buildPipeContextHeader(pipeData: any, steps: any[], stepIndex: number): string {
+async function buildPipeContextHeader(pipeData: any, steps: any[], stepIndex: number): Promise<string> {
   const parts: string[] = [];
 
-  parts.push("You are working on a step within a markdown-based pipeline.");
+  // Start with the comprehensive Pipedown system prompt so the LLM
+  // understands the framework's conventions (input object, opts, $p,
+  // conditionals, imports, etc.) before seeing the specific pipeline.
+  parts.push(await getPipedownSystemPrompt());
 
-  // Pipe-level metadata gives the LLM the "big picture"
+  // ── Pipeline-specific metadata ──
+  // Gives the LLM the "big picture" for this particular pipeline.
+  parts.push(`## This Pipeline`);
   parts.push(`\nPipeline name: ${pipeData.name || "unnamed"}`);
   if (pipeData.pipeDescription) {
     parts.push(`Pipeline description: ${pipeData.pipeDescription}`);
@@ -200,18 +205,30 @@ function buildPipeContextHeader(pipeData: any, steps: any[], stepIndex: number):
   if (pipeData.schema) {
     parts.push(`Pipeline schema:\n\`\`\`zod\n${pipeData.schema}\n\`\`\``);
   }
+  if (pipeData.config) {
+    // Surface relevant config (inputs, build settings) so the LLM
+    // understands what test data exists and how the pipe is configured.
+    const { inputs, ...rest } = pipeData.config;
+    if (inputs && inputs.length > 0) {
+      parts.push(`\nTest inputs (${inputs.length} entries):\n\`\`\`json\n${JSON.stringify(inputs.slice(0, 3), null, 2)}\n\`\`\``);
+    }
+    if (Object.keys(rest).length > 0) {
+      parts.push(`\nConfig:\n\`\`\`json\n${JSON.stringify(rest, null, 2)}\n\`\`\``);
+    }
+  }
 
-  // Preceding steps provide the sequential context — the LLM needs to
-  // understand what data transformations have already occurred before
-  // the target step so it can generate coherent titles, descriptions,
-  // or code improvements.
+  // ── Preceding steps ──
+  // The LLM needs to understand what data transformations have already
+  // occurred before the target step so it can generate coherent titles,
+  // descriptions, or code improvements.
   const preceding = steps.slice(0, stepIndex);
   if (preceding.length > 0) {
-    parts.push("\nPreceding steps in this pipeline:");
-    preceding.forEach((s: { name: string; description?: string; code: string }, i: number) => {
-      parts.push(`\nStep ${i + 1}: ${s.name}`);
+    parts.push("\n## Preceding steps in this pipeline:");
+    preceding.forEach((s: { name: string; description?: string; code: string; config?: any }, i: number) => {
+      parts.push(`\n### Step ${i + 1}: ${s.name}`);
       if (s.description) parts.push(`Description: ${s.description}`);
-      parts.push(`Code:\n\`\`\`\n${s.code}\n\`\`\``);
+      if (s.config) parts.push(`Conditionals: ${JSON.stringify(s.config)}`);
+      parts.push(`Code:\n\`\`\`ts\n${s.code}\n\`\`\``);
     });
   }
 
@@ -454,20 +471,103 @@ export async function serve(input: BuildInput){
         // Track whether the sync succeeded so we can inform the frontend
         let synced = false;
 
+        // ── Shared step summary ──
+        // Several prompts need a compact view of all steps (name + code).
+        // Build it once so each action branch can reference it.
+        const stepsOverview = JSON.stringify(
+          steps.map((s: { name: string; code: string; description?: string; config?: any }) => ({
+            name: s.name,
+            code: s.code,
+            ...(s.description ? { description: s.description } : {}),
+            ...(s.config ? { conditionals: s.config } : {}),
+          })),
+          null,
+          2,
+        );
+
         if (action === "description") {
-          const contextPrompt = `Generate a concise description for this pipeline based on its steps:\n${JSON.stringify(steps.map((s: { name: string; code: string }) => ({ name: s.name, code: s.code })), null, 2)}\n\nProvide only the description text, no markdown formatting.`;
+          // ── Description generation ──
+          // Uses the full Pipedown system prompt so the LLM understands the
+          // framework conventions and can write a description that references
+          // the input object flow, conditionals, and execution modes accurately.
+          const contextPrompt = `${await getPipedownSystemPrompt()}
+
+## Your Task
+
+Generate a concise 1-2 sentence description for this Pipedown pipeline based on its steps. The description should explain what the pipeline does at a high level — what data it processes, what side effects it has, and what it produces on the \`input\` object.
+
+### Pipeline name: ${pipeData.name || "unnamed"}
+
+### Steps:
+${stepsOverview}
+
+### Rules:
+- Output ONLY the description text — no markdown formatting, no quotes, no preamble.
+- Focus on the pipeline's purpose and data flow, not implementation details.
+- Reference the key \`input\` properties the pipeline reads and writes.`;
           result = await callLLM(contextPrompt);
           // Persist: set the pipe-level description field
           pipeData.pipeDescription = result;
         } else if (action === "schema") {
-          const contextPrompt = `Generate a Zod schema for the input/output of this pipeline:\n${JSON.stringify(steps.map((s: { name: string; code: string }) => ({ name: s.name, code: s.code })), null, 2)}\n\nProvide only the Zod schema code.`;
+          // ── Zod schema generation ──
+          // The LLM needs to understand Pipedown's input object conventions
+          // (input.errors, input.request, input.mode, etc.) to generate a
+          // schema that validates both user-defined and framework-set properties.
+          const contextPrompt = `${await getPipedownSystemPrompt()}
+
+## Your Task
+
+Generate a Zod schema that validates the \`input\` object for this Pipedown pipeline. The schema should cover all properties that steps read from and write to \`input\`.
+
+### Pipeline name: ${pipeData.name || "unnamed"}
+${pipeData.pipeDescription ? `### Pipeline description: ${pipeData.pipeDescription}` : ""}
+
+### Steps:
+${stepsOverview}
+
+### Rules:
+- Output ONLY the Zod schema code — no markdown fences, no explanations, no imports.
+- Use \`z.object({ ... })\` as the top-level shape.
+- Include properties that steps explicitly read from or write to \`input\`.
+- Mark optional properties with \`.optional()\` — only properties guaranteed to exist by the end should be required.
+- Do NOT include framework-internal properties (\`input.errors\`, \`input.mode\`, \`input.request\`, \`input.response\`, \`input.flags\`, \`input.route\`) unless the pipeline's steps explicitly use them.
+- Use descriptive \`.describe()\` annotations on non-obvious fields.
+- Prefer \`z.unknown()\` over \`z.any()\` for untyped data.`;
           result = await callLLM(contextPrompt);
           // Strip markdown code fences if the LLM wrapped the output.
           // The LLM is instructed to return only the schema code, but may
           // include ```zod ... ``` or ```ts ... ``` fences anyway.
           pipeData.schema = stripCodeFences(result);
         } else if (action === "tests") {
-          const contextPrompt = `Generate test input objects for this pipeline:\n${JSON.stringify(steps.map((s: { name: string; code: string }) => ({ name: s.name, code: s.code })), null, 2)}\n\nProvide JSON array of test inputs.`;
+          // ── Test input generation ──
+          // The LLM needs to understand that test inputs are passed as the
+          // initial `input` object and snapshot-tested via `pd test`.
+          // Each entry needs `_name` for labeling in test output.
+          const contextPrompt = `${await getPipedownSystemPrompt()}
+
+## Your Task
+
+Generate test input objects for this Pipedown pipeline. Each object becomes the initial \`input\` passed to the pipeline and is snapshot-tested with \`pd test\`.
+
+### Pipeline name: ${pipeData.name || "unnamed"}
+${pipeData.pipeDescription ? `### Pipeline description: ${pipeData.pipeDescription}` : ""}
+${pipeData.schema ? `### Pipeline schema:\n\`\`\`zod\n${pipeData.schema}\n\`\`\`` : ""}
+
+### Steps:
+${stepsOverview}
+
+### Rules:
+- Output ONLY a JSON array — no markdown fences, no explanations.
+- Every object MUST have a \`_name\` string property that describes the test scenario (used as the snapshot test label).
+- Include at least 3-5 test cases covering:
+  - A happy-path / normal input
+  - Edge cases (empty values, missing optional fields)
+  - Error conditions (invalid data that should trigger error handling)
+  - Conditional paths (inputs that activate different \`check:\`/\`not:\`/\`route:\` branches)
+- Only include properties that the pipeline's first steps actually read from \`input\`.
+- Use realistic but deterministic values (avoid random data, timestamps, or UUIDs that would break snapshots).
+- If the pipeline uses \`input.flags\`, include a test with flags set.
+- If the pipeline uses \`input.request\`, note that server-mode properties are set by the framework — test inputs should only include user-domain data.`;
           result = await callLLM(contextPrompt);
           // Parse the LLM's JSON array into config.inputs.
           // The LLM may return markdown-fenced JSON — strip fences first.
@@ -485,11 +585,27 @@ export async function serve(input: BuildInput){
         } else if (action === "step-title" && stepIndex !== undefined) {
           const { step } = findTargetStep(steps, "" + stepIndex);
           // Build a full-context prompt so the LLM understands where this step
-          // sits within the pipeline. Includes pipe name, description, schema,
-          // and all preceding steps — the same context that step-code gets via
-          // buildContextPrompt, but focused on title generation.
-          const pipeContext = buildPipeContextHeader(pipeData, steps, stepIndex);
-          const contextPrompt = `${pipeContext}\nSuggest a better title for this pipeline step:\nCurrent title: ${step.name}\nCode:\n${step.code}\n\nProvide only the title text, no markdown formatting or quotes.`;
+          // sits within the pipeline. Includes the Pipedown system prompt, pipe
+          // metadata, and all preceding steps.
+          const pipeContext = await buildPipeContextHeader(pipeData, steps, stepIndex);
+          const contextPrompt = `${pipeContext}
+
+## Your Task
+
+Suggest a better title for this pipeline step. The title becomes a markdown heading (## Title) in the source file.
+
+### Current step:
+Title: ${step.name}
+Code:
+\`\`\`ts
+${step.code}
+\`\`\`
+
+### Rules:
+- Output ONLY the title text — no markdown formatting, no quotes, no heading markers.
+- Keep it concise (2-5 words).
+- Use imperative verb form (e.g., "Fetch User Data", "Validate Input", "Build Response").
+- The title should describe what the step does in the context of the overall pipeline.`;
           result = await callLLM(contextPrompt);
           // Persist: update the step's heading name in the pipe data
           pipeData.steps[stepIndex].name = result.trim();
@@ -498,17 +614,35 @@ export async function serve(input: BuildInput){
           // Include full pipeline context so the LLM can write a description
           // that accurately reflects how this step relates to earlier steps
           // and the overall pipeline purpose.
-          const pipeContext = buildPipeContextHeader(pipeData, steps, stepIndex);
-          const contextPrompt = `${pipeContext}\nWrite a brief description for this pipeline step:\nTitle: ${step.name}\nCode:\n${step.code}\n\nProvide only the description text, no markdown formatting.`;
+          const pipeContext = await buildPipeContextHeader(pipeData, steps, stepIndex);
+          const contextPrompt = `${pipeContext}
+
+## Your Task
+
+Write a brief description for this pipeline step. The description appears as a paragraph between the heading and the code block in the markdown source.
+
+### Current step:
+Title: ${step.name}
+Code:
+\`\`\`ts
+${step.code}
+\`\`\`
+
+### Rules:
+- Output ONLY the description text — no markdown formatting, no quotes.
+- Keep it to 1-2 sentences.
+- Explain what the step does and why, referencing the \`input\` properties it reads/writes.
+- If the step has conditionals, mention when it runs.`;
           result = await callLLM(contextPrompt);
           // Persist: set the step's description paragraph
           pipeData.steps[stepIndex].description = result.trim();
         } else if (action === "step-code" && stepIndex !== undefined) {
-          // buildContextPrompt already includes preceding steps, but we
-          // enhance it with pipe-level metadata (name, description, schema)
-          // so the LLM understands the broader pipeline purpose.
-          const pipeContext = buildPipeContextHeader(pipeData, steps, stepIndex);
-          const codePrompt = buildContextPrompt(steps, stepIndex, userPrompt || "Improve this code");
+          // buildContextPrompt already includes the Pipedown system prompt and
+          // preceding steps, but we enhance it with pipe-level metadata (name,
+          // description, schema, config) via buildPipeContextHeader so the LLM
+          // understands the broader pipeline purpose.
+          const pipeContext = await buildPipeContextHeader(pipeData, steps, stepIndex);
+          const codePrompt = await buildContextPrompt(steps, stepIndex, userPrompt || "Improve this code");
           const contextPrompt = `${pipeContext}\n${codePrompt}`;
           result = await callLLM(contextPrompt);
           // Strip markdown code fences if the LLM wrapped the output.
