@@ -65,12 +65,28 @@ export function pdRunWith(
   return pdRun({ scriptName, testInput, entryPoint: `${wrapperName}.ts` });
 }
 
-export function pdServe(scriptName: string, testInput: string) {
+/**
+ * Launch a pipe as an HTTP server.
+ *
+ * @param scriptName - The pipe name (markdown filename without .md)
+ * @param testInput - JSON string to pass as initial input
+ * @param entryPoint - Template entry point: "server.ts" (production, default)
+ *                     or "devServer.ts" (development with hot reload + tracing).
+ *                     In dev mode the devServer handles its own file watching,
+ *                     so Deno's --watch is only used for the production template.
+ * Ref: templates/server.ts, templates/devServer.ts
+ */
+export function pdServe(scriptName: string, testInput: string, entryPoint = "server.ts") {
+  // The devServer.ts template manages its own file watching and rebuilding
+  // via Deno.watchFs, so we only enable Deno's --watch for the production
+  // server template (which needs it to restart on .pd/ file changes).
+  const useWatch = entryPoint === "server.ts";
+
   return pdRun({
     scriptName,
     testInput,
-    entryPoint: "server.ts",
-    watch: true,
+    entryPoint,
+    watch: useWatch,
     rawInput: true,
     includeScriptArgs: false,
   });

@@ -78,7 +78,7 @@ async function pdInit(input: CliInput) {
     Object.assign(input.globalConfig, config);
 }
 
-const DEFAULT_TEMPLATE_FILES = ["cli.ts", "server.ts", "worker.ts", "test.ts", "trace.ts"];
+const DEFAULT_TEMPLATE_FILES = ["cli.ts", "server.ts", "devServer.ts", "worker.ts", "test.ts", "trace.ts"];
 
 async function scaffoldTemplates(input: CliInput) {
     const templatesDir = std.join(Deno.cwd(), "templates");
@@ -263,6 +263,8 @@ const flags: Args = std.parseArgs(Deno.args, {
         "dry-run",
         "list",
         "build",
+        "dev",
+        "no-trace",
     ],
     string: [
         "out",
