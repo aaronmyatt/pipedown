@@ -46,7 +46,10 @@ function canReconstructLosslessly(pipe: Pipe): boolean {
  * @returns true if the line is a DSL directive that should be preserved
  */
 function isDSLDirective(line: string): boolean {
-  return /^\s*-\s*(?:check|when|if|flags|or|and|not|route|stop|only|mock)[:\s]/.test(line);
+  // Matches all pipedown list-item directives, including "method" and "type"
+  // for HTTP method filtering and response content-type shorthand.
+  // Ref: mdToPipe.ts setupChecks() regex for the authoritative directive list
+  return /^\s*-\s*(?:check|when|if|flags|or|and|not|route|stop|only|mock|method|type)[:\s]/.test(line);
 }
 
 /**
@@ -395,6 +398,19 @@ function buildDirectives(config: Step["config"]): string[] {
 
   if (config.only !== undefined) {
     directives.push("only:");
+  }
+
+  // HTTP method guard — emit one directive per allowed method.
+  // Ref: pdPipe/pdUtils.ts funcWrapper() for runtime evaluation
+  for (const method of (config as Record<string, unknown>).methods as string[] || []) {
+    directives.push(`method: ${method}`);
+  }
+
+  // Response content-type shorthand — supports names like "html", "json"
+  // or raw MIME types like "image/png".
+  // Ref: pdPipe/pdUtils.ts CONTENT_TYPE_MAP for shorthand resolution
+  if ((config as Record<string, unknown>).contentType) {
+    directives.push(`type: ${(config as Record<string, unknown>).contentType}`);
   }
 
   return directives;

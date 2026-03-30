@@ -120,6 +120,10 @@ export type StepConfig = {
     not?: string[];
     /** URL patterns for route matching. */
     routes?: string[];
+    /** HTTP methods this step responds to (e.g., ["GET", "POST"]). Multiple = OR. */
+    methods?: string[];
+    /** Response content-type shorthand or raw MIME type (e.g., "html", "application/xml"). */
+    contentType?: string;
     /** Flag paths (auto-prefixed with /flags). */
     flags?: string[];
     /** If set, only this step index runs. */

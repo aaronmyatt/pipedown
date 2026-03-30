@@ -216,7 +216,11 @@ const setupChecks = (input: mdToPipeInput) => {
     .map((step: Step, stepIndex: number) => {
       if (step.inList) {
         const listRange = inRange(input.ranges.lists, step.range[0]);
-        const checkRegex = new RegExp('(?<type>check|when|if|flags|or|and|not|route|stop|only|mock):\\s*(?<pointer>\\S*)');
+        // Regex to match DSL directives in list items before code blocks.
+        // Each directive controls conditional execution or response metadata.
+        // "method" filters by HTTP method; "type" sets response content-type.
+        // Ref: pdPipe/pdUtils.ts funcWrapper() for runtime evaluation
+        const checkRegex = new RegExp('(?<type>check|when|if|flags|or|and|not|route|stop|only|mock|method|type):\\s*(?<pointer>\\S*)');
 
         if (listRange) {
           // Collect list item text content
@@ -252,6 +256,15 @@ const setupChecks = (input: mdToPipeInput) => {
                 "stop": () => pd.$p.set(step, `/config/stop`, stepIndex),
                 "only": () => pd.$p.set(step, `/config/only`, stepIndex),
                 "mock": () => { step.mock = true; },
+                // "method" — HTTP method guard (e.g., method: POST).
+                // Multiple method directives on one step act as OR.
+                // Ref: pdPipe/pdUtils.ts funcWrapper() for runtime evaluation
+                "method": () => pd.$p.set(step, `/config/methods/-`, check.pointer.toUpperCase()),
+                // "type" — response content-type shorthand (e.g., type: html).
+                // Supports shorthand names (json, html, text, etc.) or raw MIME types.
+                // Applied after step execution by funcWrapper.
+                // Ref: pdPipe/pdUtils.ts CONTENT_TYPE_MAP for shorthand resolution
+                "type": () => pd.$p.set(step, `/config/contentType`, check.pointer),
               };
 
               actions[check.type]?.();
