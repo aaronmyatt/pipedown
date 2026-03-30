@@ -1,4 +1,8 @@
-// Projects FocusedProjectView component (detail area)
+// ── Projects FocusedProjectView component (detail area) ──
+// Shows the pipes within the focused project with a "+ New Pipe" button
+// for creating new pipes directly in this project.
+// Ref: PD.actions.viewPipe in state.js for pipe selection
+// Ref: PD.actions.openNewPipeModal in state.js for pipe creation
 PD.components.FocusedProjectView = {
   view: function() {
     if (!PD.state.focusedProject) {
@@ -19,7 +23,14 @@ PD.components.FocusedProjectView = {
     return m("div.detail", [
       m("div.project-heading", [
         m("h2", PD.state.focusedProject.name),
-        m("span.path", PD.state.focusedProject.path)
+        m("span.path", PD.state.focusedProject.path),
+        // ── New Pipe button ──
+        // Positioned in the heading row so it's always accessible when
+        // a project is focused. Uses .tb-btn.primary for emphasis.
+        m("button.tb-btn.primary", {
+          onclick: PD.actions.openNewPipeModal,
+          style: "margin-inline-start: auto"
+        }, "+ New Pipe")
       ]),
       pipes.length === 0
         ? m("p", { style: "color: var(--text-2)" }, "No markdown pipes found in this project.")

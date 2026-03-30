@@ -83,11 +83,15 @@
   font-family: var(--font-mono);
   white-space: nowrap;
 }
+/* flex-wrap allows the path and button to wrap below the heading on
+   narrow viewports instead of overflowing.
+   Ref: https://developer.mozilla.org/en-US/docs/Web/CSS/flex-wrap */
 .project-heading {
   display: flex;
   align-items: baseline;
   gap: var(--size-2);
   margin-block-end: var(--size-3);
+  flex-wrap: wrap;
 }
 .project-heading h2 { margin: 0; font-size: var(--font-size-4); }
 .project-heading .path {

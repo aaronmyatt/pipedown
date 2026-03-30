@@ -1,6 +1,11 @@
-// Projects page state, data-fetching, and navigation
+// ── Projects page state, data-fetching, and navigation ──
+// Initialises the per-page PD namespace with reactive state, actions for
+// project/pipe browsing, and modal flows for creating new projects and pipes.
+// Ref: Mithril.js state management — https://mithril.js.org/components.html
+
 window.PD = {
   state: {
+    // ── Project browsing ──
     projects: [],
     loading: true,
     searchQuery: "",
@@ -9,13 +14,28 @@ window.PD = {
     pipesLoading: false,
     viewingPipe: null,
     markdownHtml: null,
-    markdownLoading: false
+    markdownLoading: false,
+
+    // ── New Project modal ──
+    showNewProjectModal: false,
+    newProjectName: "",
+    newProjectCreating: false,
+    // Global config from ~/.pipedown/config.json (loaded on modal open)
+    globalConfig: null,
+
+    // ── New Pipe modal (on focused project) ──
+    showNewPipeModal: false,
+    newPipeName: "",
+    newPipeCreating: false
   },
   actions: {},
   utils: {},
   components: {}
 };
 
+// ── Markdown renderer ──
+// Ref: markdown-it — https://github.com/markdown-it/markdown-it
+// Ref: highlight.js — https://highlightjs.org/
 PD.utils.mdRenderer = window.markdownit({
   html: false,
   linkify: true,
@@ -34,6 +54,9 @@ PD.utils.mdRenderer = window.markdownit({
   }
 });
 
+// ── Search filter ──
+// Matches project names, pipe names, and recent pipe names against the
+// user's search query. Returns true if the project should be visible.
 PD.utils.matchesSearch = function(project) {
   if (!PD.state.searchQuery) return true;
   var q = PD.state.searchQuery.toLowerCase();
@@ -45,6 +68,24 @@ PD.utils.matchesSearch = function(project) {
   return false;
 };
 
+// ── Sanitise name helper ──
+// Converts a user-entered name into a safe directory/file name: lowercase,
+// non-alphanumeric chars → hyphens, collapse consecutive hyphens, strip edges.
+// Shared logic between project and pipe creation.
+// Ref: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String/replace
+PD.utils.sanitiseName = function(name) {
+  var safe = name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return safe || "untitled";
+};
+
+// ── Project / Pipe Browsing Actions ──
+
+// focusProject — select a project in the sidebar and load its pipes.
+// Ref: GET /api/projects/{name}/pipes endpoint in buildandserve.ts
 PD.actions.focusProject = function(project) {
   PD.state.focusedProject = project;
   PD.state.viewingPipe = null;
@@ -63,6 +104,8 @@ PD.actions.focusProject = function(project) {
   }).then(function() { m.redraw.sync(); });
 };
 
+// viewPipe — fetch and render a pipe's markdown source.
+// Ref: GET /api/projects/{name}/files/{path} in buildandserve.ts
 PD.actions.viewPipe = function(pipe) {
   PD.state.viewingPipe = pipe;
   PD.state.markdownLoading = true;
@@ -83,6 +126,7 @@ PD.actions.viewPipe = function(pipe) {
   }).then(function() { m.redraw.sync(); });
 };
 
+// goHome — clear all selection state to return to the project list.
 PD.actions.goHome = function() {
   PD.state.focusedProject = null;
   PD.state.focusedPipes = [];
@@ -90,7 +134,150 @@ PD.actions.goHome = function() {
   PD.state.markdownHtml = null;
 };
 
+// goToProject — clear pipe selection, staying on the focused project.
 PD.actions.goToProject = function() {
   PD.state.viewingPipe = null;
   PD.state.markdownHtml = null;
+};
+
+// loadProjects — (re-)fetches the enriched project list from the API.
+// Called on initial load (Layout oncreate) and after creating a new project.
+// Ref: GET /api/projects in buildandserve.ts
+PD.actions.loadProjects = function() {
+  return m.request({ method: "GET", url: "/api/projects" }).then(function(data) {
+    PD.state.projects = data;
+    PD.state.loading = false;
+  }).catch(function() {
+    PD.state.projects = [];
+    PD.state.loading = false;
+  }).then(function() { m.redraw.sync(); });
+};
+
+// ── New Project Modal Actions ──
+// These actions manage the "create new project" dialog that scaffolds a
+// new project directory under the configured newProjectDir.
+
+// openNewProjectModal — show the modal and fetch global config so we can
+// display the resolved newProjectDir path.
+// Ref: GET /api/config in buildandserve.ts
+PD.actions.openNewProjectModal = function() {
+  PD.state.showNewProjectModal = true;
+  PD.state.newProjectName = "";
+  PD.state.newProjectCreating = false;
+  // Fetch global config to show the target directory
+  m.request({ method: "GET", url: "/api/config" }).then(function(config) {
+    PD.state.globalConfig = config;
+  }).catch(function() {
+    PD.state.globalConfig = {};
+  }).then(function() { m.redraw.sync(); });
+};
+
+PD.actions.closeNewProjectModal = function() {
+  PD.state.showNewProjectModal = false;
+  PD.state.newProjectName = "";
+  PD.state.newProjectCreating = false;
+};
+
+// createNewProject — sanitise name, POST to /api/projects, refresh list,
+// and focus the newly created project.
+// Ref: POST /api/projects in buildandserve.ts
+PD.actions.createNewProject = function() {
+  if (PD.state.newProjectCreating || !PD.state.newProjectName.trim()) return;
+  PD.state.newProjectCreating = true;
+  m.redraw();
+
+  var displayName = PD.state.newProjectName.trim();
+
+  fetch("/api/projects", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: displayName })
+  }).then(function(res) {
+    if (!res.ok) {
+      return res.json().then(function(body) {
+        throw new Error(body.error || "Create failed: " + res.statusText);
+      });
+    }
+    return res.json();
+  }).then(function(newProject) {
+    PD.actions.closeNewProjectModal();
+    // Reload the full project list so the new one appears in the sidebar
+    PD.actions.loadProjects();
+    // After a short delay (async reload), auto-focus the new project
+    // Ref: setTimeout ensures we run after m.redraw from loadProjects
+    setTimeout(function() {
+      var match = PD.state.projects.find(function(p) {
+        return p.path === newProject.path;
+      });
+      if (match) {
+        PD.actions.focusProject(match);
+      }
+    }, 500);
+  }).catch(function(err) {
+    PD.state.newProjectCreating = false;
+    // Display error inline in the modal area — keep it simple with an alert
+    // since the projects page doesn't have a drawer component.
+    alert(err.message || "Failed to create project");
+    m.redraw();
+  });
+};
+
+// ── New Pipe Modal Actions (on focused project) ──
+// These actions manage creating a new pipe file within the currently
+// focused project. Simpler than the home page variant because the target
+// project is always the focused one — no project selector needed.
+
+PD.actions.openNewPipeModal = function() {
+  PD.state.showNewPipeModal = true;
+  PD.state.newPipeName = "";
+  PD.state.newPipeCreating = false;
+};
+
+PD.actions.closeNewPipeModal = function() {
+  PD.state.showNewPipeModal = false;
+  PD.state.newPipeName = "";
+  PD.state.newPipeCreating = false;
+};
+
+// createNewPipe — sanitise name, generate template markdown, POST to
+// the write endpoint, and refresh the focused project's pipe list.
+// Ref: POST /api/projects/{name}/files/{path} in buildandserve.ts
+PD.actions.createNewPipe = function() {
+  if (PD.state.newPipeCreating || !PD.state.newPipeName.trim() || !PD.state.focusedProject) return;
+  PD.state.newPipeCreating = true;
+  m.redraw();
+
+  var displayName = PD.state.newPipeName.trim();
+  var safeName = PD.utils.sanitiseName(displayName);
+  var fileName = safeName + ".md";
+
+  // Build template markdown with the user's display name and two starter steps
+  var template = "# " + displayName + "\n\n" +
+    "Describe what this pipe does.\n\n" +
+    "## Step One\n\n" +
+    "Describe what this step does.\n\n" +
+    "```ts\n// Your code here\n```\n\n" +
+    "## Step Two\n\n" +
+    "Describe what this step does.\n\n" +
+    "```ts\n// Your code here\n```\n";
+
+  var projectName = PD.state.focusedProject.name;
+  var url = "/api/projects/" +
+    encodeURIComponent(projectName) +
+    "/files/" + encodeURIComponent(fileName);
+
+  fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain" },
+    body: template
+  }).then(function(res) {
+    if (!res.ok) throw new Error("Create failed: " + res.statusText);
+    PD.actions.closeNewPipeModal();
+    // Refresh the focused project's pipe list so the new pipe appears
+    PD.actions.focusProject(PD.state.focusedProject);
+  }).catch(function(err) {
+    PD.state.newPipeCreating = false;
+    alert(err.message || "Failed to create pipe");
+    m.redraw();
+  });
 };
