@@ -186,29 +186,7 @@
   opacity: 1;
   pointer-events: all;
 }
-.tb-btn {
-  padding: var(--size-1) var(--size-2);
-  border-radius: var(--radius-2);
-  border: var(--border-size-1) solid var(--surface-4);
-  background: var(--surface-1);
-  color: var(--text-1);
-  cursor: pointer;
-  font-size: var(--font-size-00);
-  font-family: var(--font-sans);
-  white-space: nowrap;
-}
-.tb-btn:hover { background: var(--surface-3); }
-/* Primary action button — green accent with a subtle gradient for depth.
-   Matches the pd-desktop brand gradient (green-5 → green-7).
-   Ref: Open Props green scale — https://open-props.style/#green */
-.tb-btn.primary {
-  background: linear-gradient(135deg, var(--green-3), var(--green-4));
-  color: var(--green-9);
-  border-color: var(--green-5);
-}
-.tb-btn.primary:hover {
-  background: linear-gradient(135deg, var(--green-4), var(--green-5));
-}
+/* .tb-btn styles moved to shared/base.css */
 
 /* Dropdown */
 .dropdown-wrapper { position: relative; display: inline-block; }
@@ -570,95 +548,7 @@
   outline-offset: -2px;
 }
 
-/* ── New Pipe Button ──
-   Dashed-border button in the sidebar for creating new pipe files.
-   The dashed style visually distinguishes it as a creation affordance
-   rather than a navigation element. */
-
-/* New-pipe creation button — dashed green border signals an "add" affordance */
-.new-pipe-btn {
-  width: 100%;
-  padding: var(--size-2);
-  margin-block-end: var(--size-3);
-  border-radius: var(--radius-2);
-  border: var(--border-size-1) dashed var(--green-5);
-  background: transparent;
-  color: var(--green-6);
-  cursor: pointer;
-  font-size: var(--font-size-1);
-  font-family: var(--font-sans);
-  font-weight: var(--font-weight-5);
-  transition: background 0.15s, border-style 0.15s;
-}
-
-.new-pipe-btn:hover {
-  background: var(--green-1);
-  border-style: solid;
-  border-color: var(--green-6);
-}
-
-/* ── New Pipe Modal ──
-   Full-viewport overlay with a centered dialog box for entering the
-   new pipe's name and target project.
-   Ref: Open Props shadows — https://open-props.style/#shadows */
-
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: color-mix(in srgb, var(--surface-1) 80%, transparent);
-  backdrop-filter: blur(4px);
-  z-index: 50;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.modal-box {
-  background: var(--surface-2);
-  border: var(--border-size-1) solid var(--surface-3);
-  border-radius: var(--radius-3);
-  padding: var(--size-5);
-  min-width: 400px;
-  max-width: 500px;
-  box-shadow: var(--shadow-4);
-}
-
-.modal-box h2 {
-  margin: 0 0 var(--size-3) 0;
-  font-size: var(--font-size-3);
-}
-
-.modal-label {
-  display: block;
-  font-size: var(--font-size-0);
-  color: var(--text-2);
-  margin-block-end: var(--size-1);
-  font-weight: var(--font-weight-5);
-}
-
-.modal-input {
-  width: 100%;
-  padding: var(--size-2);
-  border-radius: var(--radius-2);
-  border: var(--border-size-1) solid var(--surface-4);
-  background: var(--surface-1);
-  color: var(--text-1);
-  font-size: var(--font-size-1);
-  font-family: var(--font-sans);
-  margin-block-end: var(--size-3);
-  box-sizing: border-box;
-}
-
-.modal-input:focus {
-  outline: 2px solid var(--green-5);
-  outline-offset: -2px;
-}
-
-.modal-actions {
-  display: flex;
-  gap: var(--size-2);
-  justify-content: flex-end;
-}
+/* .new-pipe-btn and .modal-* styles moved to shared/base.css */
 
 /* ── Extract Mode ──
    Styles for the step-extraction workflow: floating action bar at the
