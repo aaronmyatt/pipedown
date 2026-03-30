@@ -41,10 +41,16 @@ PD.components.NewPipeModal = {
     // on the next open).
     if (!PD.state.showNewPipeModal) return null;
 
-    // Build the list of unique project names from the recentPipes list.
-    // Using an object as a set to deduplicate.
-    // Ref: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/keys
+    // Build the list of unique project names by merging allProjects
+    // (which includes empty/newly-created projects) with recentPipes
+    // (which captures any project names that may not be in allProjects yet).
+    // This ensures newly created projects appear in the dropdown even
+    // before they have any pipes.
+    // Ref: PD.actions.loadAllProjects in state.js
     var seen = {};
+    // Primary source: allProjects (from GET /api/projects)
+    PD.state.allProjects.forEach(function(p) { seen[p.name] = true; });
+    // Fallback: recentPipes — covers edge cases where allProjects hasn't loaded
     PD.state.recentPipes.forEach(function(p) { seen[p.projectName] = true; });
     var projectNames = Object.keys(seen).sort();
 

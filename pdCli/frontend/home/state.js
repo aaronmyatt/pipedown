@@ -53,6 +53,11 @@ window.PD = {
     editDirty: false,     // true when editBuffer differs from rawMarkdown
     editSaving: false,    // true while the save POST is in flight
 
+    // ── All projects (for New Pipe modal project picker) ──
+    // Full project list from /api/projects — includes empty projects that
+    // don't appear in recentPipes. Loaded alongside recentPipes on init.
+    allProjects: [],
+
     // ── New Pipe modal ──
     // Controls the "create a new pipe" dialog opened from the sidebar.
     showNewPipeModal: false,
@@ -156,6 +161,18 @@ PD.actions.loadRecentPipes = function() {
       statusText: "Request Failed",
       message: err.message || "Failed to load pipes"
     };
+  }).then(function() { m.redraw.sync(); });
+};
+
+// loadAllProjects — fetches the full project list from /api/projects so
+// that the New Pipe modal can offer newly created (empty) projects that
+// have no pipes yet and wouldn't appear in recentPipes.
+// Ref: GET /api/projects in buildandserve.ts
+PD.actions.loadAllProjects = function() {
+  m.request({ method: "GET", url: "/api/projects" }).then(function(data) {
+    PD.state.allProjects = data;
+  }).catch(function() {
+    PD.state.allProjects = [];
   }).then(function() { m.redraw.sync(); });
 };
 

@@ -35,7 +35,12 @@ PD.components.Sidebar = {
   // ── oncreate ──
   // Triggers the initial data fetch when the sidebar first mounts.
   // Ref: https://mithril.js.org/lifecycle-methods.html#oncreate
-  oncreate: function() { PD.actions.loadRecentPipes(); },
+  oncreate: function() {
+    PD.actions.loadRecentPipes();
+    // Also load the full project list so the New Pipe modal can offer
+    // newly created empty projects that have no pipes yet.
+    PD.actions.loadAllProjects();
+  },
   view: function() {
     if (PD.state.loading) {
       return m("div.sidebar", m("p", { style: "color: var(--text-2)" }, "Loading pipes..."));
