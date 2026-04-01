@@ -123,6 +123,7 @@ export function homePage(): string {
   <link rel="stylesheet" href="/frontend/shared/base.css"/>
   <link rel="stylesheet" href="/frontend/shared/markdown.css"/>
   <link rel="stylesheet" href="/frontend/shared/jsonTree.css"/>
+  <link rel="stylesheet" href="/frontend/shared/ansi.css"/>
   <link rel="stylesheet" href="/frontend/home/styles.css"/>
   <script src="https://unpkg.com/mithril/mithril.js"><\/script>
   <script src="https://unpkg.com/markdown-it/dist/markdown-it.min.js"><\/script>
@@ -134,6 +135,7 @@ export function homePage(): string {
 <body>
   <div id="app"></div>
   <script src="/frontend/shared/jsonTree.js"><\/script>
+  <script src="/frontend/shared/ansi.js"><\/script>
   <script src="/frontend/shared/relativeTime.js"><\/script>
   <script src="/frontend/home/state.js"><\/script>
   <script src="/frontend/home/components/SearchBar.js"><\/script>

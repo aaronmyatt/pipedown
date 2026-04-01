@@ -272,9 +272,15 @@ PD.utils.drawerInputEditorContent = function() {
 // state is isolated.
 // Ref: pdCli/frontend/shared/jsonTree.js
 PD.utils.drawerBodyContent = function() {
-  // While running, show raw streaming text so the user sees live progress.
+  // While running, show live streaming text. ANSI escape codes (bold, colour)
+  // are converted to styled HTML via pd.ansiToHtml() so Deno error output
+  // renders with proper formatting instead of raw escape sequences.
+  // m.trust() tells Mithril to inject the pre-sanitised HTML string directly.
+  // Ref: https://mithril.js.org/trust.html
   if (PD.state.drawerStatus === "running") {
-    return PD.state.drawerOutput || "Running...";
+    var runningText = PD.state.drawerOutput;
+    if (!runningText) return "Running...";
+    return m.trust(pd.ansiToHtml(runningText));
   }
 
   // ── Error display ──
@@ -304,8 +310,8 @@ PD.utils.drawerBodyContent = function() {
     }
     sections.push(m("div.drawer-error-title", titleChildren));
 
-    // Error message body.
-    sections.push(m("div.drawer-error-message", err.message));
+    // Error message body — ANSI codes stripped / styled for readability.
+    sections.push(m("div.drawer-error-message", m.trust(pd.ansiToHtml(err.message))));
 
     // If the drawer accumulated partial output before the error (e.g. a
     // stream that broke mid-transfer), show it in a collapsible section
@@ -314,7 +320,7 @@ PD.utils.drawerBodyContent = function() {
     if (rawOutput && rawOutput !== err.message) {
       sections.push(m("details.drawer-error-details", [
         m("summary", "Raw output"),
-        m("pre", rawOutput)
+        m("pre", m.trust(pd.ansiToHtml(rawOutput)))
       ]));
     }
 
@@ -368,5 +374,9 @@ PD.utils.drawerBodyContent = function() {
 
   // ── Raw text fallback ──
   // Non-JSON output (e.g. LLM text streaming, test runner output).
-  return PD.state.drawerOutput || "";
+  // ANSI escape codes are converted to styled HTML so Deno compiler errors
+  // (bold red "error:" prefix, underline markers, etc.) render legibly.
+  var rawText = PD.state.drawerOutput;
+  if (!rawText) return "";
+  return m.trust(pd.ansiToHtml(rawText));
 };
