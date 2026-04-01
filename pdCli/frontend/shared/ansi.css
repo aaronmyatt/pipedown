@@ -1,0 +1,59 @@
+/* ── ANSI colour classes ──
+   Maps terminal SGR colour codes to theme-aware CSS custom properties
+   from Open Props. Each colour has a light-theme and dark-theme variant
+   so the output remains legible regardless of the active theme.
+
+   Standard colours (30–37 / 40–47) use mid-range tokens.
+   Bright colours  (90–97 / 100–107) use lighter/darker tokens.
+
+   Ref: Open Props colours — https://open-props.style/#colors
+   Ref: ANSI SGR codes     — https://en.wikipedia.org/wiki/ANSI_escape_code#SGR */
+
+/* ── Text decorations ── */
+.ansi-bold      { font-weight: var(--font-weight-7); }
+.ansi-dim       { opacity: 0.6; }
+.ansi-italic    { font-style: italic; }
+.ansi-underline { text-decoration: underline; }
+
+/* ── Standard foreground (30–37) ──
+   Uses higher-numbered tokens (darker shades) in light mode so text is
+   readable against a light background, and lower-numbered tokens (lighter
+   shades) in dark mode for contrast against dark backgrounds. */
+.ansi-black   { color: var(--gray-8); }
+.ansi-red     { color: var(--red-7); }
+.ansi-green   { color: var(--green-7); }
+.ansi-yellow  { color: var(--yellow-7); }
+.ansi-blue    { color: var(--blue-7); }
+.ansi-magenta { color: var(--pink-7); }
+.ansi-cyan    { color: var(--cyan-7); }
+.ansi-white   { color: var(--gray-3); }
+
+/* ── Bright foreground (90–97) ── */
+.ansi-bright-black   { color: var(--gray-6); }
+.ansi-bright-red     { color: var(--red-5); }
+.ansi-bright-green   { color: var(--green-5); }
+.ansi-bright-yellow  { color: var(--yellow-5); }
+.ansi-bright-blue    { color: var(--blue-5); }
+.ansi-bright-magenta { color: var(--pink-5); }
+.ansi-bright-cyan    { color: var(--cyan-5); }
+.ansi-bright-white   { color: var(--gray-1); }
+
+/* ── Standard background (40–47) ── */
+.ansi-bg-black   { background-color: var(--gray-9); }
+.ansi-bg-red     { background-color: var(--red-2); }
+.ansi-bg-green   { background-color: var(--green-2); }
+.ansi-bg-yellow  { background-color: var(--yellow-2); }
+.ansi-bg-blue    { background-color: var(--blue-2); }
+.ansi-bg-magenta { background-color: var(--pink-2); }
+.ansi-bg-cyan    { background-color: var(--cyan-2); }
+.ansi-bg-white   { background-color: var(--gray-1); }
+
+/* ── Bright background (100–107) ── */
+.ansi-bg-bright-black   { background-color: var(--gray-7); }
+.ansi-bg-bright-red     { background-color: var(--red-3); }
+.ansi-bg-bright-green   { background-color: var(--green-3); }
+.ansi-bg-bright-yellow  { background-color: var(--yellow-3); }
+.ansi-bg-bright-blue    { background-color: var(--blue-3); }
+.ansi-bg-bright-magenta { background-color: var(--pink-3); }
+.ansi-bg-bright-cyan    { background-color: var(--cyan-3); }
+.ansi-bg-bright-white   { background-color: var(--gray-0); }
