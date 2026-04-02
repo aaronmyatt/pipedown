@@ -50,7 +50,7 @@ PD.components.RunDrawer = {
   // Skip auto-scroll in input editor mode — the user is typing, not watching.
   onupdate: function(vnode) {
     if (PD.state.drawerStatus === "running" && PD.state.drawerMode !== "input") {
-      var body = vnode.dom.querySelector(".run-drawer-body");
+      const body = vnode.dom.querySelector(".run-drawer-body");
       if (body) {
         body.scrollTop = body.scrollHeight;
       }
@@ -304,11 +304,18 @@ PD.utils.drawerBodyContent = function() {
   // are converted to styled HTML via pd.ansiToHtml() so Deno error output
   // renders with proper formatting instead of raw escape sequences.
   // m.trust() tells Mithril to inject the pre-sanitised HTML string directly.
-  // Ref: https://mithril.js.org/trust.html
+  //
+  // IMPORTANT: m.trust() content is wrapped in a <div> container so Mithril
+  // can cleanly swap/remove it during vdom diffing. Without the wrapper,
+  // transitioning from m.trust() to regular vnodes (e.g. when the operation
+  // finishes or the drawer closes) causes a "removeChild" error because the
+  // browser's HTML parser may restructure the trusted HTML, making the DOM
+  // tree diverge from what Mithril's diff algorithm expects.
+  // Ref: https://mithril.js.org/trust.html#avoid-trusting-html
   if (PD.state.drawerStatus === "running") {
     var runningText = PD.state.drawerOutput;
-    if (!runningText) return "Running...";
-    return m.trust(pd.ansiToHtml(runningText));
+    if (!runningText) return m("div", "Running...");
+    return m("div", m.trust(pd.ansiToHtml(runningText)));
   }
 
   // ── Error display ──
@@ -339,7 +346,8 @@ PD.utils.drawerBodyContent = function() {
     sections.push(m("div.drawer-error-title", titleChildren));
 
     // Error message body — ANSI codes stripped / styled for readability.
-    sections.push(m("div.drawer-error-message", m.trust(pd.ansiToHtml(err.message))));
+    // Wrapped in a nested div so m.trust() has a stable parent for diffing.
+    sections.push(m("div.drawer-error-message", m("div", m.trust(pd.ansiToHtml(err.message)))));
 
     // If the drawer accumulated partial output before the error (e.g. a
     // stream that broke mid-transfer), show it in a collapsible section
@@ -348,7 +356,7 @@ PD.utils.drawerBodyContent = function() {
     if (rawOutput && rawOutput !== err.message) {
       sections.push(m("details.drawer-error-details", [
         m("summary", "Raw output"),
-        m("pre", m.trust(pd.ansiToHtml(rawOutput)))
+        m("pre", m("span", m.trust(pd.ansiToHtml(rawOutput))))
       ]));
     }
 
@@ -404,7 +412,8 @@ PD.utils.drawerBodyContent = function() {
   // Non-JSON output (e.g. LLM text streaming, test runner output).
   // ANSI escape codes are converted to styled HTML so Deno compiler errors
   // (bold red "error:" prefix, underline markers, etc.) render legibly.
+  // Wrapped in a div for stable vdom diffing (same reason as the running state).
   var rawText = PD.state.drawerOutput;
-  if (!rawText) return "";
-  return m.trust(pd.ansiToHtml(rawText));
+  if (!rawText) return m("div");
+  return m("div", m.trust(pd.ansiToHtml(rawText)));
 };

@@ -401,8 +401,11 @@ export async function serve(input: BuildInput){
     // Recent pipes (flat list across all projects)
     if (url.pathname === "/api/recent-pipes") {
       const pipes = await scanRecentPipes();
+      // no-store prevents the browser from caching the pipe list — stale
+      // responses here would hide newly created or recently modified pipes.
+      // Ref: https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Cache-Control#no-store
       return new Response(JSON.stringify(pipes), {
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", "cache-control": "no-store" },
       });
     }
 
@@ -415,8 +418,12 @@ export async function serve(input: BuildInput){
       if (!project) return new Response("Project not found", { status: 404 });
       const data = await readPipeIndex(project.path, pipeName);
       if (!data) return new Response("Pipe index not found (run pd build first)", { status: 404 });
+      // no-store ensures refreshPipe() always gets the latest index.json
+      // after LLM actions or manual edits rebuild .pd/. Without this header,
+      // XHR-based m.request() may serve a cached 200 and the UI won't update.
+      // Ref: https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Cache-Control#no-store
       return new Response(JSON.stringify(data), {
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", "cache-control": "no-store" },
       });
     }
 
@@ -667,6 +674,12 @@ ${step.code}
             // Rebuild so the .pd/ directory (index.json, index.ts) stays in
             // sync with the updated markdown source
             await buildProject(project.path);
+            // Notify SSE clients so the UI refreshes immediately — without
+            // this, only the requesting tab's onDone callback would refresh,
+            // and other open tabs/windows would stay stale until the file
+            // watcher's debounced rebuild fires (~200ms later).
+            // Matches the pattern used by /api/extract and /api/projects/{name}/files/{path}.
+            try { _controller?.enqueue("data: reload\n\n"); } catch { /* SSE client may have disconnected */ }
             synced = true;
           } catch (syncErr) {
             // Log but don't fail the request — the LLM result is still valid
@@ -1135,8 +1148,11 @@ ${step.code}
       }
       try {
         const content = await readPipeMarkdown(project.path, filePath);
+        // no-store so refreshPipe() never gets a stale cached copy of the
+        // markdown after an LLM action or manual save rewrites the file.
+        // Ref: https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Cache-Control#no-store
         return new Response(content, {
-          headers: { "content-type": "text/plain; charset=utf-8" },
+          headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" },
         });
       } catch (e) {
         const status = (e as Error).message?.includes("traversal") ? 403 : 404;

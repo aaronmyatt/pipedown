@@ -488,13 +488,20 @@ PD.actions.refreshPipe = function() {
   var detailEl = document.querySelector(".detail");
   var savedScroll = detailEl ? detailEl.scrollTop : 0;
 
+  // Cache-bust: append a timestamp query parameter so the browser never
+  // serves a stale cached response. This is a belt-and-suspenders measure
+  // alongside the server's Cache-Control: no-store header — some browsers
+  // or intermediary proxies may ignore no-store for XHR GET requests.
+  // Ref: https://developer.mozilla.org/en-US/docs/Web/API/XMLHttpRequest/Using_XMLHttpRequest#bypassing_the_cache
+  var cacheBust = "?t=" + Date.now();
+
   var mdUrl = "/api/projects/" +
     encodeURIComponent(pipe.projectName) +
-    "/files/" + encodeURIComponent(pipe.pipePath);
+    "/files/" + encodeURIComponent(pipe.pipePath) + cacheBust;
 
   var indexUrl = "/api/projects/" +
     encodeURIComponent(pipe.projectName) +
-    "/pipes/" + encodeURIComponent(pipe.pipeName) + "/index";
+    "/pipes/" + encodeURIComponent(pipe.pipeName) + "/index" + cacheBust;
 
   // Fetch both resources in parallel — same requests as selectPipe() but
   // without resetting markdownHtml/pipeData to null first.
