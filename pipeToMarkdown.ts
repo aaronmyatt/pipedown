@@ -99,7 +99,7 @@ function replaceStructuralBlocks(
   output: string[],
   newSchema: string | undefined,
   schemaChanged: boolean,
-  newConfigBlock: string | null,
+  newConfigBlock: string | undefined,
   configChanged: boolean,
 ): void {
   // Track which blocks we've seen so we can insert missing ones at the end.
@@ -232,7 +232,7 @@ function losslessReconstruct(pipe: Pipe): string {
       pipe.originalConfig !== undefined
         ? currentConfigBlock !== pipe.originalConfig
         // Config was absent at parse time but now has meaningful content
-        : currentConfigBlock !== null;
+        : currentConfigBlock !== undefined;
 
     const headerChanged = pipeDescChanged || schemaChanged || configChanged;
 
@@ -558,8 +558,8 @@ function buildDirectives(config: Step["config"]): string[] {
   return directives;
 }
 
-export function buildConfigBlock(config?: PipeConfig): string | null {
-  if (!config) return null;
+export function buildConfigBlock(config?: PipeConfig): string | undefined {
+  if (!config) return undefined;
 
   // Extract only the user-meaningful config (not internal/system fields)
   const meaningful: Record<string, unknown> = {};
@@ -584,7 +584,7 @@ export function buildConfigBlock(config?: PipeConfig): string | null {
     }
   }
 
-  if (Object.keys(meaningful).length === 0) return null;
+  if (Object.keys(meaningful).length === 0) return undefined;
 
   return JSON.stringify(meaningful, null, 2);
 }

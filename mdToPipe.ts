@@ -211,7 +211,7 @@ const mergeMetaConfig = (input: mdToPipeInput) => {
   // test inputs) and splice the new JSON block into the header.
   // Uses buildConfigBlock() from pipeToMarkdown.ts to ensure the comparison
   // uses the same serialisation logic as rendering, avoiding false positives.
-  input.pipe.originalConfig = buildConfigBlock(input.pipe.config) ?? undefined;
+  input.pipe.originalConfig = buildConfigBlock(input.pipe.config);
 };
 
 const setupChecks = (input: mdToPipeInput) => {
