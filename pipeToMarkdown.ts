@@ -120,8 +120,8 @@ function replaceStructuralBlocks(
       // Find the matching close fence
       let closeIdx = i + 1;
       while (closeIdx < regionEnd) {
-        if (sourceLines[closeIdx].trim().startsWith(fence) &&
-            sourceLines[closeIdx].trim().length <= fence.length + indent.length) {
+        const trimmed = sourceLines[closeIdx].trim();
+        if (trimmed === fence) {
           break;
         }
         closeIdx++;
