@@ -105,7 +105,10 @@ PD.components.Sidebar = {
       m("div.sidebar-section", [
         m("h3.sidebar-section-header", "Projects"),
         projectGroups.map(function(group) {
-          var isCollapsed = PD.state.collapsedProjects[group.projectName];
+          // A project is collapsed unless the user has explicitly expanded it.
+          // Absent key or `true` → collapsed; explicit `false` → expanded.
+          // This makes "collapsed" the default for new/unseen projects.
+          var isCollapsed = PD.state.collapsedProjects[group.projectName] !== false;
           return m("div.project-group", { key: group.projectName }, [
             // ── Project heading ──
             // Clickable row that toggles the pipe list visibility.

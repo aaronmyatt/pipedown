@@ -12,9 +12,18 @@ window.PD = {
 
     // ── Sidebar project groups ──
     // Tracks which project headings in the "Projects" sidebar section are
-    // collapsed. Keys are project names; absent key = expanded (default).
+    // collapsed. Keys are project names; value `false` = explicitly expanded,
+    // `true` or absent = collapsed. Persisted to localStorage so the user's
+    // preferred expand/collapse state survives page reloads.
     // Ref: Sidebar.js — "Projects" section rendering
-    collapsedProjects: {},
+    // Ref: https://developer.mozilla.org/en-US/docs/Web/API/Window/localStorage
+    collapsedProjects: (function() {
+      try {
+        var saved = localStorage.getItem("pd-collapsed-projects");
+        if (saved) return JSON.parse(saved);
+      } catch(e) { /* ignore — localStorage unavailable or corrupted JSON */ }
+      return {};  // first visit — no preferences yet; Sidebar treats absent keys as collapsed
+    })(),
     selectedPipe: null,
     pipeData: null,
     rawMarkdown: null,
@@ -178,12 +187,26 @@ PD.actions.loadAllProjects = function() {
 
 // ── toggleProjectCollapse ──
 // Toggles the collapsed/expanded state of a project group in the
-// sidebar's "Projects" section. Used by the project heading buttons.
+// sidebar's "Projects" section. Persists to localStorage so the
+// preference survives page reloads.
+//
+// Semantics: absent key or `true` = collapsed; `false` = expanded.
+// This makes "collapsed" the default for projects the user hasn't
+// interacted with yet.
+//
 // @param {string} projectName — the project group to toggle
 // Ref: Sidebar.js — project-group-header onclick
+// Ref: https://developer.mozilla.org/en-US/docs/Web/API/Storage/setItem
 PD.actions.toggleProjectCollapse = function(projectName) {
-  PD.state.collapsedProjects[projectName] =
-    !PD.state.collapsedProjects[projectName];
+  var current = PD.state.collapsedProjects[projectName];
+  // absent or true → expand (false); false → collapse (true)
+  PD.state.collapsedProjects[projectName] = current === false ? true : false;
+  // Persist the full map so every project the user has touched is remembered.
+  // Uses the same try-catch pattern as the theme manager (shared/theme.js).
+  try {
+    localStorage.setItem("pd-collapsed-projects",
+      JSON.stringify(PD.state.collapsedProjects));
+  } catch(e) { /* ignore — localStorage full or unavailable */ }
 };
 
 PD.utils.renderMarkdownWithAnnotations = function(raw, pipeData) {

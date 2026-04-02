@@ -7,7 +7,20 @@ window.PD = {
 
     traces: [],
     loading: true,
-    expanded: {},
+
+    // ── Sidebar collapsible groups ──
+    // Tracks which project/pipe headings in the sidebar are expanded.
+    // Keys are project names or "project/pipe" paths; value `false` = expanded,
+    // `true` or absent = collapsed. Persisted to localStorage so the user's
+    // preferred expand/collapse state survives page reloads.
+    // Ref: https://developer.mozilla.org/en-US/docs/Web/API/Window/localStorage
+    expanded: (function() {
+      try {
+        var saved = localStorage.getItem("pd-traces-expanded");
+        if (saved) return JSON.parse(saved);
+      } catch(e) { /* ignore — localStorage unavailable or corrupted JSON */ }
+      return {};  // first visit — no preferences yet; Sidebar treats absent keys as collapsed
+    })(),
     selected: null,
     traceData: null,
     traceLoading: false,
@@ -68,8 +81,28 @@ PD.actions.selectTrace = function(entry) {
   }).then(function() { m.redraw.sync(); });
 };
 
+// ── toggleExpand ──
+// Toggles the collapsed/expanded state of a project or pipe group in the
+// traces sidebar. Persists to localStorage so the preference survives
+// page reloads.
+//
+// Semantics: absent key or `true` = collapsed; `false` = expanded.
+// This makes "collapsed" the default for groups the user hasn't
+// interacted with yet.
+//
+// @param {string} key — project name or "project/pipe" path to toggle
+// Ref: Sidebar.js — group header onclick
+// Ref: https://developer.mozilla.org/en-US/docs/Web/API/Storage/setItem
 PD.actions.toggleExpand = function(key) {
-  PD.state.expanded[key] = !PD.state.expanded[key];
+  var current = PD.state.expanded[key];
+  // absent or true → expand (false); false → collapse (true)
+  PD.state.expanded[key] = current === false ? true : false;
+  // Persist the full map so every group the user has touched is remembered.
+  // Uses the same try-catch pattern as the theme manager (shared/theme.js).
+  try {
+    localStorage.setItem("pd-traces-expanded",
+      JSON.stringify(PD.state.expanded));
+  } catch(e) { /* ignore — localStorage full or unavailable */ }
 };
 
 PD.utils.isSelected = function(entry) {
