@@ -184,6 +184,10 @@ export type Pipe = {
     pipeDescription?: string;
     /** The pipe-level description at parse time, for detecting mutations during round-trip. */
     originalPipeDescription?: string;
+    /** The schema text at parse time, for detecting schema mutations during round-trip. */
+    originalSchema?: string;
+    /** Serialized "meaningful" config at parse time (JSON string), for detecting config mutations during round-trip. */
+    originalConfig?: string;
     /** The original markdown source text, for lossless round-trip reconstruction. */
     rawSource?: string;
 };

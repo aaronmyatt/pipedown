@@ -80,6 +80,10 @@ const findSchema = (input: mdToPipeInput) => {
   const token = input.tokens.at(schemaRange[0]);
   if (token) {
     input.pipe.schema = token.content || "";
+    // Preserve the original schema at parse time for lossless round-trip —
+    // allows pipeToMarkdown to detect schema mutations and splice the new
+    // zod block content into the header while preserving other formatting.
+    input.pipe.originalSchema = input.pipe.schema;
   }
 
   if (input.ranges.schemaBlocks.length > 1) {
@@ -200,6 +204,31 @@ const mergeMetaConfig = (input: mdToPipeInput) => {
     return std.deepMerge(acc, step);
   }, {});
   input.pipe.config = Object.assign(input.pipe.config || {}, metaConfig);
+
+  // Preserve the original config at parse time for lossless round-trip —
+  // allows pipeToMarkdown to detect config mutations (e.g., LLM-generated
+  // test inputs) and splice the new JSON block into the header.
+  // We serialise only "meaningful" config keys (inputs, build, custom keys)
+  // matching the same filter logic used by buildConfigBlock() in
+  // pipeToMarkdown.ts so the comparison is deterministic.
+  // Ref: pipeToMarkdown.ts buildConfigBlock()
+  const internalKeys = new Set([
+    "inputs", "build", "templates", "skip", "exclude",
+    "checks", "or", "and", "not", "routes", "flags",
+    "only", "stop", "name", "inGlobal",
+  ]);
+  const meaningful: Record<string, unknown> = {};
+  const cfg = input.pipe.config;
+  if (cfg) {
+    if ((cfg as any).inputs && (cfg as any).inputs.length > 0) meaningful.inputs = (cfg as any).inputs;
+    if ((cfg as any).build && (cfg as any).build.length > 0) meaningful.build = (cfg as any).build;
+    for (const [key, value] of Object.entries(cfg)) {
+      if (!internalKeys.has(key) && value !== undefined) meaningful[key] = value;
+    }
+  }
+  input.pipe.originalConfig = Object.keys(meaningful).length > 0
+    ? JSON.stringify(meaningful, null, 2)
+    : undefined;
 };
 
 const setupChecks = (input: mdToPipeInput) => {

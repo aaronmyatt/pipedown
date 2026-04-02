@@ -488,6 +488,202 @@ input.old = true;
     assertEquals(reconstructed.includes("# Pipeline"), true);
   });
 
+  // --- Schema mutations in lossless mode ---
+
+  await t.step("lossless: splices in changed schema block", async () => {
+    const source = `# Schema Pipe
+
+Old pipe description.
+
+\`\`\`zod
+z.object({ name: z.string() })
+\`\`\`
+
+## Process
+
+\`\`\`ts
+input.count = input.count + 1;
+\`\`\`
+`;
+    const result = await parse(source);
+    // Mutate the schema (simulates LLM-generated schema)
+    result.pipe.schema = "z.object({ name: z.string(), age: z.number() })";
+
+    const reconstructed = pipeToMarkdown(result.pipe);
+    // New schema should be present
+    assertEquals(reconstructed.includes("z.object({ name: z.string(), age: z.number() })"), true);
+    // Old schema should be gone
+    assertEquals(reconstructed.includes("z.object({ name: z.string() })"), false);
+    // Everything else preserved
+    assertEquals(reconstructed.includes("# Schema Pipe"), true);
+    assertEquals(reconstructed.includes("Old pipe description."), true);
+    assertEquals(reconstructed.includes("```zod"), true);
+    assertEquals(reconstructed.includes("## Process"), true);
+    assertEquals(reconstructed.includes("input.count = input.count + 1;"), true);
+  });
+
+  await t.step("lossless: inserts schema block when none existed", async () => {
+    const source = `# No Schema Pipe
+
+A simple pipe with no schema.
+
+## Step One
+
+\`\`\`ts
+input.x = 1;
+\`\`\`
+`;
+    const result = await parse(source);
+    // Set schema for the first time (simulates LLM generating one)
+    result.pipe.schema = "z.object({ x: z.number() })";
+
+    const reconstructed = pipeToMarkdown(result.pipe);
+    assertEquals(reconstructed.includes("```zod"), true);
+    assertEquals(reconstructed.includes("z.object({ x: z.number() })"), true);
+    // Existing content preserved
+    assertEquals(reconstructed.includes("# No Schema Pipe"), true);
+    assertEquals(reconstructed.includes("A simple pipe with no schema."), true);
+    assertEquals(reconstructed.includes("## Step One"), true);
+    assertEquals(reconstructed.includes("input.x = 1;"), true);
+  });
+
+  // --- Config/inputs mutations in lossless mode ---
+
+  await t.step("lossless: splices in changed config inputs", async () => {
+    const source = `# Config Pipe
+
+\`\`\`json
+{
+  "inputs": [
+    { "_name": "test", "value": 42 }
+  ]
+}
+\`\`\`
+
+## Do Work
+
+\`\`\`ts
+input.result = input.value * 2;
+\`\`\`
+`;
+    const result = await parse(source);
+    // Mutate config inputs (simulates LLM-generated test inputs)
+    result.pipe.config!.inputs = [
+      { _name: "happy path", value: 100 },
+      { _name: "edge case", value: 0 },
+    ];
+
+    const reconstructed = pipeToMarkdown(result.pipe);
+    // New inputs should be present
+    assertEquals(reconstructed.includes('"happy path"'), true);
+    assertEquals(reconstructed.includes('"edge case"'), true);
+    // Old input gone
+    assertEquals(reconstructed.includes('"value": 42'), false);
+    // Structure preserved
+    assertEquals(reconstructed.includes("```json"), true);
+    assertEquals(reconstructed.includes("# Config Pipe"), true);
+    assertEquals(reconstructed.includes("## Do Work"), true);
+  });
+
+  await t.step("lossless: inserts config block when none existed", async () => {
+    const source = `# No Config Pipe
+
+## Step One
+
+\`\`\`ts
+input.x = 1;
+\`\`\`
+`;
+    const result = await parse(source);
+    // Set config inputs for the first time
+    result.pipe.config = { inputs: [{ _name: "first test", x: 5 }] };
+
+    const reconstructed = pipeToMarkdown(result.pipe);
+    assertEquals(reconstructed.includes("```json"), true);
+    assertEquals(reconstructed.includes('"first test"'), true);
+    // Existing content preserved
+    assertEquals(reconstructed.includes("# No Config Pipe"), true);
+    assertEquals(reconstructed.includes("## Step One"), true);
+    assertEquals(reconstructed.includes("input.x = 1;"), true);
+  });
+
+  // --- Combined schema + config mutations ---
+
+  await t.step("lossless: both schema and config changed simultaneously", async () => {
+    const source = `# Full Pipe
+
+A pipe with both schema and config.
+
+\`\`\`zod
+z.object({ name: z.string() })
+\`\`\`
+
+\`\`\`json
+{
+  "inputs": [
+    { "_name": "original", "name": "Alice" }
+  ]
+}
+\`\`\`
+
+## Process
+
+\`\`\`ts
+input.greeting = "Hello " + input.name;
+\`\`\`
+`;
+    const result = await parse(source);
+    // Change both
+    result.pipe.schema = "z.object({ name: z.string(), age: z.number() })";
+    result.pipe.config!.inputs = [
+      { _name: "updated", name: "Bob", age: 30 },
+    ];
+
+    const reconstructed = pipeToMarkdown(result.pipe);
+    // New schema
+    assertEquals(reconstructed.includes("z.object({ name: z.string(), age: z.number() })"), true);
+    assertEquals(reconstructed.includes("z.object({ name: z.string() })\n```"), false);
+    // New config
+    assertEquals(reconstructed.includes('"updated"'), true);
+    assertEquals(reconstructed.includes('"Bob"'), true);
+    assertEquals(reconstructed.includes('"original"'), false);
+    // Description preserved
+    assertEquals(reconstructed.includes("A pipe with both schema and config."), true);
+  });
+
+  await t.step("lossless: schema changes but config is preserved verbatim", async () => {
+    const source = `# Mixed Pipe
+
+\`\`\`zod
+z.object({ x: z.number() })
+\`\`\`
+
+\`\`\`json
+{
+  "inputs": [
+    { "_name": "keep me", "x": 1 }
+  ]
+}
+\`\`\`
+
+## Step
+
+\`\`\`ts
+input.y = input.x + 1;
+\`\`\`
+`;
+    const result = await parse(source);
+    // Only change schema — config should stay verbatim
+    result.pipe.schema = "z.object({ x: z.number(), y: z.number() })";
+
+    const reconstructed = pipeToMarkdown(result.pipe);
+    // New schema present
+    assertEquals(reconstructed.includes("z.object({ x: z.number(), y: z.number() })"), true);
+    // Config block preserved verbatim from original source
+    assertEquals(reconstructed.includes('"keep me"'), true);
+    assertEquals(reconstructed.includes('"x": 1'), true);
+  });
+
   // --- Fallback mode ---
 
   await t.step("falls back to field reconstruction when no rawSource", async () => {

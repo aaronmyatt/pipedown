@@ -77,6 +77,113 @@ function findHeaderDescriptionEnd(
   return headerEnd;
 }
 
+/**
+ * Walks the "structural region" of the header (fenced code blocks like
+ * ```zod and ```json between the description end and the first step heading)
+ * and splices in updated content for changed blocks while preserving
+ * everything else verbatim.
+ *
+ * @param sourceLines    - All lines from the raw source
+ * @param regionStart    - First line of the structural region (inclusive)
+ * @param regionEnd      - Last line of the structural region (exclusive)
+ * @param output         - The output lines array to push onto
+ * @param newSchema      - The current schema text (may be undefined/empty)
+ * @param schemaChanged  - Whether the schema has changed since parse time
+ * @param newConfigBlock - The current config block text from buildConfigBlock()
+ * @param configChanged  - Whether the config has changed since parse time
+ */
+function replaceStructuralBlocks(
+  sourceLines: string[],
+  regionStart: number,
+  regionEnd: number,
+  output: string[],
+  newSchema: string | undefined,
+  schemaChanged: boolean,
+  newConfigBlock: string | null,
+  configChanged: boolean,
+): void {
+  // Track which blocks we've seen so we can insert missing ones at the end.
+  let sawZodBlock = false;
+  let sawJsonBlock = false;
+
+  let i = regionStart;
+  while (i < regionEnd) {
+    const line = sourceLines[i];
+
+    // Detect a fenced code block opening: ```zod, ```json, ```ts, etc.
+    const fenceMatch = line.match(/^(\s*)(```+)(\w*)/);
+    if (fenceMatch) {
+      const indent = fenceMatch[1];
+      const fence = fenceMatch[2]; // the ``` characters
+      const lang = fenceMatch[3];  // language tag (zod, json, ts, ...)
+
+      // Find the matching close fence
+      let closeIdx = i + 1;
+      while (closeIdx < regionEnd) {
+        if (sourceLines[closeIdx].trim().startsWith(fence) &&
+            sourceLines[closeIdx].trim().length <= fence.length + indent.length) {
+          break;
+        }
+        closeIdx++;
+      }
+      // closeIdx is now the close-fence line (or regionEnd if unclosed)
+
+      if (lang === "zod" && schemaChanged) {
+        // ── Replace ```zod block with new schema ──
+        sawZodBlock = true;
+        if (newSchema && newSchema.trim()) {
+          output.push(line); // fence-open verbatim
+          output.push(newSchema.trimEnd());
+          if (closeIdx < regionEnd) output.push(sourceLines[closeIdx]); // fence-close
+        }
+        // If schema is now empty/undefined, omit the entire block
+        i = closeIdx + 1;
+        continue;
+      } else if (lang === "json" && configChanged) {
+        // ── Replace ```json block with new config ──
+        sawJsonBlock = true;
+        if (newConfigBlock) {
+          output.push(line); // fence-open verbatim
+          output.push(newConfigBlock);
+          if (closeIdx < regionEnd) output.push(sourceLines[closeIdx]); // fence-close
+        }
+        // If config is now empty/null, omit the entire block
+        i = closeIdx + 1;
+        continue;
+      } else {
+        // Block unchanged or unrecognised language — emit verbatim
+        if (lang === "zod") sawZodBlock = true;
+        if (lang === "json") sawJsonBlock = true;
+        // Emit from fence-open through fence-close (inclusive)
+        const blockEnd = Math.min(closeIdx + 1, regionEnd);
+        output.push(...sourceLines.slice(i, blockEnd));
+        i = blockEnd;
+        continue;
+      }
+    }
+
+    // Not a fence line — emit verbatim (blank lines, comments, etc.)
+    output.push(line);
+    i++;
+  }
+
+  // ── Insert blocks that didn't exist in the original source ──
+  // If a schema or config was generated for the first time, we need to
+  // add new fenced blocks at the end of the structural region.
+  if (schemaChanged && !sawZodBlock && newSchema && newSchema.trim()) {
+    output.push("```zod");
+    output.push(newSchema.trimEnd());
+    output.push("```");
+    output.push("");
+  }
+  if (configChanged && !sawJsonBlock && newConfigBlock) {
+    output.push("```json");
+    output.push(newConfigBlock);
+    output.push("```");
+    output.push("");
+  }
+}
+
 function losslessReconstruct(pipe: Pipe): string {
   const sourceLines = pipe.rawSource!.split("\n");
   const output: string[] = [];
@@ -101,19 +208,38 @@ function losslessReconstruct(pipe: Pipe): string {
   }
 
   // ── Header section (everything before the first step) ──
+  // The header may contain: H1 heading, description prose, ```zod schema
+  // block, ```json config block, and blank lines. We detect changes to each
+  // independently and splice only the changed parts while preserving the
+  // rest verbatim from rawSource.
   const headerEnd = stepBoundaries[0].start;
   if (headerEnd > 0) {
+    // Detect which header-level fields have changed since parse time.
+    // Each follows the same "original vs current" pattern used for steps.
     const pipeDescChanged =
-      pipe.originalPipeDescription !== undefined &&
-      pipe.pipeDescription !== pipe.originalPipeDescription;
+      pipe.originalPipeDescription !== undefined
+        ? pipe.pipeDescription !== pipe.originalPipeDescription
+        : pipe.pipeDescription !== undefined && pipe.pipeDescription !== pipe.originalPipeDescription;
 
-    if (pipeDescChanged) {
-      // Splice in the new pipe-level description while preserving the H1
-      // heading, schema blocks, config blocks, and other structural content.
-      //
-      // Strategy: find the H1 line, then locate the description region
-      // (prose between H1 and the first structural block like ```zod).
-      // Replace only that region with the new description text.
+    const schemaChanged =
+      pipe.originalSchema !== undefined
+        ? pipe.schema !== pipe.originalSchema
+        // Schema was absent at parse time but has now been set (first-time generation)
+        : pipe.schema !== undefined && pipe.schema !== "";
+
+    const currentConfigBlock = buildConfigBlock(pipe.config);
+    const configChanged =
+      pipe.originalConfig !== undefined
+        ? currentConfigBlock !== pipe.originalConfig
+        // Config was absent at parse time but now has meaningful content
+        : currentConfigBlock !== null;
+
+    const headerChanged = pipeDescChanged || schemaChanged || configChanged;
+
+    if (headerChanged) {
+      // At least one header field changed — reconstruct with splicing.
+      // Strategy: find the H1 line, then handle description and structural
+      // regions independently.
       let h1Line = -1;
       for (let i = 0; i < headerEnd; i++) {
         if (/^#\s/.test(sourceLines[i])) { h1Line = i; break; }
@@ -126,15 +252,30 @@ function losslessReconstruct(pipe: Pipe): string {
         // Find where the description region ends (first ``` block or headerEnd)
         const descEnd = findHeaderDescriptionEnd(sourceLines, h1Line, headerEnd);
 
-        // Emit new description (with surrounding blank lines for readability)
-        output.push("");
-        if (pipe.pipeDescription) {
-          output.push(pipe.pipeDescription);
+        // ── Description region (H1+1 to first structural block) ──
+        if (pipeDescChanged) {
+          // Emit new description (with surrounding blank lines for readability)
           output.push("");
+          if (pipe.pipeDescription) {
+            output.push(pipe.pipeDescription);
+            output.push("");
+          }
+        } else {
+          // Description unchanged — emit original lines verbatim
+          output.push(...sourceLines.slice(h1Line + 1, descEnd));
         }
 
-        // Emit structural content after the description region (schema, config, etc.)
-        if (descEnd < headerEnd) {
+        // ── Structural region (```zod and ```json blocks to headerEnd) ──
+        if (schemaChanged || configChanged) {
+          // Walk the structural region, replacing changed blocks and
+          // preserving everything else verbatim.
+          replaceStructuralBlocks(
+            sourceLines, descEnd, headerEnd, output,
+            pipe.schema, schemaChanged,
+            currentConfigBlock, configChanged,
+          );
+        } else if (descEnd < headerEnd) {
+          // Structural blocks unchanged — emit verbatim
           output.push(...sourceLines.slice(descEnd, headerEnd));
         }
       } else {
@@ -142,6 +283,7 @@ function losslessReconstruct(pipe: Pipe): string {
         output.push(...sourceLines.slice(0, headerEnd));
       }
     } else {
+      // Nothing changed — emit entire header verbatim (fast path)
       output.push(...sourceLines.slice(0, headerEnd));
     }
   }
