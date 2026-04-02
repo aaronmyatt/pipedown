@@ -70,11 +70,17 @@ body {
     linear-gradient(180deg, color-mix(in srgb, var(--surface-1) 38%, transparent), transparent 58%);
   color: var(--text-1);
 }
+/* ── Layout grid ──
+   height: 100vh (not min-height) constrains the grid so the 1fr row
+   gives sidebar and .detail a fixed height. This makes both panels
+   scroll independently via overflow: auto, which in turn enables
+   position: sticky on the PipeToolbar within .detail.
+   Ref: https://developer.mozilla.org/en-US/docs/Web/CSS/grid-template-rows */
 .layout {
   display: grid;
   grid-template-columns: 300px 1fr;
   grid-template-rows: auto 1fr;
-  min-height: 100vh;
+  height: 100vh;
 }
 /* ── Topbar ──
    Spans the full grid width. A subtle green gradient underline echoes the
@@ -248,7 +254,7 @@ body {
   background: var(--surface-1);
   color: var(--text-1);
   cursor: pointer;
-  font-size: var(--font-size-00);
+  font-size: var(--font-size-1);
   font-family: var(--font-sans);
   white-space: nowrap;
 }
