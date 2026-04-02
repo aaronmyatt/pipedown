@@ -63,14 +63,8 @@ pdCli/frontend/
 ### Mithril gotchas
 
 - `m.mount(el, Component)` does **not** call lifecycle hooks on the root component. Always wrap: `m.mount(el, { view: () => m(PD.components.Layout) })`.
-- Use `m.redraw.sync()` (not `m.redraw()`) after async data callbacks — `requestAnimationFrame`-based redraw is unreliable in headless/preview environments.
 - Trigger initial data fetching from `oncreate` on a component that is _not_ the `m.mount` root.
 
 ## Testing UI changes
 
-Use the preview tools sparingly. Screenshots and snapshot checks are token-expensive.
-
-- Prefer `preview_eval` or `preview_snapshot` over `preview_screenshot` for verifying state
-- Limit screenshot usage to 1-2 per feature at most — only when visual layout verification is truly needed
-- Use `curl` against API endpoints (e.g. `/api/projects`) for backend verification instead of browser tools
-- Do not loop through click-screenshot-click-screenshot flows; verify the critical path once then stop
+Do **not** start the dev server, use preview tools, or attempt to verify UI changes yourself. The user will test and verify independently. Focus on writing correct code and explaining what changed.

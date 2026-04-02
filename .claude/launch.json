@@ -3,7 +3,7 @@
   "configurations": [
     {
       "name": "pd-dashboard",
-      "runtimeExecutable": "deno",
+      "runtimeExecutable": "/Users/aaronmyatt/.deno/bin/deno",
       "runtimeArgs": ["run", "--no-check", "--unstable-kv", "-A", "pdCli/mod.ts"],
       "port": 8888
     }
