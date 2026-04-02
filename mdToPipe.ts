@@ -10,6 +10,7 @@ import type {
   Pipe,
 } from "./pipedown.d.ts";
 import { sanitizeString } from "./pdUtils.ts";
+import { buildConfigBlock } from "./pipeToMarkdown.ts";
 
 // Extract plain text from a heading token. Handles both markdown-it's
 // children array (inline tokens) and the fallback of looking at the next
@@ -80,6 +81,10 @@ const findSchema = (input: mdToPipeInput) => {
   const token = input.tokens.at(schemaRange[0]);
   if (token) {
     input.pipe.schema = token.content || "";
+    // Preserve the original schema at parse time for lossless round-trip —
+    // allows pipeToMarkdown to detect schema mutations and splice the new
+    // zod block content into the header while preserving other formatting.
+    input.pipe.originalSchema = input.pipe.schema;
   }
 
   if (input.ranges.schemaBlocks.length > 1) {
@@ -200,6 +205,13 @@ const mergeMetaConfig = (input: mdToPipeInput) => {
     return std.deepMerge(acc, step);
   }, {});
   input.pipe.config = Object.assign(input.pipe.config || {}, metaConfig);
+
+  // Preserve the original config at parse time for lossless round-trip —
+  // allows pipeToMarkdown to detect config mutations (e.g., LLM-generated
+  // test inputs) and splice the new JSON block into the header.
+  // Uses buildConfigBlock() from pipeToMarkdown.ts to ensure the comparison
+  // uses the same serialisation logic as rendering, avoiding false positives.
+  input.pipe.originalConfig = buildConfigBlock(input.pipe.config);
 };
 
 const setupChecks = (input: mdToPipeInput) => {
