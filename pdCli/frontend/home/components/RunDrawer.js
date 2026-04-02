@@ -67,20 +67,36 @@ PD.components.RunDrawer = {
     // When the user opened "Custom Input...", render the JSON editor view
     // with a textarea, validation status, and a Run button.
     if (isInputMode) {
-      return m(".run-drawer", { class: isOpen ? "open" : "" }, [
-        m("div.run-drawer-header", [
-          m("span.run-drawer-label", PD.state.drawerLabel || "Custom Input"),
-          m("button.run-drawer-close", {
-            onclick: function() {
-              PD.actions.closeDrawer();
-              PD.state.drawerMode = null;
-            },
-            title: "Close drawer (Esc)"
-          }, "\u00D7")
-        ]),
-        m(".run-drawer-body", { style: "display: flex; flex-direction: column;" },
-          PD.utils.drawerInputEditorContent()
-        )
+      // Wrap backdrop + drawer in a single container div because Mithril
+      // components must return one vnode (arrays are not supported).
+      // Both children use position: fixed so the wrapper doesn't affect layout.
+      return m("div", [
+        // ── Backdrop ──
+        // Clicking outside the drawer (on this overlay) closes it.
+        // Only rendered when the drawer is open so it doesn't block
+        // interaction with the rest of the page when hidden.
+        // Ref: styles.css .drawer-backdrop
+        isOpen ? m(".drawer-backdrop", {
+          onclick: function() {
+            PD.actions.closeDrawer();
+            PD.state.drawerMode = null;
+          }
+        }) : null,
+        m(".run-drawer", { class: isOpen ? "open" : "" }, [
+          m("div.run-drawer-header", [
+            m("span.run-drawer-label", PD.state.drawerLabel || "Custom Input"),
+            m("button.run-drawer-close", {
+              onclick: function() {
+                PD.actions.closeDrawer();
+                PD.state.drawerMode = null;
+              },
+              title: "Close drawer (Esc)"
+            }, "\u00D7")
+          ]),
+          m(".run-drawer-body", { style: "display: flex; flex-direction: column;" },
+            PD.utils.drawerInputEditorContent()
+          )
+        ])
       ]);
     }
 
@@ -107,18 +123,30 @@ PD.components.RunDrawer = {
     // (e.g. ".run-drawer" → ".run-drawer.open") can confuse the vdom diff
     // and prevent class updates from reaching the DOM.
     // Ref: https://mithril.js.org/hyperscript.html#css-selectors
-    return m(".run-drawer", { class: isOpen ? "open" : "" }, [
-      m("div", { class: headerClass }, [
-        m("span.run-drawer-label", [
-          PD.state.drawerLabel,
-          statusText
+    // Wrap backdrop + drawer in a single container div because Mithril
+    // components must return one vnode (arrays are not supported).
+    // Both children use position: fixed so the wrapper doesn't affect layout.
+    return m("div", [
+      // ── Backdrop ──
+      // Clicking outside the drawer (on this overlay) closes it.
+      // Only rendered when open to avoid blocking clicks in the main UI.
+      // Ref: styles.css .drawer-backdrop
+      isOpen ? m(".drawer-backdrop", {
+        onclick: function() { PD.actions.closeDrawer(); }
+      }) : null,
+      m(".run-drawer", { class: isOpen ? "open" : "" }, [
+        m("div", { class: headerClass }, [
+          m("span.run-drawer-label", [
+            PD.state.drawerLabel,
+            statusText
+          ]),
+          m("button.run-drawer-close", {
+            onclick: function() { PD.actions.closeDrawer(); },
+            title: "Close drawer (Esc)"
+          }, "\u00D7")
         ]),
-        m("button.run-drawer-close", {
-          onclick: function() { PD.actions.closeDrawer(); },
-          title: "Close drawer (Esc)"
-        }, "\u00D7")
-      ]),
-      m(".run-drawer-body", PD.utils.drawerBodyContent())
+        m(".run-drawer-body", PD.utils.drawerBodyContent())
+      ])
     ]);
   }
 };

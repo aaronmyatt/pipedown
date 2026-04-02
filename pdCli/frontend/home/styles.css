@@ -371,6 +371,19 @@
   transform: translateX(0);
 }
 
+/* ── Drawer backdrop ──
+   Semi-transparent overlay behind the drawer that closes it when clicked.
+   Only visible when the drawer is open (toggled via Mithril class binding).
+   z-index is one below the drawer (40) so the backdrop sits between the
+   main content and the drawer panel.
+   Ref: https://developer.mozilla.org/en-US/docs/Web/CSS/z-index */
+.drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.25);
+  z-index: 39;
+}
+
 /* Header bar — sticky so it stays visible while scrolling output */
 .run-drawer-header {
   display: flex;
