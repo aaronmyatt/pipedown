@@ -558,7 +558,7 @@ function buildDirectives(config: Step["config"]): string[] {
   return directives;
 }
 
-function buildConfigBlock(config?: PipeConfig): string | null {
+export function buildConfigBlock(config?: PipeConfig): string | null {
   if (!config) return null;
 
   // Extract only the user-meaningful config (not internal/system fields)

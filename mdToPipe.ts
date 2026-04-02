@@ -10,6 +10,7 @@ import type {
   Pipe,
 } from "./pipedown.d.ts";
 import { sanitizeString } from "./pdUtils.ts";
+import { buildConfigBlock } from "./pipeToMarkdown.ts";
 
 // Extract plain text from a heading token. Handles both markdown-it's
 // children array (inline tokens) and the fallback of looking at the next
@@ -208,27 +209,9 @@ const mergeMetaConfig = (input: mdToPipeInput) => {
   // Preserve the original config at parse time for lossless round-trip —
   // allows pipeToMarkdown to detect config mutations (e.g., LLM-generated
   // test inputs) and splice the new JSON block into the header.
-  // We serialise only "meaningful" config keys (inputs, build, custom keys)
-  // matching the same filter logic used by buildConfigBlock() in
-  // pipeToMarkdown.ts so the comparison is deterministic.
-  // Ref: pipeToMarkdown.ts buildConfigBlock()
-  const internalKeys = new Set([
-    "inputs", "build", "templates", "skip", "exclude",
-    "checks", "or", "and", "not", "routes", "flags",
-    "only", "stop", "name", "inGlobal",
-  ]);
-  const meaningful: Record<string, unknown> = {};
-  const cfg = input.pipe.config;
-  if (cfg) {
-    if ((cfg as any).inputs && (cfg as any).inputs.length > 0) meaningful.inputs = (cfg as any).inputs;
-    if ((cfg as any).build && (cfg as any).build.length > 0) meaningful.build = (cfg as any).build;
-    for (const [key, value] of Object.entries(cfg)) {
-      if (!internalKeys.has(key) && value !== undefined) meaningful[key] = value;
-    }
-  }
-  input.pipe.originalConfig = Object.keys(meaningful).length > 0
-    ? JSON.stringify(meaningful, null, 2)
-    : undefined;
+  // Uses buildConfigBlock() from pipeToMarkdown.ts to ensure the comparison
+  // uses the same serialisation logic as rendering, avoiding false positives.
+  input.pipe.originalConfig = buildConfigBlock(input.pipe.config) ?? undefined;
 };
 
 const setupChecks = (input: mdToPipeInput) => {
