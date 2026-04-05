@@ -10,7 +10,7 @@ import { pipeToMarkdown } from "../pipeToMarkdown.ts";
 import { reportErrors } from "./reportErrors.ts";
 import { scanTraces, readTrace, tracePage } from "./traceDashboard.ts";
 import { enrichProjects, readProjectsRegistry, scanProjectPipes, readPipeMarkdown, projectsPage, readGlobalConfig, writeGlobalConfig, createProject } from "./projectsDashboard.ts";
-import { scanRecentPipes, readPipeIndex, recentStepTraces, recentPipeTraces, homePage } from "./homeDashboard.ts";
+import { scanRecentPipes, scanAllPipes, readPipeIndex, recentStepTraces, recentPipeTraces, homePage } from "./homeDashboard.ts";
 import { findTargetStep, buildContextPrompt, callLLM, getPipedownSystemPrompt } from "./llmCommand.ts";
 // performExtraction splits a pipe's steps into a new sub-pipe and rewrites
 // the parent with a delegation step. Used by POST /api/extract.
@@ -358,6 +358,20 @@ export async function serve(input: BuildInput){
       const pipes = await scanRecentPipes();
       // no-store prevents the browser from caching the pipe list — stale
       // responses here would hide newly created or recently modified pipes.
+      // Ref: https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Cache-Control#no-store
+      return new Response(JSON.stringify(pipes), {
+        headers: { "content-type": "application/json", "cache-control": "no-store" },
+      });
+    }
+
+    // All pipes (complete, unfiltered list across all projects).
+    // Used by the sidebar's "Projects" section which groups every pipe under
+    // its project heading — unlike /api/recent-pipes which is capped at 10.
+    // Ref: homeDashboard.ts → scanAllPipes()
+    if (url.pathname === "/api/all-pipes") {
+      const pipes = await scanAllPipes();
+      // no-store: same rationale as /api/recent-pipes — the sidebar needs
+      // the freshest list after pipe creation, deletion, or project changes.
       // Ref: https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Cache-Control#no-store
       return new Response(JSON.stringify(pipes), {
         headers: { "content-type": "application/json", "cache-control": "no-store" },

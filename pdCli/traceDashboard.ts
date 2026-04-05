@@ -28,6 +28,7 @@ export async function scanTraces(): Promise<TraceIndexEntry[]> {
     }
   }
 
+  // TODO: "timestamps" punking us again. We need to switch to real timestamps
   entries.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
   return entries;
 }

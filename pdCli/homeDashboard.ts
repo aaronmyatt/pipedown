@@ -14,10 +14,70 @@ export async function scanRecentPipes(): Promise<RecentPipe[]> {
   const projects = await readProjectsRegistry();
   const allPipes: RecentPipe[] = [];
 
+  // ── Build a lookup of latest trace timestamp per project+pipe ──
+  // Trace files live at ~/.pipedown/traces/{project}/{pipe}/{timestamp}.json.
+  // scanTraces() returns them sorted newest-first, so the first occurrence of
+  // each project+pipe pair is its most recent execution time.
+  // Ref: traceDashboard.ts → scanTraces()
+  const traces = await scanTraces();
+  const latestTraceByPipe = new Map<string, string>();
+  for (const t of traces) {
+    const key = `${t.project}/${t.pipe}`;
+    // scanTraces is sorted descending, so the first hit per key is the latest
+    if (!latestTraceByPipe.has(key)) {
+      latestTraceByPipe.set(key, t.timestamp);
+    }
+  }
+
   for (const project of projects) {
     try {
       await Deno.stat(project.path);
     } catch {
+      continue;
+    }
+
+    const pipes = await scanProjectPipes(project.path);
+    for (const pipe of pipes) {
+      // Determine the effective "last activity" timestamp: whichever is more
+      // recent between the file's mtime (created/updated) and the latest trace
+      // timestamp (last execution). This ensures a pipe that was executed
+      // recently — even if its source file hasn't changed — sorts to the top.
+      const traceTs = latestTraceByPipe.get(`${project.name}/${pipe.name}`) ?? "";
+      const mtime = pipe.mtime ?? "";
+      const lastActivity = traceTs > mtime ? traceTs : mtime;
+
+      allPipes.push({
+        projectName: project.name,
+        projectPath: project.path,
+        pipeName: pipe.name,
+        pipePath: pipe.path,
+        mtime: lastActivity || null,
+      });
+    }
+  }
+
+  // Sort by most recent activity (created, modified, or executed) descending,
+  // then return only the top 10 most recently active pipes.
+  allPipes.sort((a, b) => (b.mtime || "").localeCompare(a.mtime || ""));
+  return allPipes.slice(0, 50);
+}
+
+// ── scanAllPipes ──
+// Returns every known pipe across all registered projects, sorted by mtime
+// descending. Unlike scanRecentPipes (which factors in trace execution times
+// and caps at 10), this function gives the complete, unfiltered list needed
+// by the sidebar's "Projects" section to group pipes under project headings.
+// Ref: readProjectsRegistry() — ~/.pipedown/projects.json
+// Ref: scanProjectPipes() — walks a project dir for .md pipe files
+export async function scanAllPipes(): Promise<RecentPipe[]> {
+  const projects = await readProjectsRegistry();
+  const allPipes: RecentPipe[] = [];
+
+  for (const project of projects) {
+    try {
+      await Deno.stat(project.path);
+    } catch {
+      // Project directory no longer exists on disk — skip it silently.
       continue;
     }
 
@@ -33,6 +93,8 @@ export async function scanRecentPipes(): Promise<RecentPipe[]> {
     }
   }
 
+  // Sort by file modification time descending so the sidebar shows the most
+  // recently touched pipes first within each project group.
   allPipes.sort((a, b) => (b.mtime || "").localeCompare(a.mtime || ""));
   return allPipes;
 }
