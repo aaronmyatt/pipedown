@@ -26,10 +26,6 @@ PD.components.ExtractBar = {
       }
     };
     document.addEventListener("keydown", vnode.state._keyHandler);
-
-    // Auto-focus the name input for immediate typing when the bar appears.
-    var input = vnode.dom.querySelector(".extract-name-input");
-    if (input) input.focus();
   },
 
   // ── Lifecycle: re-focus input when the component is re-rendered ──
@@ -81,6 +77,9 @@ PD.components.ExtractBar = {
         type: "text",
         placeholder: "New pipe name...",
         value: PD.state.extractName,
+        oncreate: function(vnode) {
+          vnode.dom.focus();
+        },
         oninput: function(e) {
           PD.state.extractName = e.target.value;
         },

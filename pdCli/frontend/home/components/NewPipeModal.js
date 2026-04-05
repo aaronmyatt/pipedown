@@ -22,10 +22,6 @@ PD.components.NewPipeModal = {
       }
     };
     document.addEventListener("keydown", vnode.state._keyHandler);
-
-    // Auto-focus the name input for immediate typing.
-    var input = vnode.dom.querySelector("input");
-    if (input) input.focus();
   },
 
   // ── Lifecycle: clean up ──
@@ -47,12 +43,12 @@ PD.components.NewPipeModal = {
     // This ensures newly created projects appear in the dropdown even
     // before they have any pipes.
     // Ref: PD.actions.loadAllProjects in state.js
-    var seen = {};
+    const seen = {};
     // Primary source: allProjects (from GET /api/projects)
     PD.state.allProjects.forEach(function(p) { seen[p.name] = true; });
     // Fallback: recentPipes — covers edge cases where allProjects hasn't loaded
     PD.state.recentPipes.forEach(function(p) { seen[p.projectName] = true; });
-    var projectNames = Object.keys(seen).sort();
+    const projectNames = Object.keys(seen).sort();
 
     return m(".modal-overlay", {
       // Clicking the backdrop (outside the modal box) closes the modal.
@@ -71,6 +67,9 @@ PD.components.NewPipeModal = {
           type: "text",
           placeholder: "e.g. Fetch RSS Digest",
           value: PD.state.newPipeName,
+          oncreate: function(vnode) {
+            vnode.dom.focus();
+          },
           oninput: function(e) {
             PD.state.newPipeName = e.target.value;
           },
