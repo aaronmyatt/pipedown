@@ -100,7 +100,7 @@ function _pd_validateSchema_${index}_${name}(input) {
       func: "_pd_validateSchema",
       step: "${name}",
       stepIndex: ${index},
-      message: "Schema validation failed after step ${index} (\\"${name}\\"): " + result.error.message,
+      message: "Schema validation failed after step ${index} (${name}): " + result.error.message,
       issues: result.error.issues,
     });
   }
