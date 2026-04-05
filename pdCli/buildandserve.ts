@@ -16,89 +16,13 @@ import { findTargetStep, buildContextPrompt, callLLM, getPipedownSystemPrompt } 
 // the parent with a delegation step. Used by POST /api/extract.
 // Ref: extractSteps.ts — parseStepIndices, buildExtractedPipe, buildReplacementStep
 import { performExtraction, toKebabCase } from "../extractSteps.ts";
+// Shared Tauri IPC notification utility — sends events to the pd-desktop app
+// via Unix socket at /tmp/pipedown.sock. Fire-and-forget; silently no-ops
+// when the desktop app isn't running.
+// Ref: ./notifyTauri.ts for protocol details and event type definitions
+import { notifyTauri } from "./notifyTauri.ts";
 
 let _controller: ReadableStreamDefaultController<string> | null = null;
-
-// ── Tauri Desktop IPC ──
-// When Pipedown Desktop (the Tauri app) is running, it listens on a Unix
-// domain socket at /tmp/pipedown.sock for event notifications. The pd server
-// sends newline-delimited JSON messages after operations complete (run, LLM,
-// test, pack). The Tauri app uses these to fire native macOS notifications.
-//
-// **Graceful degradation:** If the socket doesn't exist (Tauri not running),
-// the connection attempt silently fails and no events are sent. This means
-// `pd` works identically whether or not the desktop app is running.
-//
-// **Protocol:** Each message is a single JSON object followed by `\n`:
-//   { "type": "run_complete", "project": "myproj", "pipe": "fetch", "success": true, "message": "..." }
-//
-// Ref: https://docs.deno.com/runtime/reference/api/net/#unix-sockets
-// Ref: /Users/aaronmyatt/pipes/pd-desktop/src-tauri/src/ipc.rs for the Tauri-side listener
-
-const TAURI_SOCKET_PATH = "/tmp/pipedown.sock";
-
-/**
- * Attempt to connect to the Tauri desktop app's Unix socket.
- * Returns the connection if successful, or null if the socket doesn't exist
- * (meaning the Tauri app isn't running).
- *
- * @returns A Deno.Conn object for writing events, or null
- */
-async function connectToTauriSocket(): Promise<Deno.Conn | null> {
-  try {
-    // Deno.connect with transport: "unix" opens a Unix domain socket.
-    // This will throw if the socket file doesn't exist (Tauri not running).
-    // Ref: https://docs.deno.com/api/deno/~/Deno.connect
-    const conn = await Deno.connect({
-      transport: "unix",
-      path: TAURI_SOCKET_PATH,
-    });
-    return conn;
-  } catch {
-    // Socket doesn't exist or connection refused — Tauri app isn't running.
-    // This is the expected case for standalone `pd` usage.
-    return null;
-  }
-}
-
-/**
- * Send an event notification to the Tauri desktop app via Unix socket.
- *
- * This is a fire-and-forget operation: if the socket isn't available or the
- * write fails, the error is silently ignored. The pd server must never crash
- * or block because of Tauri IPC issues.
- *
- * @param event - An object with at least a `type` field. Common types:
- *   - `run_complete` — pipe finished executing
- *   - `llm_complete` — LLM action finished
- *   - `test_complete` — tests finished
- *   - `pack_complete` — pack operation finished
- *   - `error` — an operation failed
- *
- * Ref: /Users/aaronmyatt/pipes/pd-desktop/src-tauri/src/ipc.rs (IpcEvent struct)
- */
-async function notifyTauri(event: {
-  type: string;
-  title?: string;
-  message?: string;
-  project?: string;
-  pipe?: string;
-  success?: boolean;
-}): Promise<void> {
-  try {
-    const conn = await connectToTauriSocket();
-    if (!conn) return; // Tauri not running — silently skip
-
-    // Encode the event as newline-delimited JSON (the IPC protocol)
-    const encoder = new TextEncoder();
-    const data = encoder.encode(JSON.stringify(event) + "\n");
-    await conn.write(data);
-    conn.close();
-  } catch {
-    // Silently ignore any write errors — the pd server must not be
-    // affected by Tauri IPC failures.
-  }
-}
 
 // ── Optimistic Project Build ──
 // Before any toolbar action (run, run-step, test, pack, etc.) we rebuild
@@ -843,6 +767,19 @@ ${step.code}
         // Input is passed as a CLI arg; Deno.Command handles escaping.
         // Ref: templates/trace.ts for the full implementation
         const traceTsPath = await ensureTemplate(pipeDir, "trace.ts");
+
+        // Notify pd-desktop that a pipe run is starting — fires a native
+        // notification so the user knows work has begun. The matching
+        // `run_complete` event fires in the spawnAndStream onComplete callback.
+        notifyTauri({
+          type: "run_start",
+          title: "Pipe Run Started",
+          message: body.pipe,
+          project: body.project,
+          pipe: body.pipe,
+          success: true,
+        });
+
         return spawnAndStream(
           [Deno.execPath(), "run", "--unstable-kv", "-A", "-c", configPath, "--no-check",
            traceTsPath, "--input", body.input || "{}", "--json"],
@@ -887,6 +824,17 @@ ${step.code}
         // for step runs to avoid showing stale trace data.
         // Ref: state.js runToStep() comment
         const cliTsPath = await ensureTemplate(pipeDir, "cli.ts");
+
+        // Notify pd-desktop that a step run is starting.
+        notifyTauri({
+          type: "run_start",
+          title: "Step Run Started",
+          message: `${body.pipe} (step ${body.stepIndex})`,
+          project: body.project,
+          pipe: body.pipe,
+          success: true,
+        });
+
         return spawnAndStream(
           [Deno.execPath(), "run", "--unstable-kv", "-A", "-c", configPath, "--no-check",
            cliTsPath, "--input", inputJson, "--json"],

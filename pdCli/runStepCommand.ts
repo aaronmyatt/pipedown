@@ -3,6 +3,9 @@ import { pd, std } from "../deps.ts";
 import { PD_DIR } from "./helpers.ts";
 import { pdBuild } from "../pdBuild.ts";
 import { cliHelpTemplate } from "../stringTemplates.ts";
+// Sends IPC events to pd-desktop via Unix socket for native notifications.
+// Ref: ./notifyTauri.ts for protocol details
+import { notifyTauri } from "./notifyTauri.ts";
 
 const helpText = cliHelpTemplate({
   title: "Run Step",
@@ -92,7 +95,17 @@ console.log(JSON.stringify(input, null, 2));
     const tmpFile = std.join(Deno.cwd(), PD_DIR, `_run_step_${Date.now()}.ts`);
     await Deno.writeTextFile(tmpFile, evalScript);
 
-    try {
+    // Notify pd-desktop that a step run is starting.
+    notifyTauri({
+      type: "run_start",
+      title: "Step Run Started",
+      message: `${pipeName} (step ${stepIndex})`,
+      pipe: pipeName,
+      success: true,
+    });
+
+    let runSuccess = true;
+    let runSuccess = false;
       const command = new Deno.Command(Deno.execPath(), {
         args: [
           "run",
@@ -106,14 +119,33 @@ console.log(JSON.stringify(input, null, 2));
         stdout: "inherit",
         stderr: "inherit",
       });
-      await command.output();
+      const output = await command.output();
+      runSuccess = output.success;
     } finally {
       await Deno.remove(tmpFile);
     }
+
+    // Notify pd-desktop that the step run finished.
+    notifyTauri({
+      type: "run_complete",
+      title: runSuccess ? "Step Run Complete" : "Step Run Failed",
+      message: `${pipeName} (step ${stepIndex})`,
+      pipe: pipeName,
+      success: runSuccess,
+    });
   } catch (e) {
     console.error(`Error: ${e.message}`);
     input.errors = input.errors || [];
     input.errors.push(e);
+
+    // Notify pd-desktop of the failure.
+    notifyTauri({
+      type: "run_complete",
+      title: "Step Run Failed",
+      message: `${fileName} (step ${stepIndex}): ${e.message}`,
+      pipe: pipeName,
+      success: false,
+    });
   }
 
   return input;
