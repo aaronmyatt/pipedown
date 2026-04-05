@@ -104,8 +104,9 @@ console.log(JSON.stringify(input, null, 2));
       success: true,
     });
 
-    let runSuccess = true;
     let runSuccess = false;
+    
+    try {
       const command = new Deno.Command(Deno.execPath(), {
         args: [
           "run",
