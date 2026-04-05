@@ -55,6 +55,7 @@ export function tracePage(): string {
 <body>
   <div id="app"></div>
   <script src="/frontend/shared/jsonTree.js"><\/script>
+  <script src="/frontend/shared/hashRouter.js"><\/script>
   <script src="/frontend/traces/state.js"><\/script>
   <script src="/frontend/traces/components/Sidebar.js"><\/script>
   <script src="/frontend/traces/components/Detail.js"><\/script>

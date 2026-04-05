@@ -85,8 +85,13 @@ PD.actions.selectTrace = function(entry) {
   PD.state.expandedSteps = {};
   localStorage.removeItem("pd-traces-expandedSteps");
 
-  m.request({ 
-    method: "GET", 
+  // ── Persist to URL hash ──
+  // Hash format: #/project/pipe/timestamp
+  // Ref: shared/hashRouter.js
+  pd.hashRouter.setSegments([entry.project, entry.pipe, entry.timestamp]);
+
+  m.request({
+    method: "GET",
     url: "/api/traces/:project/:pipe/:timestamp",
     params: {
       project: entry.project,
@@ -121,6 +126,59 @@ PD.actions.toggleExpand = function(key) {
   // Persist the full map so every group the user has touched is remembered.
   localStorage.setItem("pd-traces-expanded",
     JSON.stringify(PD.state.expanded));
+};
+
+// ── restoreFromHash ──
+// Reads the URL hash and, if it encodes a trace selection, finds the
+// matching trace entry in the loaded list and selects it.
+// Called after loadTraces completes and on hashchange events.
+//
+// Hash format: #/project/pipe/timestamp
+//
+// @return {boolean} — true if a trace was restored
+// Ref: shared/hashRouter.js
+PD.actions.restoreFromHash = function() {
+  var segments = pd.hashRouter.getSegments();
+  // Need exactly 3 segments: [project, pipe, timestamp]
+  if (segments.length !== 3) return false;
+
+  var project = segments[0];
+  var pipe = segments[1];
+  var timestamp = segments[2];
+
+  // Don't re-select if already viewing this trace
+  if (PD.utils.isSelected({ project: project, pipe: pipe, timestamp: timestamp })) {
+    return true;
+  }
+
+  // Search the loaded traces for a match
+  var match = PD.state.traces.find(function(t) {
+    return t.project === project && t.pipe === pipe && t.timestamp === timestamp;
+  });
+
+  if (match) {
+    PD.actions.selectTrace(match);
+
+    // Also expand the parent project and pipe groups in the sidebar so the
+    // selected trace is visible without manual clicking.
+    // Semantics: `false` = expanded in the expanded map.
+    // Ref: PD.state.expanded in state.js
+    if (PD.state.expanded[project] !== false) {
+      PD.state.expanded[project] = false;
+    }
+    var pipeKey = project + "/" + pipe;
+    if (PD.state.expanded[pipeKey] !== false) {
+      PD.state.expanded[pipeKey] = false;
+    }
+    // Persist expansion state to localStorage
+    try {
+      localStorage.setItem("pd-traces-expanded",
+        JSON.stringify(PD.state.expanded));
+    } catch(e) { /* ignore */ }
+
+    return true;
+  }
+  return false;
 };
 
 PD.utils.isSelected = function(entry) {

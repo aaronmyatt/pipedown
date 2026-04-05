@@ -92,6 +92,12 @@ PD.actions.focusProject = function(project) {
   PD.state.markdownHtml = null;
   PD.state.pipesLoading = true;
   PD.state.focusedPipes = [];
+
+  // ── Persist to URL hash ──
+  // Hash format: #/projectName
+  // Ref: shared/hashRouter.js
+  pd.hashRouter.setSegments([project.name]);
+
   m.request({
     method: "GET",
     url: "/api/projects/" + encodeURIComponent(project.name) + "/pipes"
@@ -110,6 +116,14 @@ PD.actions.viewPipe = function(pipe) {
   PD.state.viewingPipe = pipe;
   PD.state.markdownLoading = true;
   PD.state.markdownHtml = null;
+
+  // ── Persist to URL hash ──
+  // Hash format: #/projectName/pipeName
+  // Ref: shared/hashRouter.js
+  if (PD.state.focusedProject) {
+    pd.hashRouter.setSegments([PD.state.focusedProject.name, pipe.name]);
+  }
+
   var url = "/api/projects/" +
     encodeURIComponent(PD.state.focusedProject.name) +
     "/files/" + encodeURIComponent(pipe.path);
@@ -132,12 +146,18 @@ PD.actions.goHome = function() {
   PD.state.focusedPipes = [];
   PD.state.viewingPipe = null;
   PD.state.markdownHtml = null;
+  // Clear the hash since nothing is selected
+  pd.hashRouter.clear();
 };
 
 // goToProject — clear pipe selection, staying on the focused project.
 PD.actions.goToProject = function() {
   PD.state.viewingPipe = null;
   PD.state.markdownHtml = null;
+  // Revert hash to project-only (drop the pipe segment)
+  if (PD.state.focusedProject) {
+    pd.hashRouter.setSegments([PD.state.focusedProject.name]);
+  }
 };
 
 // loadProjects — (re-)fetches the enriched project list from the API.
@@ -151,6 +171,72 @@ PD.actions.loadProjects = function() {
     PD.state.projects = [];
     PD.state.loading = false;
   }).then(function() { m.redraw.sync(); });
+};
+
+// ── restoreFromHash ──
+// Reads the URL hash and restores the focused project (and optionally a
+// viewed pipe) from it. Called after loadProjects completes and on
+// hashchange events.
+//
+// Hash formats:
+//   #/projectName         → focus project, show pipe list
+//   #/projectName/pipeName → focus project + view specific pipe
+//
+// @return {boolean} — true if something was restored
+// Ref: shared/hashRouter.js
+PD.actions.restoreFromHash = function() {
+  var segments = pd.hashRouter.getSegments();
+  if (segments.length === 0) return false;
+
+  var projectName = segments[0];
+  var pipeName = segments[1] || null; // optional
+
+  // Don't re-focus if already viewing this project (avoids resetting pipes list)
+  var alreadyFocused = PD.state.focusedProject &&
+    PD.state.focusedProject.name === projectName;
+
+  if (!alreadyFocused) {
+    // Find the project in the loaded list
+    var project = PD.state.projects.find(function(p) {
+      return p.name === projectName;
+    });
+    if (!project) return false;
+
+    // Focus the project — this triggers a pipe list fetch.
+    // If we also need to view a pipe, we wait for the pipe list to load
+    // and then select it.
+    PD.actions.focusProject(project);
+    // Restore the hash that focusProject just set (it only wrote project),
+    // because we might need the pipe segment too.
+    if (pipeName) {
+      pd.hashRouter.setSegments([projectName, pipeName]);
+    }
+  }
+
+  // If a pipe name was specified, select it once the pipe list is available.
+  if (pipeName) {
+    // The pipe list may already be loaded (if project was already focused)
+    // or may still be loading (if we just called focusProject). Poll briefly.
+    var attempts = 0;
+    var interval = setInterval(function() {
+      attempts++;
+      if (!PD.state.pipesLoading || attempts > 50) {
+        clearInterval(interval);
+        if (!PD.state.pipesLoading) {
+          // Don't re-select if already viewing this pipe
+          if (PD.state.viewingPipe && PD.state.viewingPipe.name === pipeName) return;
+          var pipe = PD.state.focusedPipes.find(function(p) {
+            return p.name === pipeName;
+          });
+          if (pipe) {
+            PD.actions.viewPipe(pipe);
+          }
+        }
+      }
+    }, 100);
+  }
+
+  return true;
 };
 
 // ── New Project Modal Actions ──

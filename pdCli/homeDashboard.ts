@@ -137,6 +137,7 @@ export function homePage(): string {
   <script src="/frontend/shared/jsonTree.js"><\/script>
   <script src="/frontend/shared/ansi.js"><\/script>
   <script src="/frontend/shared/relativeTime.js"><\/script>
+  <script src="/frontend/shared/hashRouter.js"><\/script>
   <script src="/frontend/home/state.js"><\/script>
   <script src="/frontend/home/components/SearchBar.js"><\/script>
   <script src="/frontend/home/components/Sidebar.js"><\/script>

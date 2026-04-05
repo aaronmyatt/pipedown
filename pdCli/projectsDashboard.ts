@@ -317,6 +317,7 @@ export function projectsPage(): string {
 <body>
   <div id="app"></div>
   <script src="/frontend/shared/relativeTime.js"><\/script>
+  <script src="/frontend/shared/hashRouter.js"><\/script>
   <script src="/frontend/projects/state.js"><\/script>
   <script src="/frontend/projects/components/SearchBar.js"><\/script>
   <script src="/frontend/projects/components/ProjectList.js"><\/script>

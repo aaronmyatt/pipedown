@@ -4,9 +4,23 @@
 // Ref: https://mithril.js.org/lifecycle-methods.html#oncreate
 PD.components.Layout = {
   oncreate: function() {
-    // Fetch all registered projects on first mount.
+    // Fetch all registered projects on first mount, then restore any
+    // selection encoded in the URL hash (project and/or pipe).
     // Ref: PD.actions.loadProjects in state.js
+    // Ref: PD.actions.restoreFromHash in state.js
     PD.actions.loadProjects();
+
+    // Poll for the project list to finish loading, then attempt hash restoration.
+    var attempts = 0;
+    var interval = setInterval(function() {
+      attempts++;
+      if (!PD.state.loading || attempts > 50) {
+        clearInterval(interval);
+        if (!PD.state.loading) {
+          PD.actions.restoreFromHash();
+        }
+      }
+    }, 100);
   },
   view: function() {
     return m("div.layout", [

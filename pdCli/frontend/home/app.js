@@ -90,3 +90,57 @@ eventSource.onmessage = function(event) {
     }
   }
 };
+
+// ── Hash-based selection restoration ──
+// After the initial data fetch completes, check the URL hash for a
+// previously selected pipe and re-select it. This makes selections
+// survive page refreshes and enables bookmarkable pipe URLs.
+//
+// We override the original loadRecentPipes success path by wrapping
+// the action: once pipes load, attempt to restore from hash.
+// Ref: shared/hashRouter.js — pd.hashRouter.getSegments()
+// Ref: state.js — PD.actions.restoreFromHash()
+(function() {
+  var originalLoad = PD.actions.loadRecentPipes;
+
+  // ── Wrapped loadRecentPipes ──
+  // Calls the original action, then attempts to restore the selected
+  // pipe from the URL hash once the pipe list is available.
+  PD.actions.loadRecentPipes = function() {
+    originalLoad();
+
+    // The original action sets PD.state.loading = false when the request
+    // resolves. We poll briefly for that signal, then attempt restoration.
+    // A simple polling approach avoids modifying the original Promise chain
+    // in state.js.
+    var attempts = 0;
+    var interval = setInterval(function() {
+      attempts++;
+      if (!PD.state.loading || attempts > 50) {
+        clearInterval(interval);
+        if (!PD.state.loading) {
+          PD.actions.restoreFromHash();
+        }
+      }
+    }, 100);
+  };
+})();
+
+// ── hashchange listener ──
+// When the user navigates with browser back/forward buttons, the hash
+// changes. Re-read it and update the selection accordingly.
+// Ref: https://developer.mozilla.org/en-US/docs/Web/API/Window/hashchange_event
+pd.hashRouter.onHashChange(function() {
+  var segments = pd.hashRouter.getSegments();
+  if (segments.length === 2) {
+    // Hash has a pipe selection — restore it
+    PD.actions.restoreFromHash();
+  } else if (segments.length === 0 && PD.state.selectedPipe) {
+    // Hash was cleared (e.g. user pressed back to deselect) — clear selection.
+    PD.state.selectedPipe = null;
+    PD.state.markdownHtml = null;
+    PD.state.pipeData = null;
+    PD.state.rawMarkdown = null;
+    m.redraw();
+  }
+});

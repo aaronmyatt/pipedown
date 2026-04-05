@@ -185,6 +185,61 @@ PD.actions.loadAllProjects = function() {
   }).then(function() { m.redraw.sync(); });
 };
 
+// ── restoreFromHash ──
+// Reads the URL hash and, if it encodes a pipe selection, finds the
+// matching pipe in the already-loaded recentPipes list and selects it.
+// Called after the initial data fetch completes and on `hashchange` events
+// (browser back/forward navigation).
+//
+// Hash format: #/projectName/pipePath
+// Both segments are URI-decoded by pd.hashRouter.getSegments().
+//
+// @return {boolean} — true if a pipe was restored, false otherwise
+// Ref: shared/hashRouter.js
+PD.actions.restoreFromHash = function() {
+  var segments = pd.hashRouter.getSegments();
+  // Need exactly 2 segments: [projectName, pipePath]
+  if (segments.length !== 2) return false;
+  var projectName = segments[0];
+  var pipePath = segments[1];
+
+  // Don't re-select if already viewing this pipe — avoids resetting
+  // scroll position, drawer state, and edit mode.
+  if (PD.state.selectedPipe &&
+      PD.state.selectedPipe.projectName === projectName &&
+      PD.state.selectedPipe.pipePath === pipePath) {
+    return true;
+  }
+
+  // Search the loaded pipe list for a match. recentPipes contains all
+  // pipes grouped by project, so we scan the full array.
+  var match = null;
+  PD.state.recentPipes.forEach(function(group) {
+    // Each group has a projectName and a pipes array
+    if (group.projectName === projectName) {
+      // Check if the group itself matches (flat list item)
+      if (group.pipePath === pipePath) {
+        match = group;
+        return;
+      }
+      // Check nested pipes array if present
+      if (group.pipes) {
+        group.pipes.forEach(function(p) {
+          if (p.pipePath === pipePath) {
+            match = p;
+          }
+        });
+      }
+    }
+  });
+
+  if (match) {
+    PD.actions.selectPipe(match);
+    return true;
+  }
+  return false;
+};
+
 // ── toggleProjectCollapse ──
 // Toggles the collapsed/expanded state of a project group in the
 // sidebar's "Projects" section. Persists to localStorage so the
@@ -263,6 +318,14 @@ PD.actions.selectPipe = function(pipe) {
   PD.state.editSaving = false;
 
   PD.state.selectedPipe = pipe;
+
+  // ── Persist selection to URL hash ──
+  // Encodes project name and pipe path into the fragment so the selection
+  // survives page refreshes and can be bookmarked.
+  // Hash format: #/projectName/pipePath
+  // Ref: shared/hashRouter.js
+  pd.hashRouter.setSegments([pipe.projectName, pipe.pipePath]);
+
   PD.state.markdownLoading = true;
   PD.state.markdownHtml = null;
   PD.state.pipeData = null;
