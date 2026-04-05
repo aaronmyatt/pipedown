@@ -62,6 +62,14 @@ window.PD = {
     editDirty: false,     // true when editBuffer differs from rawMarkdown
     editSaving: false,    // true while the save POST is in flight
 
+    // ── All pipes (complete list for "Projects" sidebar section) ──
+    // Every pipe across all registered projects, loaded from /api/all-pipes.
+    // The "Projects" sidebar section groups this full list by project name,
+    // whereas recentPipes (from /api/recent-pipes) is capped at the 10 most
+    // recently active pipes and drives only the "Recent" section.
+    // Ref: Sidebar.js — "Projects" section uses PD.utils.groupPipesByProject
+    allPipes: [],
+
     // ── All projects (for New Pipe modal project picker) ──
     // Full project list from /api/projects — includes empty projects that
     // don't appear in recentPipes. Loaded alongside recentPipes on init.
@@ -183,6 +191,21 @@ PD.actions.loadAllProjects = function() {
   }).catch(function() {
     PD.state.allProjects = [];
   }).then(function() { m.redraw.sync(); });
+};
+
+// loadAllPipes — fetches the complete, unfiltered pipe list from /api/all-pipes.
+// The sidebar's "Projects" section needs every pipe across all projects so it
+// can group them under collapsible project headings. This is separate from
+// loadRecentPipes (which is capped at 10) to avoid showing an incomplete
+// project tree when many pipes exist.
+// Ref: GET /api/all-pipes in buildandserve.ts
+// Ref: homeDashboard.ts → scanAllPipes()
+PD.actions.loadAllPipes = function() {
+  m.request({ method: "GET", url: "/api/all-pipes" }).then(function(data) {
+    PD.state.allPipes = data;
+  }).catch(function() {
+    PD.state.allPipes = [];
+  });
 };
 
 // ── restoreFromHash ──
@@ -872,6 +895,9 @@ PD.actions.createNewPipe = function() {
     // Reload the pipe list so the new pipe appears in the sidebar.
     // After reloading, find and select the new pipe, then enter edit mode.
     PD.actions.loadRecentPipes();
+    // Also refresh the full pipe list so the "Projects" sidebar section
+    // includes the newly created pipe immediately.
+    PD.actions.loadAllPipes();
     // Give the pipe list a moment to update (loadRecentPipes is async),
     // then find and select the newly created pipe.
     // Ref: setTimeout ensures we run after the m.redraw from loadRecentPipes.
@@ -1315,5 +1341,8 @@ PD.actions.performExtract = function() {
     PD.actions.exitExtractMode();
     PD.actions.refreshPipe();
     PD.actions.loadRecentPipes();
+    // Extraction creates a new sub-pipe — refresh the full list so
+    // the "Projects" section shows it.
+    PD.actions.loadAllPipes();
   });
 };

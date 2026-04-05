@@ -40,6 +40,8 @@ eventSource.onmessage = function(event) {
     // is mid-edit, in which case we skip to avoid clobbering their work.
     // Ref: state.js — PD.actions.loadRecentPipes, PD.actions.selectPipe
     PD.actions.loadRecentPipes();
+    // Also refresh the full pipe list so the "Projects" section stays current.
+    PD.actions.loadAllPipes();
 
     if (!PD.state.editMode) {
       // ── Find and focus the executed pipe ──
@@ -81,6 +83,8 @@ eventSource.onmessage = function(event) {
   // Fired by the file watcher when .md files change on disk.
   if (event.data === "reload") {
     PD.actions.loadRecentPipes();
+    // Keep the "Projects" section in sync with the file watcher too.
+    PD.actions.loadAllPipes();
     // Don't re-fetch and re-render while the user is editing — their
     // editBuffer would be overwritten by the stale rawMarkdown.
     // Use refreshPipe() instead of selectPipe() to preserve the user's
@@ -101,6 +105,9 @@ eventSource.onmessage = function(event) {
 // Ref: shared/hashRouter.js — pd.hashRouter.getSegments()
 // Ref: state.js — PD.actions.restoreFromHash()
 (function() {
+  // Kick off both fetches in parallel: the 10 most recent (for "Recent"
+  // section) and the full list (for "Projects" section).
+  PD.actions.loadAllPipes();
   PD.actions.loadRecentPipes()
   .then(function() {
     // After loadRecentPipes completes, attempt to restore

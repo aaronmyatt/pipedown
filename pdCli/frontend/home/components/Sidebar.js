@@ -37,6 +37,10 @@ PD.components.Sidebar = {
   // Ref: https://mithril.js.org/lifecycle-methods.html#oncreate
   oncreate: function() {
     PD.actions.loadRecentPipes();
+    // Load the complete pipe list so the "Projects" sidebar section can
+    // group ALL pipes by project — not just the 10 most recent.
+    // Ref: state.js → PD.actions.loadAllPipes → GET /api/all-pipes
+    PD.actions.loadAllPipes();
     // Also load the full project list so the New Pipe modal can offer
     // newly created empty projects that have no pipes yet.
     PD.actions.loadAllProjects();
@@ -75,11 +79,25 @@ PD.components.Sidebar = {
     }
 
     // ── Derive section data ──
-    // "Recent" takes the first 10 from the mtime-sorted, filtered list.
-    // "Projects" groups the full filtered list by projectName.
-    // Ref: state.js PD.utils.groupPipesByProject
+    // "Recent" takes the first 10 from the activity-sorted, filtered list.
+    // "Projects" groups the complete pipe list (from /api/all-pipes) by
+    // projectName so every pipe appears under its project heading — not
+    // just the 10 most recently active ones.
+    // Ref: state.js PD.actions.loadAllPipes, PD.utils.groupPipesByProject
     var recentPipes = pipes.slice(0, 10);
-    var projectGroups = PD.utils.groupPipesByProject(pipes);
+
+    // Apply the same search filter to allPipes so the "Projects" section
+    // respects the search query consistently with the "Recent" section.
+    var allPipes = PD.state.allPipes || [];
+    if (PD.state.searchQuery) {
+      var q2 = PD.state.searchQuery.toLowerCase();
+      allPipes = allPipes.filter(function(p) {
+        return p.pipeName.toLowerCase().includes(q2) ||
+          p.projectName.toLowerCase().includes(q2) ||
+          p.pipePath.toLowerCase().includes(q2);
+      });
+    }
+    var projectGroups = PD.utils.groupPipesByProject(allPipes);
 
     return m("div.sidebar", [
       m(PD.components.SearchBar),
