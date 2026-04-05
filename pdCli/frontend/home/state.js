@@ -151,7 +151,7 @@ PD.utils.parseErrorBody = function(bodyText) {
 // --- Data fetching ---
 PD.actions.loadRecentPipes = function() {
   PD.state.loading = true;
-  m.request({ method: "GET", url: "/api/recent-pipes" }).then(function(data) {
+  return m.request({ method: "GET", url: "/api/recent-pipes" }).then(function(data) {
     PD.state.recentPipes = data;
     PD.state.loading = false;
   }).catch(function(err) {
@@ -170,7 +170,7 @@ PD.actions.loadRecentPipes = function() {
       statusText: "Request Failed",
       message: err.message || "Failed to load pipes"
     };
-  }).then(function() { m.redraw.sync(); });
+  });
 };
 
 // loadAllProjects — fetches the full project list from /api/projects so

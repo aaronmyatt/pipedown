@@ -101,29 +101,14 @@ eventSource.onmessage = function(event) {
 // Ref: shared/hashRouter.js — pd.hashRouter.getSegments()
 // Ref: state.js — PD.actions.restoreFromHash()
 (function() {
-  var originalLoad = PD.actions.loadRecentPipes;
-
-  // ── Wrapped loadRecentPipes ──
-  // Calls the original action, then attempts to restore the selected
-  // pipe from the URL hash once the pipe list is available.
-  PD.actions.loadRecentPipes = function() {
-    originalLoad();
-
-    // The original action sets PD.state.loading = false when the request
-    // resolves. We poll briefly for that signal, then attempt restoration.
-    // A simple polling approach avoids modifying the original Promise chain
-    // in state.js.
-    var attempts = 0;
-    var interval = setInterval(function() {
-      attempts++;
-      if (!PD.state.loading || attempts > 50) {
-        clearInterval(interval);
-        if (!PD.state.loading) {
-          PD.actions.restoreFromHash();
-        }
-      }
-    }, 100);
-  };
+  PD.actions.loadRecentPipes()
+  .then(function() {
+    // After loadRecentPipes completes, attempt to restore
+    // selection from the URL hash. This handles the case where the user
+    // refreshes the page with a pipe selected — we want to re-select it
+    // after reload.
+    PD.actions.restoreFromHash();
+  });
 })();
 
 // ── hashchange listener ──
