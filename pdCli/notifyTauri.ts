@@ -12,7 +12,7 @@
 // ── Socket Path ──
 // `/tmp/` is conventional for IPC sockets on macOS/Linux — writable by all
 // users and cleaned up on reboot (no stale sockets after crashes).
-const TAURI_SOCKET_PATH = "/tmp/pipedown.sock";
+export const TAURI_SOCKET_PATH = "/tmp/pipedown.sock";
 
 /**
  * Shape of an event sent to the Tauri desktop app.
