@@ -47,25 +47,64 @@ export const pipeToScript = async (input: PipeToScriptInput) => {
   };
 
   const scriptTemplate = (input: PipeToScriptInput) => {
-    const hasSchema = !!input.pipe.schema;
+    // ── Zod block detection ──
+    // A \`\`\`zod block may contain:
+    //   (a) An exported schema:  `export const schema = z.object({...})`
+    //   (b) A non-exported schema: `const schema = z.object({...})`
+    //   (c) Only helper definitions (no `schema` variable at all)
+    //
+    // Cases (a) and (b) trigger automatic validation wrappers (_pd_initSchema /
+    // per-step _pd_validateSchema_<i>_<name>) and the `PipeInput` type alias.
+    // Case (c) injects the zod definitions at module level so step code can
+    // reference them (e.g. `MyType.parse(...)`) but skips validation wrappers.
+    // Ref: https://zod.dev/?id=basic-usage
+    const schemaText = input.pipe.schema ?? "";
+    const hasZodBlock = schemaText.length > 0;
 
-    const zodImport = hasSchema ? 'import { z } from "npm:zod";' : "";
-    // Strip import statements from schema text — they're hoisted to the top
-    const schemaBody = input.pipe.schema
-      ? input.pipe.schema.replaceAll(/import.*from.*/gm, "").trim()
+    // Detect whether the zod block defines a variable literally named `schema`.
+    // Matches both `export const schema` and plain `const schema`.
+    // This drives whether we generate the validation pipeline wrappers.
+    const hasSchemaVar = hasZodBlock &&
+      /(?:export\s+)?const\s+schema\s*=/.test(schemaText);
+
+    // Always import zod when a ```zod block exists — even helper-only blocks
+    // need the `z` namespace in scope.
+    const zodImport = hasZodBlock ? 'import { z } from "npm:zod";' : "";
+
+    const schemaImports = hasZodBlock
+      ? [...schemaText.matchAll(detectImports)].map((match) => match[0])
+      : [];
+
+    if (schemaImports.length > 0) {
+      console.warn(
+        "Warning: removing import statements from pipe schema block; only the generated zod import is preserved. Removed imports: " +
+          schemaImports.join(", "),
+      );
+    }
+
+    // Strip import statements from schema text before injecting it into the
+    // generated module. Schema imports are not hoisted automatically; only the
+    // generated zod import above is preserved.
+    const schemaBody = hasZodBlock
+      ? schemaText.replaceAll(/import.*from.*/gm, "").trim()
       : "";
 
     // Step names needed both for schemaBlock generation and funcSequence construction
     const stepNames = input.pipe.steps.map((step: Step) => step.funcName);
 
-    // ── Schema block generation ──
-    // Build step-specific validation wrappers so that zod errors clearly
-    // identify which step (by name and index) caused the validation failure.
-    // Each step gets its own `_pd_validateSchema_<index>_<funcName>` function
-    // that closes over the step's metadata and includes it in the error object.
+    // ── Build the schema block that gets injected at module level ──
+    // When `schema` is defined → full validation wrappers + PipeInput type.
+    // When only helper types exist → inject definitions only (no wrappers).
+    //
+    // Step-specific validation wrappers (from main): each step gets its own
+    // `_pd_validateSchema_<index>_<funcName>` function so that zod errors
+    // clearly identify which step caused the validation failure.
     // Ref: https://zod.dev/?id=safeParse (safeParse returns { success, data | error })
-    const schemaBlock = hasSchema ? `
-// Pipe schema — validates input at every step boundary
+    let schemaBlock = "";
+    if (hasZodBlock && hasSchemaVar) {
+      // Full schema mode: inject definitions + step-specific validation helpers
+      schemaBlock = `
+// ── Pipe schema — validates input at every step boundary ──
 ${schemaBody}
 export type PipeInput = z.infer<typeof schema>;
 
@@ -106,13 +145,24 @@ function _pd_validateSchema_${index}_${name}(input) {
   }
 }
 `).join("")}
-` : "";
+`;
+    } else if (hasZodBlock) {
+      // Helper-only mode: inject zod definitions at module level without
+      // validation wrappers. Step code can reference these types directly,
+      // e.g. `AggregatedDeveloper.parse(data)`.
+      schemaBlock = `
+// ── Zod definitions (no pipe-level schema) ──
+${schemaBody}
+`;
+    }
 
-    // When schema exists, wrap each step with its own named validator:
-    // init → step0 → validate_0_step0 → step1 → validate_1_step1 → ...
+    // ── Build the function sequence ──
+    // When a `schema` variable exists, wrap each step with its own named
+    // validator: init → step0 → validate_0_step0 → step1 → validate_1_step1
     // Each validator is unique per step so errors report the exact step context.
+    // Otherwise (no schema or helper-only), just chain the steps directly.
     let funcSequenceItems: string;
-    if (hasSchema) {
+    if (hasSchemaVar) {
       const withValidation = stepNames.flatMap(
         (name: string, index: number) => [name, `_pd_validateSchema_${index}_${name}`],
       );
