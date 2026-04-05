@@ -38,7 +38,7 @@ export const pipeToScript = async (input: PipeToScriptInput) => {
   };
 
   const stepsToFunctions = (input: PipeToScriptInput) => {
-    input.functions = input.pipe && input.pipe.steps.map((step: Step) => {
+    input.functions = input.pipe.steps.map((step: Step) => {
       return `export async function ${step.funcName} (input, opts) {
     ${step.code.replaceAll(detectImports, "")}
 }`;
@@ -51,41 +51,70 @@ export const pipeToScript = async (input: PipeToScriptInput) => {
 
     const zodImport = hasSchema ? 'import { z } from "npm:zod";' : "";
     // Strip import statements from schema text — they're hoisted to the top
-    const schemaBody = hasSchema
-      ? input.pipe.schema!.replace(/import.*from.*/gm, "").trim()
+    const schemaBody = input.pipe.schema
+      ? input.pipe.schema.replaceAll(/import.*from.*/gm, "").trim()
       : "";
 
+    // Step names needed both for schemaBlock generation and funcSequence construction
+    const stepNames = input.pipe.steps.map((step: Step) => step.funcName);
+
+    // ── Schema block generation ──
+    // Build step-specific validation wrappers so that zod errors clearly
+    // identify which step (by name and index) caused the validation failure.
+    // Each step gets its own `_pd_validateSchema_<index>_<funcName>` function
+    // that closes over the step's metadata and includes it in the error object.
+    // Ref: https://zod.dev/?id=safeParse (safeParse returns { success, data | error })
     const schemaBlock = hasSchema ? `
 // Pipe schema — validates input at every step boundary
 ${schemaBody}
 export type PipeInput = z.infer<typeof schema>;
 
+// Validates the raw input before the first step runs.
+// Reports errors as step index -1 ("pre-pipeline") so they are
+// visually distinct from per-step validation failures.
 function _pd_initSchema(input) {
   const result = schema.safeParse(input);
   if (result.success) {
     Object.assign(input, result.data);
   } else {
     input.errors = input.errors || [];
-    input.errors.push({ func: "_pd_initSchema", message: result.error.message, issues: result.error.issues });
+    input.errors.push({
+      func: "_pd_initSchema",
+      step: "(initial input)",
+      stepIndex: -1,
+      message: "Schema validation failed on initial input: " + result.error.message,
+      issues: result.error.issues,
+    });
   }
 }
 
-function _pd_validateSchema(input) {
+${stepNames.map((name: string, index: number) => String.raw`
+// Post-step validator for step ${index}: "${name}"
+// Runs immediately after "${name}" to ensure it left the input
+// in a schema-valid state.
+function _pd_validateSchema_${index}_${name}(input) {
   const result = schema.safeParse(input);
   if (!result.success) {
     input.errors = input.errors || [];
-    input.errors.push({ func: "_pd_validateSchema", message: result.error.message, issues: result.error.issues });
+    input.errors.push({
+      func: "_pd_validateSchema",
+      step: "${name}",
+      stepIndex: ${index},
+      message: "Schema validation failed after step ${index} (\\"${name}\\"): " + result.error.message,
+      issues: result.error.issues,
+    });
   }
 }
+`).join("")}
 ` : "";
 
-    // When schema exists, wrap each step with validation:
-    // init → step1 → validate → step2 → validate → ...
-    const stepNames = input.pipe.steps.map((step: Step) => step.funcName);
+    // When schema exists, wrap each step with its own named validator:
+    // init → step0 → validate_0_step0 → step1 → validate_1_step1 → ...
+    // Each validator is unique per step so errors report the exact step context.
     let funcSequenceItems: string;
     if (hasSchema) {
       const withValidation = stepNames.flatMap(
-        (name: string) => [name, "_pd_validateSchema"],
+        (name: string, index: number) => [name, `_pd_validateSchema_${index}_${name}`],
       );
       funcSequenceItems = ["_pd_initSchema", ...withValidation].join(", ");
     } else {
@@ -99,9 +128,9 @@ import $p from "jsr:@pd/pointers@0.1.1";
 ${zodImport}
 ${input.pipe.config?.build ? '' : 'import "jsr:@std/dotenv/load";'}
 import rawPipe from "./index.json" with {type: "json"};
-${input.pipeImports && input.pipeImports.join("\n")}
+${input.pipeImports?.join("\n")}
 ${schemaBlock}
-${input.functions && input.functions.join("\n")}
+${input.functions?.join("\n")}
 
 const funcSequence = [
 ${funcSequenceItems}

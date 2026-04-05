@@ -309,8 +309,10 @@ Deno.test("pipeToScript", async (t) => {
 
     const result = await pipeToScript({ pipe });
     assertEquals(result.success, true);
-    // Sequence should be: _pd_initSchema, StepA, _pd_validateSchema, StepB, _pd_validateSchema
-    assertStringIncludes(result.script!, "_pd_initSchema, StepA, _pd_validateSchema, StepB, _pd_validateSchema");
+    // Sequence should be: _pd_initSchema, StepA, _pd_validateSchema_0_StepA, StepB, _pd_validateSchema_1_StepB
+    // Each validator is named after the step it follows, so errors clearly
+    // report which step (by name and index) left the input in a bad state.
+    assertStringIncludes(result.script!, "_pd_initSchema, StepA, _pd_validateSchema_0_StepA, StepB, _pd_validateSchema_1_StepB");
   });
 
   await t.step("does not generate schema code when pipe has no schema", async () => {
