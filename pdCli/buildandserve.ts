@@ -19,6 +19,37 @@ import { performExtraction, toKebabCase } from "../extractSteps.ts";
 
 let _controller: ReadableStreamDefaultController<string> | null = null;
 
+// ── SSE broadcast helpers ──
+// The basic `_controller.enqueue("data: reload\n\n")` sends a plain "reload"
+// string to all connected browser tabs. For richer notifications — e.g. telling
+// the frontend which pipe was just executed — we send JSON-encoded event data.
+// The frontend parses `event.data` as JSON first, falling back to the legacy
+// string check for backwards compatibility.
+//
+// Ref: https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events
+// Ref: https://html.spec.whatwg.org/multipage/server-sent-events.html#event-stream-interpretation
+
+/**
+ * Broadcast a structured SSE event to all connected browser clients.
+ * If no client is connected (_controller is null), the call is silently ignored.
+ *
+ * @param data - Plain string (e.g. "reload") or an object to JSON-encode.
+ *               Objects must include a `type` field so the frontend can dispatch.
+ *
+ * @example
+ *   broadcastSSE("reload");  // legacy reload
+ *   broadcastSSE({ type: "pipe_executed", project: "myproj", pipe: "fetch" });
+ */
+function broadcastSSE(data: string | Record<string, unknown>): void {
+  if (!_controller) return;
+  try {
+    const payload = typeof data === "string" ? data : JSON.stringify(data);
+    _controller.enqueue(`data: ${payload}\n\n`);
+  } catch {
+    // SSE client may have disconnected — ignore.
+  }
+}
+
 // ── Tauri Desktop IPC ──
 // When Pipedown Desktop (the Tauri app) is running, it listens on a Unix
 // domain socket at /tmp/pipedown.sock for event notifications. The pd server
@@ -847,16 +878,21 @@ ${step.code}
           [Deno.execPath(), "run", "--unstable-kv", "-A", "-c", configPath, "--no-check",
            traceTsPath, "--input", body.input || "{}", "--json"],
           project.path,
-          // Notify Tauri when the pipe run finishes (success or failure).
+          // Notify Tauri + SSE clients when the pipe run finishes.
+          // The SSE broadcast tells the frontend which pipe was just executed
+          // so it can auto-focus it for quick inspection.
           // The notification fires after the stream is fully consumed.
-          (success) => notifyTauri({
-            type: "run_complete",
-            title: success ? "Pipe Run Complete" : "Pipe Run Failed",
-            message: `${body.pipe}${success ? "" : " encountered errors"}`,
-            project: body.project,
-            pipe: body.pipe,
-            success,
-          }),
+          (success) => {
+            notifyTauri({
+              type: "run_complete",
+              title: success ? "Pipe Run Complete" : "Pipe Run Failed",
+              message: `${body.pipe}${success ? "" : " encountered errors"}`,
+              project: body.project,
+              pipe: body.pipe,
+              success,
+            });
+            broadcastSSE({ type: "pipe_executed", project: body.project, pipe: body.pipe });
+          },
         );
       } catch (e) {
         return new Response("Error: " + (e as Error).message, { status: 500 });
@@ -891,15 +927,20 @@ ${step.code}
           [Deno.execPath(), "run", "--unstable-kv", "-A", "-c", configPath, "--no-check",
            cliTsPath, "--input", inputJson, "--json"],
           project.path,
-          // Notify Tauri when the step run finishes.
-          (success) => notifyTauri({
-            type: "run_complete",
-            title: success ? "Step Run Complete" : "Step Run Failed",
-            message: `${body.pipe} (step ${body.stepIndex})`,
-            project: body.project,
-            pipe: body.pipe,
-            success,
-          }),
+          // Notify Tauri + SSE clients when the step run finishes.
+          // Same auto-focus behavior as full pipe runs — the user wants to
+          // see the pipe they just ran, even for partial step executions.
+          (success) => {
+            notifyTauri({
+              type: "run_complete",
+              title: success ? "Step Run Complete" : "Step Run Failed",
+              message: `${body.pipe} (step ${body.stepIndex})`,
+              project: body.project,
+              pipe: body.pipe,
+              success,
+            });
+            broadcastSSE({ type: "pipe_executed", project: body.project, pipe: body.pipe });
+          },
         );
       } catch (e) {
         return new Response("Error: " + (e as Error).message, { status: 500 });
