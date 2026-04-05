@@ -1,5 +1,5 @@
 // Traces page state and data-fetching
-window.PD = {
+globalThis.PD = {
   state: {
     // ── Sidebar visibility ──
     // Toggled by the hamburger button in the topbar.
@@ -15,17 +15,29 @@ window.PD = {
     // preferred expand/collapse state survives page reloads.
     // Ref: https://developer.mozilla.org/en-US/docs/Web/API/Window/localStorage
     expanded: (function() {
-      try {
-        var saved = localStorage.getItem("pd-traces-expanded");
-        if (saved) return JSON.parse(saved);
-      } catch(e) { /* ignore — localStorage unavailable or corrupted JSON */ }
-      return {};  // first visit — no preferences yet; Sidebar treats absent keys as collapsed
+      const saved = localStorage.getItem("pd-traces-expanded");
+      if (saved) return JSON.parse(saved);
     })(),
     selected: null,
     traceData: null,
     traceLoading: false,
-    expandedSteps: {},
-    detailTab: "steps"
+    // ── Expanded steps ──
+    // Tracks which trace steps are expanded in the detail view.
+    // Restored from localStorage so the user's drill-down survives reloads.
+    // Ref: https://developer.mozilla.org/en-US/docs/Web/API/Window/localStorage
+    expandedSteps: (function() {
+      const saved = localStorage.getItem("pd-traces-expandedSteps");
+      if (saved) return JSON.parse(saved);
+    })(),
+
+    // ── Active detail tab ──
+    // Which tab (steps/input/output/raw) is active in the trace detail pane.
+    // Persisted so navigating away and back keeps the user's preferred view.
+    detailTab: (function() {
+      const saved = localStorage.getItem("pd-traces-detailTab");
+      if (saved && ["steps","input","output","raw"].indexOf(saved) !== -1) return saved;
+      return "steps";
+    })()
   },
   actions: {},
   utils: {},
@@ -34,15 +46,16 @@ window.PD = {
 
 PD.utils.formatTimestamp = function(ts) {
   try {
-    var iso = ts.replace(/(\d{4}-\d{2}-\d{2}T\d{2})-(\d{2})-(\d{2})-(\d+)Z/, "$1:$2:$3.$4Z");
-    var d = new Date(iso);
-    if (isNaN(d.getTime())) return ts;
+    // TODO: this regex is a band-aid for an ISO formatting quirk in our backend;
+    const iso = ts.replace(/(\d{4}-\d{2}-\d{2}T\d{2})-(\d{2})-(\d{2})-(\d+)Z/, "$1:$2:$3.$4Z");
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return ts;
     return d.toLocaleString();
   } catch(_) { return ts; }
 };
 
 PD.utils.groupTraces = function(traces) {
-  var grouped = {};
+  const grouped = {};
   traces.forEach(function(t) {
     if (!grouped[t.project]) grouped[t.project] = {};
     if (!grouped[t.project][t.pipe]) grouped[t.project][t.pipe] = [];
@@ -59,26 +72,34 @@ PD.actions.loadTraces = function() {
   }).catch(function() {
     PD.state.traces = [];
     PD.state.loading = false;
-  }).then(function() { m.redraw.sync(); });
+  })
 };
 
 PD.actions.selectTrace = function(entry) {
   PD.state.selected = entry;
   PD.state.traceData = null;
   PD.state.traceLoading = true;
+  // Reset step expansions for the new trace and clear persisted state.
+  // The detail tab is intentionally NOT reset — the user's preferred tab
+  // (e.g. "raw") should carry over between traces.
   PD.state.expandedSteps = {};
-  PD.state.detailTab = "steps";
-  var url = "/api/traces/" +
-    encodeURIComponent(entry.project) + "/" +
-    encodeURIComponent(entry.pipe) + "/" +
-    encodeURIComponent(entry.timestamp + ".json");
-  m.request({ method: "GET", url: url }).then(function(data) {
+  localStorage.removeItem("pd-traces-expandedSteps");
+
+  m.request({ 
+    method: "GET", 
+    url: "/api/traces/:project/:pipe/:timestamp",
+    params: {
+      project: entry.project,
+      pipe: entry.pipe,
+      timestamp: entry.timestamp + ".json"
+    }
+  }).then(function(data) {
     PD.state.traceData = data;
     PD.state.traceLoading = false;
   }).catch(function() {
     PD.state.traceData = null;
     PD.state.traceLoading = false;
-  }).then(function() { m.redraw.sync(); });
+  });
 };
 
 // ── toggleExpand ──
@@ -94,15 +115,12 @@ PD.actions.selectTrace = function(entry) {
 // Ref: Sidebar.js — group header onclick
 // Ref: https://developer.mozilla.org/en-US/docs/Web/API/Storage/setItem
 PD.actions.toggleExpand = function(key) {
-  var current = PD.state.expanded[key];
+  const current = PD.state.expanded[key];
   // absent or true → expand (false); false → collapse (true)
-  PD.state.expanded[key] = current === false ? true : false;
+  PD.state.expanded[key] = current === false;
   // Persist the full map so every group the user has touched is remembered.
-  // Uses the same try-catch pattern as the theme manager (shared/theme.js).
-  try {
-    localStorage.setItem("pd-traces-expanded",
-      JSON.stringify(PD.state.expanded));
-  } catch(e) { /* ignore — localStorage full or unavailable */ }
+  localStorage.setItem("pd-traces-expanded",
+    JSON.stringify(PD.state.expanded));
 };
 
 PD.utils.isSelected = function(entry) {
