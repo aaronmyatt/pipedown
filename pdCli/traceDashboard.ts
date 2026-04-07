@@ -21,6 +21,9 @@ export async function scanTraces(): Promise<TraceIndexEntry[]> {
     if (parts.length >= 3) {
       entries.push({
         project: parts[0],
+
+        // TODO: consider saving traces by original pipe filename
+        // (e.g. "myPipe.pd.ts") instead of the markdown h1 title/internal name
         pipe: parts.slice(1, -1).join("/"),
         timestamp: parts[parts.length - 1].replace(".json", ""),
         filePath: entry.path,
@@ -28,9 +31,18 @@ export async function scanTraces(): Promise<TraceIndexEntry[]> {
     }
   }
 
-  // TODO: "timestamps" punking us again. We need to switch to real timestamps
-  entries.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
-  return entries;
+  // ── Sort by timestamp descending (newest first) ──
+  // Filenames are now Unix epoch milliseconds (e.g. "1743588527353"), so a
+  // simple numeric comparison gives correct chronological ordering.
+  // Falls back to localeCompare for any legacy non-numeric filenames that
+  // haven't been migrated yet.
+  // Ref: scripts/migrateTraceTimestamps.ts — migration tool
+
+  return entries.toSorted((a, b) => {
+    const aNum = Number(a.timestamp);
+    const bNum = Number(b.timestamp);
+    return bNum - aNum;
+  });
 }
 
 export async function readTrace(filePath: string): Promise<unknown> {

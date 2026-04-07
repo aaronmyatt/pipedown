@@ -44,13 +44,23 @@ globalThis.PD = {
   components: {}
 };
 
+// ── formatTimestamp ──
+// Converts a trace timestamp to a human-readable locale string.
+// Timestamps are now epoch-millis strings (e.g. "1743588527353") used as
+// filenames. We parse them as numbers first, then fall back to ISO parsing
+// for any legacy entries that haven't been migrated yet.
+// Ref: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/toLocaleString
 PD.utils.formatTimestamp = function(ts) {
   try {
-    // TODO: this regex is a band-aid for an ISO formatting quirk in our backend;
-    const iso = ts.replace(/(\d{4}-\d{2}-\d{2}T\d{2})-(\d{2})-(\d{2})-(\d+)Z/, "$1:$2:$3.$4Z");
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return ts;
-    return d.toLocaleString();
+    // ── Try epoch-millis first (new format) ──
+    var epoch = Number(ts);
+    if (!Number.isNaN(epoch) && epoch > 0) {
+      return new Date(epoch).toLocaleString();
+    }
+    // ── Fall back to ISO string parsing (legacy) ──
+    var d = new Date(ts);
+    if (!Number.isNaN(d.getTime())) return d.toLocaleString();
+    return ts;
   } catch(_) { return ts; }
 };
 

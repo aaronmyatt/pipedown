@@ -211,9 +211,16 @@ async function writeTrace(
   const traceDir = `${home}/.pipedown/traces/${projectName}/${pipeName}`;
   await Deno.mkdir(traceDir, { recursive: true });
 
+  // ── Timestamp strategy ──
+  // Use Unix epoch milliseconds for the filename — this sorts correctly as
+  // both a number and a string, and avoids the colon/dot mangling that the
+  // old ISO-based filenames required.
+  // The `timestamp` property inside the JSON stays as a proper ISO-8601
+  // string for human readability.
+  // Ref: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/getTime
   const now = new Date();
   const timestamp = now.toISOString();
-  const fileTimestamp = timestamp.replace(/[:.]/g, "-");
+  const fileTimestamp = String(now.getTime());
 
   const trace = {
     pipeName,
@@ -247,7 +254,7 @@ const pipelineDuration =
   Math.round((performance.now() - pipelineStart) * 100) / 100;
 
 await writeTrace(
-  rawPipe.name,
+  rawPipe.fileName || rawPipe.name || "unknown-pipe-"+Date.now(),
   traceLog,
   originalInput,
   output,

@@ -7,7 +7,7 @@ export interface RecentPipe {
   projectPath: string;
   pipeName: string;
   pipePath: string;
-  mtime: string | null;
+  mtime: Date | null;
 }
 
 export async function scanRecentPipes(): Promise<RecentPipe[]> {
@@ -29,6 +29,8 @@ export async function scanRecentPipes(): Promise<RecentPipe[]> {
     }
   }
 
+  console.log("Latest trace timestamps by project/pipe:", Object.fromEntries(latestTraceByPipe.entries()));
+
   for (const project of projects) {
     try {
       await Deno.stat(project.path);
@@ -42,24 +44,39 @@ export async function scanRecentPipes(): Promise<RecentPipe[]> {
       // recent between the file's mtime (created/updated) and the latest trace
       // timestamp (last execution). This ensures a pipe that was executed
       // recently — even if its source file hasn't changed — sorts to the top.
-      const traceTs = latestTraceByPipe.get(`${project.name}/${pipe.name}`) ?? "";
-      const mtime = pipe.mtime ?? "";
-      const lastActivity = traceTs > mtime ? traceTs : mtime;
+      // ── Determine most recent activity ──
+      // Trace timestamps are now epoch-millis filenames (e.g. "1743588527353")
+      // while pipe mtimes are ISO strings from Deno.stat().mtime.toISOString().
+      // Convert both to epoch-millis numbers for a correct comparison.
+      // Ref: traceDashboard.ts → scanTraces(), projectsDashboard.ts → scanProjectPipes()
+      const rawTraceTs = latestTraceByPipe.get(`${project.name}/${pipe.name}`) ?? "";
+      // console.log(`${project.name}/${pipe.name}`, rawTraceTs, pipe.mtime);
+      const rawMtime = pipe.mtime ?? "";
+      const traceEpoch = Number(rawTraceTs) || new Date(rawTraceTs).getTime() || 0;
+      const mtimeEpoch = rawMtime ? new Date(rawMtime).getTime() || 0 : 0;
+      const lastActivity = traceEpoch > mtimeEpoch
+        ? traceEpoch
+        : mtimeEpoch || null;
 
       allPipes.push({
         projectName: project.name,
         projectPath: project.path,
         pipeName: pipe.name,
         pipePath: pipe.path,
-        mtime: lastActivity || null,
+        mtime: lastActivity ? new Date(lastActivity) : null
       });
     }
   }
 
   // Sort by most recent activity (created, modified, or executed) descending,
   // then return only the top 10 most recently active pipes.
-  allPipes.sort((a, b) => (b.mtime || "").localeCompare(a.mtime || ""));
-  return allPipes.slice(0, 50);
+  // console.log("All scanned pipes with activity timestamps:", allPipes
+  //   .toSorted((a, b) => (b.mtime?.getTime() || 0) - (a.mtime?.getTime() || 0))
+  //   .slice(0, 10));
+  
+  return allPipes
+    .toSorted((a, b) => (b.mtime?.getTime() || 0) - (a.mtime?.getTime() || 0))
+    .slice(0, 50);
 }
 
 // ── scanAllPipes ──
