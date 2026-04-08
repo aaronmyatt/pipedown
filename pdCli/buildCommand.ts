@@ -1,7 +1,8 @@
 import { pd } from "../deps.ts";
 import { pdBuild } from "../pdBuild.ts";
+import { defaultTemplateFiles } from "../defaultTemplateFiles.ts";
 import { cliHelpTemplate } from "../stringTemplates.ts";
-import type { CliInput } from "../pipedown.d.ts";
+import type { CliInput, BuildInput } from "../pipedown.d.ts";
 
 const helpText = cliHelpTemplate({
   title: "Build",
@@ -20,7 +21,17 @@ export async function buildCommand(input: CliInput) {
   if (pd.$p.get(input, "/flags/help") || pd.$p.get(input, "/flags/h")) {
     console.log(helpText);
   } else {
-    return Object.assign(input, await pdBuild(input));
+    const buildResult = await pdBuild(input);
+    const merged = Object.assign(input, buildResult);
+
+    // After the main build, restore any default template files (deno.json,
+    // replEval.ts) that may be missing from the .pd directory. pdBuild
+    // already calls defaultTemplateFiles internally, but re-running it here
+    // ensures files deleted outside of a build cycle are recreated.
+    // Ref: defaultTemplateFiles.ts — writes .pd/deno.json and .pd/replEval.ts
+    await defaultTemplateFiles(merged as BuildInput);
+
+    return merged;
   }
   return input;
 }
