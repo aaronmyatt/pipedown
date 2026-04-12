@@ -67,8 +67,91 @@ export type mdToPipeInput =
     & RangeFinderInput
     & Input;
 
+// ── Workspace / Sync Types ──
+// These types support the web-first workflow where `index.json` is the
+// machine-edit source of truth and `pd sync` writes structured changes
+// back to markdown. See WEB_FIRST_WORKFLOW_PLAN.md §4.1 and §7.3.
+
+/**
+ * Tracks whether the structured workspace (index.json) is in sync with
+ * the canonical markdown file on disk.
+ *
+ * - `"clean"` — markdown and index.json are consistent; no unsynced edits.
+ * - `"json_dirty"` — structured workspace has been modified (via web UI or
+ *   Pi patch) but those changes have not yet been written back to markdown
+ *   via `pd sync`.
+ * - `"syncing"` — a sync or build operation is currently in progress.
+ *
+ * Ref: WEB_FIRST_WORKFLOW_PLAN.md §7.3
+ */
+export type SyncState = "clean" | "json_dirty" | "syncing";
+
+/**
+ * Minimal metadata embedded directly inside `index.json` to track the
+ * workspace's sync state and provenance. Keeping this block small avoids
+ * a separate sidecar file while still giving the UI enough information
+ * to answer "is markdown in sync with index.json?"
+ *
+ * Ref: WEB_FIRST_WORKFLOW_PLAN.md §4.1-A
+ */
+export type WorkspaceMetadata = {
+    /** Current sync state between index.json and the source markdown. */
+    syncState: SyncState;
+    /** ISO-8601 timestamp of the last successful `pd build` run. */
+    lastBuiltAt?: string;
+    /** ISO-8601 timestamp of the last successful `pd sync` run. */
+    lastSyncedAt?: string;
+    /**
+     * Hash of meaningful pipe content for change detection.
+     * Reserved for future use — left undefined in the first cut.
+     */
+    contentHash?: string;
+    /**
+     * Which operation last modified this index.json, enabling the UI
+     * to show provenance (e.g., "last changed by Pi patch").
+     */
+    lastModifiedBy?: "build" | "sync" | "web_edit" | "pi_patch";
+};
+
+/**
+ * Machine-readable result envelope returned by `pd sync`. This allows
+ * both CLI consumers and the web UI to inspect sync outcomes without
+ * parsing console output.
+ *
+ * Ref: WEB_FIRST_WORKFLOW_PLAN.md §7.5
+ */
+export type SyncResult = {
+    /** Whether the sync (and optional rebuild) completed successfully. */
+    success: boolean;
+    /** The pipe name that was synced. */
+    pipeName: string;
+    /** Path to the source markdown file (if known). */
+    mdPath?: string;
+    /** Path to the index.json that was read. */
+    indexJsonPath: string;
+    /** Resulting sync state after the operation. */
+    syncState: SyncState;
+    /** Generated markdown content (included in dry-run mode). */
+    markdown?: string;
+    /** Error message if the sync failed. */
+    error?: string;
+    /** Whether a `pd build` was triggered after writing markdown. */
+    rebuilt?: boolean;
+};
+
 /** A single executable step extracted from a markdown code block. */
 export type Step = {
+    /**
+     * Stable, unique identifier for this step, persisted in index.json
+     * but NOT written to markdown. Used by the web UI, sessions, and
+     * Pi patch proposals to reference steps durably across rebuilds.
+     *
+     * Generated via `crypto.randomUUID()` on first build; preserved
+     * across subsequent builds by matching steps on funcName.
+     *
+     * Ref: WEB_FIRST_WORKFLOW_PLAN.md §4.1-C
+     */
+    stepId?: string;
     /** The raw code content of the ts/js code block. */
     code: string;
     /** Token range [startIndex, endIndex] in the parsed token array. */
@@ -190,6 +273,14 @@ export type Pipe = {
     originalConfig?: string;
     /** The original markdown source text, for lossless round-trip reconstruction. */
     rawSource?: string;
+    /**
+     * Minimal workspace metadata for sync-state tracking. Persisted
+     * inside index.json so the web UI can determine at a glance whether
+     * the structured workspace is clean, dirty, or syncing.
+     *
+     * Ref: WEB_FIRST_WORKFLOW_PLAN.md §4.1-A
+     */
+    workspace?: WorkspaceMetadata;
 };
 
 /** Input/output for the rangeFinder token classifier. */
@@ -230,6 +321,11 @@ export interface CliInput extends Input {
     output: Input;
     debug: boolean | string;
     match?: string;
+    /**
+     * Machine-readable result from `pd sync`, populated by syncCommand
+     * so callers (web UI, tests) can inspect the outcome programmatically.
+     */
+    syncResult?: SyncResult;
 }
 
 /** Input for the build pipeline. */
