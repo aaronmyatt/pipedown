@@ -111,7 +111,18 @@ window.PD = {
     extractMode: false,            // true when step selection UI is active
     extractSelected: {},           // { [stepIndex]: true } — selected steps
     extractName: "",               // user-entered name for the new sub-pipe
-    extracting: false              // true while the POST /api/extract is in flight
+    extracting: false,             // true while the POST /api/extract is in flight
+
+    // ── Session state ──
+    // Tracks the current run session, recent sessions for the selected pipe,
+    // and loading state for session API calls. Sessions enable incremental
+    // execution, per-step status tracking, and rerun-from-here workflows.
+    // Ref: sessionManager.ts — RunSession type and CRUD logic
+    // Ref: buildandserve.ts — POST /api/sessions, GET /api/sessions/:project/:pipe
+    activeSession: null,        // current RunSession object (or null)
+    sessionLoading: false,      // true while session API calls in flight
+    latestSessions: [],         // recent sessions for the currently selected pipe
+    _sessionExpandedStep: null  // which step is expanded in the drawer session panel (index or null)
   },
   actions: {},
   utils: {},
@@ -369,6 +380,13 @@ PD.actions.selectPipe = function(pipe) {
   PD.state.drawerInputBuffer = "{}";
   PD.state.drawerInputTarget = null;
 
+  // Reset session state — stale session data from the previous pipe
+  // must not linger when switching to a different pipe.
+  PD.state.activeSession = null;
+  PD.state.latestSessions = [];
+  PD.state.sessionLoading = false;
+  PD.state._sessionExpandedStep = null;
+
   // Close the drawer when switching pipes so stale output doesn't linger.
   PD.state.drawerOpen = false;
   PD.state.drawerOutput = "";
@@ -395,6 +413,11 @@ PD.actions.selectPipe = function(pipe) {
     PD.state.pipeData = results[1];
     PD.state.markdownHtml = PD.utils.renderMarkdownWithAnnotations(results[0], results[1]);
     PD.state.markdownLoading = false;
+
+    // After pipe data loads, fetch the most recent sessions for this pipe.
+    // This populates session badges and the session panel in the drawer.
+    // Ref: PD.actions.loadLatestSession — fetches from GET /api/sessions/:project/:pipe
+    PD.actions.loadLatestSession();
   }).catch(function(err) {
     PD.state.markdownHtml = null;
     PD.state.markdownLoading = false;
@@ -600,6 +623,12 @@ PD.actions.refreshPipe = function() {
     PD.state.pipeData = results[1];
     PD.state.markdownHtml = PD.utils.renderMarkdownWithAnnotations(results[0], results[1]);
     PD.state.markdownLoading = false;
+
+    // Also refresh the active session if one is open, so per-step status
+    // badges stay current after file changes trigger a rebuild.
+    if (PD.state.activeSession) {
+      PD.actions.refreshActiveSession();
+    }
   }).catch(function() {
     // On error, fall through — the existing content stays visible.
   }).then(function() {
@@ -1345,4 +1374,371 @@ PD.actions.performExtract = function() {
     // the "Projects" section shows it.
     PD.actions.loadAllPipes();
   });
+};
+
+// ═══════════════════════════════════════════════════════════════════════
+// ── Session Actions ──
+// These actions interact with the session-based execution API to enable
+// incremental runs, per-step status tracking, rerun-from-here, and
+// continue-from-last-step workflows.
+//
+// Session API endpoints (all in buildandserve.ts):
+//   POST /api/sessions              — create + optionally execute
+//   GET  /api/sessions/:project/:pipe — list recent sessions
+//   GET  /api/sessions/:project/:pipe/:sessionId — get full details
+//   POST /api/sessions/:project/:pipe/:sessionId/continue — resume
+//
+// Ref: sessionManager.ts — RunSession type, createSession, executeSession
+// Ref: pipedown.d.ts — RunSession, SessionStepRecord, SessionMode, StepStatus
+// ═══════════════════════════════════════════════════════════════════════
+
+/**
+ * loadLatestSession — Fetches recent sessions for the currently selected pipe
+ * and sets the most recent one as the active session.
+ *
+ * Called after selectPipe() loads pipe data, and whenever we need to refresh
+ * the session list (e.g. after a new session is created).
+ *
+ * The GET /api/sessions/:project/:pipe endpoint returns session summaries
+ * with snapshot data stripped to "[present]" for compactness. To get full
+ * step snapshot data for the active session, we follow up with a full
+ * session fetch via refreshActiveSession().
+ *
+ * @return {void}
+ * Ref: GET /api/sessions/:project/:pipe in buildandserve.ts
+ */
+PD.actions.loadLatestSession = function() {
+  if (!PD.state.selectedPipe || !PD.state.pipeData) return;
+  PD.state.sessionLoading = true;
+
+  // Use pipeData.name (the H1 heading) for the pipe name, matching how
+  // the session manager uses pipeName from the Pipe object (which is
+  // derived from fileName/cleanName/name). However, sessions use the
+  // pipe's fileName (the .pd directory name), not the display name.
+  // Ref: sessionManager.ts createSession — uses pipeData.fileName || cleanName || name
+  var pipeName = PD.state.selectedPipe.pipeName;
+
+  var url = "/api/sessions/" +
+    encodeURIComponent(PD.state.selectedPipe.projectName) +
+    "/" + encodeURIComponent(pipeName) + "?limit=5";
+
+  m.request({ method: "GET", url: url }).then(function(sessions) {
+    PD.state.latestSessions = sessions || [];
+    PD.state.sessionLoading = false;
+
+    // Set the most recent session as active (if any exist).
+    // Then fetch full details (with snapshot data) for the active session.
+    if (sessions && sessions.length > 0) {
+      PD.state.activeSession = sessions[0];
+      PD.actions.refreshActiveSession();
+    } else {
+      PD.state.activeSession = null;
+    }
+  }).catch(function() {
+    // Session fetch is non-critical — the page works without session data.
+    // Fail silently so the user isn't blocked from using the pipe.
+    PD.state.latestSessions = [];
+    PD.state.activeSession = null;
+    PD.state.sessionLoading = false;
+  });
+};
+
+/**
+ * refreshActiveSession — Re-fetches the full active session object from the
+ * server. This gets complete step snapshot data (before/after/delta) that
+ * the list endpoint strips for compactness.
+ *
+ * Called after SSE events signal step completion, after creating a new
+ * session, and periodically when needed.
+ *
+ * @return {void}
+ * Ref: GET /api/sessions/:project/:pipe/:sessionId in buildandserve.ts
+ */
+PD.actions.refreshActiveSession = function() {
+  if (!PD.state.activeSession || !PD.state.selectedPipe) return;
+
+  var session = PD.state.activeSession;
+  var pipeName = PD.state.selectedPipe.pipeName;
+
+  var url = "/api/sessions/" +
+    encodeURIComponent(session.projectName) +
+    "/" + encodeURIComponent(pipeName) +
+    "/" + encodeURIComponent(session.sessionId);
+
+  m.request({ method: "GET", url: url }).then(function(fullSession) {
+    if (fullSession) {
+      PD.state.activeSession = fullSession;
+    }
+  }).catch(function() {
+    // Best-effort refresh — if it fails, stale data remains visible.
+  });
+};
+
+/**
+ * createAndRunSession — Creates a new session via POST /api/sessions and
+ * executes it in the specified mode. Replaces the pipe run with a
+ * session-backed version that provides per-step tracking.
+ *
+ * The response from POST /api/sessions (when mode is provided) is the
+ * fully executed session object with step statuses and snapshots.
+ *
+ * @param {string} mode — SessionMode: "full", "to_step", "from_step", "single_step"
+ * @param {object} [extraOpts] — Additional body fields (targetStepIndex, startStepIndex, input)
+ * @return {void}
+ * Ref: POST /api/sessions in buildandserve.ts
+ */
+PD.actions.createAndRunSession = function(mode, extraOpts) {
+  if (!PD.state.selectedPipe) return;
+  PD.state.sessionLoading = true;
+
+  var body = {
+    project: PD.state.selectedPipe.projectName,
+    pipe: PD.state.selectedPipe.pipeName,
+    mode: mode || "full"
+  };
+
+  // Merge any extra options (targetStepIndex, startStepIndex, input)
+  if (extraOpts) {
+    Object.keys(extraOpts).forEach(function(k) {
+      body[k] = extraOpts[k];
+    });
+  }
+
+  // Open the drawer to show progress, similar to how postAction works.
+  PD.actions.startOp("session", "Session: " + (mode || "full"));
+
+  fetch("/api/sessions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  }).then(function(res) {
+    if (!res.ok) {
+      return res.text().then(function(bodyText) {
+        var msg = PD.utils.parseErrorBody(bodyText);
+        PD.state.drawerError = {
+          status: res.status,
+          statusText: res.statusText,
+          message: msg
+        };
+        PD.state.drawerStatus = "error";
+        PD.state.drawerOutput = msg;
+        PD.state.sessionLoading = false;
+        m.redraw.sync();
+      });
+    }
+    return res.json().then(function(session) {
+      // Store the returned session as the active session.
+      PD.state.activeSession = session;
+      PD.state.sessionLoading = false;
+
+      // Update drawer with session results for display.
+      PD.state.drawerStatus = session.status === "failed" ? "error" : "done";
+      PD.state.drawerLabel = "Session: " + session.mode + " (" + session.status + ")";
+
+      // Show the session output in the drawer. If the session completed
+      // successfully, we can display the final step's afterSnapshot as
+      // the pipeline output.
+      var lastDoneStep = null;
+      for (var i = session.steps.length - 1; i >= 0; i--) {
+        if (session.steps[i].status === "done" && session.steps[i].afterSnapshotRef) {
+          lastDoneStep = session.steps[i];
+          break;
+        }
+      }
+
+      if (lastDoneStep && lastDoneStep.afterSnapshotRef) {
+        try {
+          var output = JSON.parse(lastDoneStep.afterSnapshotRef);
+          PD.state.drawerParsedOutput = output;
+          PD.state.drawerOutputType = "json";
+          PD.state.drawerOutput = JSON.stringify(output, null, 2);
+        } catch (_) {
+          PD.state.drawerOutput = JSON.stringify(session, null, 2);
+        }
+      } else {
+        PD.state.drawerOutput = JSON.stringify(session, null, 2);
+      }
+
+      // Also refresh the session list so it includes the new session.
+      PD.actions.loadLatestSession();
+      m.redraw();
+    });
+  }).catch(function(err) {
+    PD.state.drawerError = {
+      status: 0,
+      statusText: "Network Error",
+      message: err.message
+    };
+    PD.state.drawerStatus = "error";
+    PD.state.drawerOutput = "Error: " + err.message;
+    PD.state.sessionLoading = false;
+    m.redraw();
+  });
+};
+
+/**
+ * runToStepSession — Creates a session that runs from step 0 to the target step.
+ * Session-backed replacement for runToStep().
+ *
+ * @param {number} stepIndex — The step index to run up to (inclusive)
+ * @return {void}
+ */
+PD.actions.runToStepSession = function(stepIndex) {
+  PD.actions.createAndRunSession("to_step", { targetStepIndex: stepIndex });
+};
+
+/**
+ * runNextStep — Runs just the next unexecuted step from the active session.
+ * Determines the first pending step and creates a single_step session for it.
+ *
+ * If there's no active session, falls back to creating a new full session
+ * targeting step 0.
+ *
+ * @return {void}
+ */
+PD.actions.runNextStep = function() {
+  var session = PD.state.activeSession;
+  var nextIndex = 0;
+
+  if (session && session.steps) {
+    // Find the first step that is NOT "done" — this is the next to execute.
+    for (var i = 0; i < session.steps.length; i++) {
+      if (session.steps[i].status !== "done") {
+        nextIndex = i;
+        break;
+      }
+      // If all steps are done, nextIndex stays at the last one
+      // (edge case: re-running the last step).
+      if (i === session.steps.length - 1) {
+        nextIndex = i;
+      }
+    }
+  }
+
+  PD.actions.createAndRunSession("single_step", { targetStepIndex: nextIndex });
+};
+
+/**
+ * rerunFromStep — Creates a session that re-executes from a specific step
+ * to the end of the pipe. Uses "from_step" mode.
+ *
+ * @param {number} stepIndex — The step index to start re-execution from
+ * @return {void}
+ */
+PD.actions.rerunFromStep = function(stepIndex) {
+  PD.actions.createAndRunSession("from_step", { startStepIndex: stepIndex });
+};
+
+/**
+ * continueSession — Continues the active session from the last completed step.
+ * Uses the POST /api/sessions/:project/:pipe/:sessionId/continue endpoint.
+ *
+ * This is useful after a to_step partial run or after a failed step is fixed.
+ * The continue endpoint resets the session mode to "continue" and executes
+ * from the first non-done step.
+ *
+ * @return {void}
+ * Ref: POST /api/sessions/:project/:pipe/:sessionId/continue in buildandserve.ts
+ */
+PD.actions.continueSession = function() {
+  if (!PD.state.activeSession || !PD.state.selectedPipe) return;
+  PD.state.sessionLoading = true;
+
+  var session = PD.state.activeSession;
+  var pipeName = PD.state.selectedPipe.pipeName;
+
+  var url = "/api/sessions/" +
+    encodeURIComponent(session.projectName) +
+    "/" + encodeURIComponent(pipeName) +
+    "/" + encodeURIComponent(session.sessionId) + "/continue";
+
+  // Open the drawer to show progress.
+  PD.actions.startOp("session", "Continuing session...");
+
+  fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({})
+  }).then(function(res) {
+    if (!res.ok) {
+      return res.text().then(function(bodyText) {
+        var msg = PD.utils.parseErrorBody(bodyText);
+        PD.state.drawerError = {
+          status: res.status,
+          statusText: res.statusText,
+          message: msg
+        };
+        PD.state.drawerStatus = "error";
+        PD.state.drawerOutput = msg;
+        PD.state.sessionLoading = false;
+        m.redraw.sync();
+      });
+    }
+    return res.json().then(function(continued) {
+      PD.state.activeSession = continued;
+      PD.state.sessionLoading = false;
+
+      PD.state.drawerStatus = continued.status === "failed" ? "error" : "done";
+      PD.state.drawerLabel = "Session: continue (" + continued.status + ")";
+
+      // Show the final output from the continued session.
+      var lastDoneStep = null;
+      for (var i = continued.steps.length - 1; i >= 0; i--) {
+        if (continued.steps[i].status === "done" && continued.steps[i].afterSnapshotRef) {
+          lastDoneStep = continued.steps[i];
+          break;
+        }
+      }
+
+      if (lastDoneStep && lastDoneStep.afterSnapshotRef) {
+        try {
+          var output = JSON.parse(lastDoneStep.afterSnapshotRef);
+          PD.state.drawerParsedOutput = output;
+          PD.state.drawerOutputType = "json";
+          PD.state.drawerOutput = JSON.stringify(output, null, 2);
+        } catch (_) {
+          PD.state.drawerOutput = JSON.stringify(continued, null, 2);
+        }
+      } else {
+        PD.state.drawerOutput = JSON.stringify(continued, null, 2);
+      }
+
+      PD.actions.loadLatestSession();
+      m.redraw();
+    });
+  }).catch(function(err) {
+    PD.state.drawerError = {
+      status: 0,
+      statusText: "Network Error",
+      message: err.message
+    };
+    PD.state.drawerStatus = "error";
+    PD.state.drawerOutput = "Error: " + err.message;
+    PD.state.sessionLoading = false;
+    m.redraw();
+  });
+};
+
+// ── Session utility: step status symbol ──
+// Returns a short Unicode character representing a step's execution status.
+// Used by MarkdownRenderer for step badges and RunDrawer for the mini status bar.
+// Ref: pipedown.d.ts — StepStatus type
+PD.utils.stepStatusSymbol = function(status) {
+  switch (status) {
+    case "pending":  return "\u25CB";   // ○ gray circle
+    case "running":  return "\u25CC";   // ◌ dotted circle (spinner)
+    case "done":     return "\u2713";   // ✓ check mark
+    case "failed":   return "\u2717";   // ✗ ballot X
+    case "skipped":  return "\u2014";   // — em dash
+    case "stale":    return "\u26A0";   // ⚠ warning
+    case "reused":   return "\u21BB";   // ↻ clockwise arrow
+    default:         return "\u25CB";   // ○ default to pending
+  }
+};
+
+// ── Session utility: step status CSS class ──
+// Returns a CSS class name for styling status badges.
+// Ref: styles.css — .step-status-badge--pending, --running, --done, etc.
+PD.utils.stepStatusClass = function(status) {
+  return "step-status-badge--" + (status || "pending");
 };

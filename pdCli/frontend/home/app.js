@@ -32,6 +32,32 @@ eventSource.onmessage = function(event) {
     // Not JSON — handle as legacy plain-text event below.
   }
 
+  // ── Session-level SSE events ──
+  // These events are broadcast by the session execution engine in
+  // buildandserve.ts after each step completes or the session finishes.
+  // We use them to refresh the active session's step statuses in real-time
+  // so the UI badges update without manual polling.
+  //
+  // Event types:
+  //   session_step_updated — a single step changed status (done/failed)
+  //   session_updated      — the overall session status changed
+  //
+  // Ref: buildandserve.ts — broadcastSSE() calls in POST /api/sessions handler
+  // Ref: state.js — PD.actions.refreshActiveSession
+  if (parsed?.type === "session_step_updated" || parsed?.type === "session_updated") {
+    // Only refresh if the event is for our currently active session.
+    // This avoids unnecessary fetches when other pipes' sessions complete.
+    if (PD.state.activeSession &&
+        PD.state.activeSession.sessionId === parsed.sessionId) {
+      PD.actions.refreshActiveSession();
+    }
+    // Don't return — fall through so pipe_executed handling can also fire
+    // if the server sends both event types.
+    if (parsed.type === "session_step_updated" || parsed.type === "session_updated") {
+      return;
+    }
+  }
+
   if (parsed?.type === "pipe_executed") {
     // ── Auto-focus the executed pipe ──
     // Refresh the pipe list first (the executed pipe's mtime will have

@@ -299,7 +299,176 @@ PD.utils.drawerInputEditorContent = function() {
 // Mithril vnodes. Each tree instance gets a unique rootPath so expand/collapse
 // state is isolated.
 // Ref: pdCli/frontend/shared/jsonTree.js
+// ── Session Summary Panel ──
+// Renders a compact session overview at the top of the drawer body when an
+// active session exists. Shows session metadata, a clickable mini status bar
+// for each step, and expandable per-step before/after/delta details.
+//
+// This appears ABOVE the normal drawer output (streaming text, jsonTree, etc.)
+// so the user gets session context alongside the raw operation output.
+//
+// Ref: pipedown.d.ts — RunSession, SessionStepRecord, StepStatus
+// Ref: PD.utils.stepStatusSymbol, PD.utils.stepStatusClass in state.js
+PD.utils.sessionSummaryPanel = function() {
+  var session = PD.state.activeSession;
+  if (!session) return null;
+
+  var sections = [];
+
+  // ── Session metadata ──
+  // Show truncated session ID, mode, and overall status.
+  var shortId = session.sessionId
+    ? session.sessionId.substring(0, 8) + "\u2026"
+    : "unknown";
+
+  // Determine status CSS modifier for color-coding.
+  var statusColor = "var(--text-2)";
+  if (session.status === "completed") statusColor = "var(--green-6)";
+  if (session.status === "failed") statusColor = "var(--red-6)";
+  if (session.status === "running") statusColor = "var(--yellow-6)";
+
+  sections.push(
+    m("div.session-summary-header", {
+      style: "display: flex; align-items: center; gap: var(--size-2); font-size: var(--font-size-0); color: var(--text-2); margin-block-end: var(--size-2);"
+    }, [
+      m("span", { title: session.sessionId }, ["Session: ", m("code", shortId)]),
+      m("span", " \u00B7 "),
+      m("span", "Mode: " + (session.mode || "unknown")),
+      m("span", " \u00B7 "),
+      m("span", { style: "color: " + statusColor + "; font-weight: var(--font-weight-6);" }, session.status || "unknown"),
+      // Continue button — only show when session is completed or failed,
+      // meaning we can resume from the last completed step.
+      (session.status === "completed" || session.status === "failed")
+        ? m("button.tb-btn.session-btn", {
+            onclick: PD.actions.continueSession,
+            style: "margin-inline-start: auto; font-size: var(--font-size-00);",
+            title: "Continue from last completed step"
+          }, "\u25B6 Continue")
+        : null
+    ])
+  );
+
+  // ── Per-step mini status bar ──
+  // A row of small colored squares, one per step, showing each step's status.
+  // Clicking a square expands that step's before/after/delta details below.
+  if (session.steps && session.steps.length > 0) {
+    sections.push(
+      m("div.session-step-bar", {
+        style: "display: flex; gap: 2px; margin-block-end: var(--size-2); flex-wrap: wrap;"
+      }, session.steps.map(function(step, i) {
+        var symbol = PD.utils.stepStatusSymbol(step.status);
+        var cssClass = "session-step-dot " + PD.utils.stepStatusClass(step.status);
+
+        // Determine step name from pipeData if available.
+        var stepName = "Step " + i;
+        if (PD.state.pipeData && PD.state.pipeData.steps && PD.state.pipeData.steps[i]) {
+          stepName = PD.state.pipeData.steps[i].name || stepName;
+        }
+
+        return m("button", {
+          key: "step-" + i,
+          class: cssClass,
+          title: stepName + " (" + step.status + ")",
+          onclick: function(e) {
+            e.stopPropagation();
+            // Toggle expanded step detail. We use a state property to track
+            // which step is expanded in the session panel.
+            if (PD.state._sessionExpandedStep === i) {
+              PD.state._sessionExpandedStep = null;
+            } else {
+              PD.state._sessionExpandedStep = i;
+            }
+            m.redraw();
+          },
+          style: "cursor: pointer; padding: 2px 6px; border: 1px solid var(--surface-3); border-radius: var(--radius-1); font-size: var(--font-size-00); line-height: 1; background: var(--surface-2);"
+        }, symbol);
+      }))
+    );
+
+    // ── Expanded step detail ──
+    // When a step dot is clicked, show its before/after/delta in a
+    // collapsible section. Snapshot data is stored as JSON strings in
+    // the session step records (afterSnapshotRef, beforeSnapshotRef, deltaRef).
+    var expandedIdx = PD.state._sessionExpandedStep;
+    if (expandedIdx != null && session.steps[expandedIdx]) {
+      var expandedStep = session.steps[expandedIdx];
+
+      // Determine step name for the header.
+      var expandedStepName = "Step " + expandedIdx;
+      if (PD.state.pipeData && PD.state.pipeData.steps && PD.state.pipeData.steps[expandedIdx]) {
+        expandedStepName = PD.state.pipeData.steps[expandedIdx].name || expandedStepName;
+      }
+
+      var stepDetail = [];
+      stepDetail.push(m("div", {
+        style: "font-weight: var(--font-weight-6); font-size: var(--font-size-0); margin-block-end: var(--size-1);"
+      }, expandedStepName + " (" + expandedStep.status + ")"));
+
+      // Duration info
+      if (expandedStep.durationMs != null) {
+        stepDetail.push(m("div", {
+          style: "font-size: var(--font-size-00); color: var(--text-2); margin-block-end: var(--size-1);"
+        }, expandedStep.durationMs.toFixed(1) + "ms"));
+      }
+
+      // Error info
+      if (expandedStep.errorRef) {
+        stepDetail.push(m("div", {
+          style: "color: var(--red-6); font-size: var(--font-size-0); margin-block-end: var(--size-1);"
+        }, "Error: " + expandedStep.errorRef));
+      }
+
+      // Before snapshot — parse from JSON string ref
+      if (expandedStep.beforeSnapshotRef && expandedStep.beforeSnapshotRef !== "[present]") {
+        try {
+          var before = JSON.parse(expandedStep.beforeSnapshotRef);
+          stepDetail.push(m("div", { style: "margin-block-end: var(--size-1);" }, [
+            m("strong", { style: "font-size: var(--font-size-00);" }, "Before:"),
+            pd.jsonTree(before, "session-step-" + expandedIdx + "-before")
+          ]));
+        } catch (_) { /* unparseable snapshot */ }
+      }
+
+      // After snapshot
+      if (expandedStep.afterSnapshotRef && expandedStep.afterSnapshotRef !== "[present]") {
+        try {
+          var after = JSON.parse(expandedStep.afterSnapshotRef);
+          stepDetail.push(m("div", { style: "margin-block-end: var(--size-1);" }, [
+            m("strong", { style: "font-size: var(--font-size-00);" }, "After:"),
+            pd.jsonTree(after, "session-step-" + expandedIdx + "-after")
+          ]));
+        } catch (_) { /* unparseable snapshot */ }
+      }
+
+      // Delta
+      if (expandedStep.deltaRef && expandedStep.deltaRef !== "[present]") {
+        try {
+          var delta = JSON.parse(expandedStep.deltaRef);
+          stepDetail.push(m("div", { style: "margin-block-end: var(--size-1);" }, [
+            m("strong", { style: "font-size: var(--font-size-00);" }, "Delta:"),
+            pd.jsonTree(delta, "session-step-" + expandedIdx + "-delta")
+          ]));
+        } catch (_) { /* unparseable delta */ }
+      }
+
+      sections.push(m("div.session-step-detail", {
+        style: "background: var(--surface-1); border: 1px solid var(--surface-3); border-radius: var(--radius-2); padding: var(--size-2); margin-block-end: var(--size-2);"
+      }, stepDetail));
+    }
+  }
+
+  // Wrap the entire session panel in a bordered container.
+  return m("div.session-summary-panel", {
+    style: "border: 1px solid var(--surface-3); border-radius: var(--radius-2); padding: var(--size-2); margin-block-end: var(--size-3); background: var(--surface-1);"
+  }, sections);
+};
+
 PD.utils.drawerBodyContent = function() {
+  // ── Session summary (always rendered first when present) ──
+  // This appears above the normal output content (streaming text, jsonTree, etc.)
+  // to provide session context alongside raw operation output.
+  var sessionPanel = PD.utils.sessionSummaryPanel();
+
   // While running, show live streaming text. ANSI escape codes (bold, colour)
   // are converted to styled HTML via pd.ansiToHtml() so Deno error output
   // renders with proper formatting instead of raw escape sequences.
@@ -314,8 +483,8 @@ PD.utils.drawerBodyContent = function() {
   // Ref: https://mithril.js.org/trust.html#avoid-trusting-html
   if (PD.state.drawerStatus === "running") {
     var runningText = PD.state.drawerOutput;
-    if (!runningText) return m("div", "Running...");
-    return m("div", m.trust(pd.ansiToHtml(runningText)));
+    if (!runningText) return [sessionPanel, m("div", "Running...")];
+    return [sessionPanel, m("div", m.trust(pd.ansiToHtml(runningText)))];
   }
 
   // ── Error display ──
@@ -360,7 +529,7 @@ PD.utils.drawerBodyContent = function() {
       ]));
     }
 
-    return m("div.drawer-error-panel", sections);
+    return [sessionPanel, m("div.drawer-error-panel", sections)];
   }
 
   // ── Trace data (richest view) ──
@@ -397,7 +566,11 @@ PD.utils.drawerBodyContent = function() {
       ]));
     }
 
-    if (sections.length > 0) return sections;
+    if (sections.length > 0) {
+      // Prepend session panel if present.
+      if (sessionPanel) sections.unshift(sessionPanel);
+      return sections;
+    }
   }
 
   // ── Parsed stdout output ──
@@ -405,7 +578,7 @@ PD.utils.drawerBodyContent = function() {
   // render the parsed object as a jsonTree.
   var parsed = PD.state.drawerParsedOutput;
   if (parsed != null && typeof parsed === "object") {
-    return pd.jsonTree(parsed, "drawer-output");
+    return [sessionPanel, pd.jsonTree(parsed, "drawer-output")];
   }
 
   // ── Raw text fallback ──
@@ -414,6 +587,6 @@ PD.utils.drawerBodyContent = function() {
   // (bold red "error:" prefix, underline markers, etc.) render legibly.
   // Wrapped in a div for stable vdom diffing (same reason as the running state).
   var rawText = PD.state.drawerOutput;
-  if (!rawText) return m("div");
-  return m("div", m.trust(pd.ansiToHtml(rawText)));
+  if (!rawText) return [sessionPanel, m("div")];
+  return [sessionPanel, m("div", m.trust(pd.ansiToHtml(rawText)))];
 };

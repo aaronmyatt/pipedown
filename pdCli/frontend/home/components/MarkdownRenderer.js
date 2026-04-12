@@ -114,6 +114,36 @@ function injectStepToolbars(container) {
       var step = PD.state.pipeData.steps[idx];
       if (!step) return;
 
+      // ── Session status badge injection ──
+      // When an active session exists, show a small status indicator
+      // (colored symbol) before the step heading text. This gives
+      // at-a-glance visibility into which steps have completed,
+      // are running, failed, etc.
+      // Ref: PD.utils.stepStatusSymbol, PD.utils.stepStatusClass
+      var existingBadge = heading.querySelector(".step-status-badge");
+      if (PD.state.activeSession && PD.state.activeSession.steps && PD.state.activeSession.steps[idx]) {
+        var stepStatus = PD.state.activeSession.steps[idx].status;
+        var symbol = PD.utils.stepStatusSymbol(stepStatus);
+        var cssClass = "step-status-badge " + PD.utils.stepStatusClass(stepStatus);
+
+        if (existingBadge) {
+          // Update existing badge in place.
+          existingBadge.className = cssClass;
+          existingBadge.textContent = symbol;
+          existingBadge.title = stepStatus;
+        } else {
+          // Create and insert a new badge before the heading text.
+          var badge = document.createElement("span");
+          badge.className = cssClass;
+          badge.textContent = symbol;
+          badge.title = stepStatus;
+          heading.insertBefore(badge, heading.firstChild);
+        }
+      } else if (existingBadge) {
+        // No active session — remove any stale badge.
+        existingBadge.remove();
+      }
+
       // ── Extract mode: step-section highlighting ──
       // When extract mode is active, add/remove the `extract-selected` class
       // on the step's .step-section container for visual highlighting.
@@ -201,6 +231,34 @@ function injectStepToolbars(container) {
             onclick: function(e) { e.stopPropagation(); }
           }, PD.utils.renderInputDropdownItems(idx)) : null
         ]),
+        // ── Session-aware step actions ──
+        // "Run next" appears only on the first pending step in the active session.
+        // "Rerun from here" is available on any step to re-execute from that point.
+        // These create new sessions via the session API rather than using the
+        // legacy /api/run-step endpoint.
+        // Ref: PD.actions.runNextStep, PD.actions.rerunFromStep in state.js
+        (function() {
+          // Determine if this is the first pending step in the active session.
+          var isNextPending = false;
+          if (PD.state.activeSession && PD.state.activeSession.steps) {
+            for (var s = 0; s < PD.state.activeSession.steps.length; s++) {
+              if (PD.state.activeSession.steps[s].status !== "done") {
+                isNextPending = (s === idx);
+                break;
+              }
+            }
+          }
+          return isNextPending
+            ? m("button.tb-btn.session-btn", {
+                onclick: function() { PD.actions.runNextStep(); },
+                title: "Run just this step (session-backed)"
+              }, "\u25B6 Next")
+            : null;
+        })(),
+        m("button.tb-btn.session-btn", {
+          onclick: function() { PD.actions.rerunFromStep(idx); },
+          title: "Re-execute from this step to the end (creates new session)"
+        }, "\u21BB Rerun"),
         m("button.tb-btn", {
           onclick: function() { PD.actions.toggleDSL(idx); m.redraw(); },
           style: PD.utils.buildDSLLines(step.config).length === 0 ? "opacity: 0.4; pointer-events: none;" : ""
