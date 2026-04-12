@@ -123,6 +123,21 @@ PD.components.PipeToolbar = {
           },
           style: PD.state.editingPipeField === "schema" ? "background: var(--blue-3); color: var(--blue-9);" : ""
         }, "Edit Schema"),
+        // ── Ask Pi button (pipe-scoped) ──
+        // Opens a prompt dialog for the user to describe what Pi should
+        // improve across the entire pipeline. Generates a pipe-scoped
+        // proposal that can modify descriptions, schema, any step, or
+        // insert/delete steps.
+        // Ref: PD.actions.askPiForPipe in state.js
+        m("button.tb-btn", {
+          onclick: function() {
+            var prompt = window.prompt("What should Pi improve in this pipeline?");
+            if (prompt) {
+              PD.actions.askPiForPipe(prompt);
+            }
+          },
+          style: "color: var(--blue-7);"
+        }, "\uD83E\uDD16 Ask Pi"),
         // ── Split Run button ──
         // Left half: runs the pipe with no custom input (default behaviour).
         // Right half (▾): opens the input history dropdown.

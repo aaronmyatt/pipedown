@@ -275,6 +275,21 @@ function injectStepToolbars(container) {
           onclick: function() { PD.actions.rerunFromStep(idx); },
           title: "Re-execute from this step to the end (creates new session)"
         }, "\u21BB Rerun"),
+        // ── Ask Pi button ──
+        // Opens a prompt dialog for the user to describe what Pi should
+        // improve, then generates a step-scoped proposal.
+        // Uses window.prompt() for the first cut — a dedicated inline
+        // input would be a future refinement.
+        // Ref: PD.actions.askPiForStep in state.js
+        m("button.tb-btn", {
+          onclick: function() {
+            var prompt = window.prompt("What should Pi improve in this step?");
+            if (prompt) {
+              PD.actions.askPiForStep(idx, prompt);
+            }
+          },
+          style: "color: var(--blue-7);"
+        }, "\uD83E\uDD16 Ask Pi"),
         m("button.tb-btn", {
           onclick: function() { PD.actions.toggleDSL(idx); m.redraw(); },
           style: PD.utils.buildDSLLines(step.config).length === 0 ? "opacity: 0.4; pointer-events: none;" : ""

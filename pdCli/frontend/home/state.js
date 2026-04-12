@@ -121,6 +121,17 @@ window.PD = {
     // Ref: pipedown.d.ts — SyncState type
     syncState: "clean",        // "clean" | "json_dirty" | "syncing"
 
+    // ── Pi proposal state ──
+    // Tracks the current Pi-generated patch proposal being reviewed.
+    // Proposals are generated via POST /api/pi/proposals and contain
+    // focused operations that mutate index.json only (never markdown).
+    // The user reviews operations in the drawer, then applies or discards.
+    // Ref: WEB_FIRST_WORKFLOW_PLAN.md §6 — Pi / LLM Integration Plan
+    // Ref: pipedown.d.ts — PatchProposal, PatchOperation
+    activeProposal: null,       // current PatchProposal being reviewed
+    proposalLoading: false,     // true while Pi is generating a proposal
+    proposalError: null,        // error message from proposal generation
+
     // ── Step editing state ──
     // Controls inline structured editing of individual steps. When
     // editingStep is non-null, the step at that index shows form fields
@@ -416,6 +427,12 @@ PD.actions.selectPipe = function(pipe) {
   PD.state.latestSessions = [];
   PD.state.sessionLoading = false;
   PD.state._sessionExpandedStep = null;
+
+  // Reset proposal state — stale proposal from the previous pipe
+  // must not linger when switching.
+  PD.state.activeProposal = null;
+  PD.state.proposalLoading = false;
+  PD.state.proposalError = null;
 
   // Close the drawer when switching pipes so stale output doesn't linger.
   PD.state.drawerOpen = false;
@@ -2039,4 +2056,302 @@ PD.actions.cancelPipeFieldEdit = function() {
   PD.state.editingPipeField = null;
   PD.state.editPipeBuffer = "";
   m.redraw();
+};
+
+// ═══════════════════════════════════════════════════════════════════════
+// ── Phase 3: Pi Proposal Actions ──
+// These actions interact with the Pi proposal API to generate, review,
+// apply, discard, and refine Pi-generated patch proposals.
+//
+// Proposals are focused patches that mutate index.json only (never markdown
+// directly). The user reviews the proposed operations in the drawer, then
+// explicitly applies or discards them.
+//
+// Ref: WEB_FIRST_WORKFLOW_PLAN.md §6 — Pi / LLM Integration Plan
+// Ref: proposalManager.ts — proposal CRUD, prompt assembly
+// Ref: buildandserve.ts — POST /api/pi/proposals, apply, discard, refine
+// ═══════════════════════════════════════════════════════════════════════
+
+/**
+ * askPiForStep — Generate a step-scoped Pi proposal.
+ *
+ * Sends the user's prompt to the Pi proposal API scoped to a specific step.
+ * The LLM returns a structured JSON proposal with operations that the user
+ * can review, apply, or discard.
+ *
+ * On success, stores the proposal in PD.state.activeProposal and opens
+ * the drawer in "proposal" mode for review.
+ *
+ * @param {number} stepIndex — zero-based index of the target step
+ * @param {string} prompt — the user's instruction for Pi
+ * @return {void}
+ *
+ * Ref: POST /api/pi/proposals in buildandserve.ts
+ */
+PD.actions.askPiForStep = function(stepIndex, prompt) {
+  if (!PD.state.selectedPipe || !prompt) return;
+
+  PD.state.proposalLoading = true;
+  PD.state.proposalError = null;
+  PD.state.activeProposal = null;
+  // Open the drawer to show loading state.
+  PD.state.drawerOpen = true;
+  PD.state.drawerMode = "proposal";
+  PD.state.drawerLabel = "Pi: generating proposal...";
+  PD.state.drawerStatus = "running";
+  PD.state.drawerError = null;
+  m.redraw();
+
+  fetch("/api/pi/proposals", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      project: PD.state.selectedPipe.projectName,
+      pipe: PD.state.selectedPipe.pipeName,
+      scopeType: "step",
+      stepIndex: stepIndex,
+      prompt: prompt
+    })
+  }).then(function(res) {
+    if (!res.ok) {
+      return res.text().then(function(bodyText) {
+        var msg = PD.utils.parseErrorBody(bodyText);
+        PD.state.proposalError = msg;
+        PD.state.proposalLoading = false;
+        PD.state.drawerStatus = "error";
+        PD.state.drawerLabel = "Pi: proposal failed";
+        PD.state.drawerError = { status: res.status, statusText: res.statusText, message: msg };
+        m.redraw.sync();
+      });
+    }
+    return res.json().then(function(proposal) {
+      PD.state.activeProposal = proposal;
+      PD.state.proposalLoading = false;
+      PD.state.drawerStatus = "done";
+      PD.state.drawerLabel = "Pi Proposal: " + (proposal.summary || "ready");
+      m.redraw();
+    });
+  }).catch(function(err) {
+    PD.state.proposalError = err.message;
+    PD.state.proposalLoading = false;
+    PD.state.drawerStatus = "error";
+    PD.state.drawerLabel = "Pi: proposal failed";
+    PD.state.drawerError = { status: 0, statusText: "Network Error", message: err.message };
+    m.redraw();
+  });
+};
+
+/**
+ * askPiForPipe — Generate a pipe-scoped Pi proposal.
+ *
+ * Same as askPiForStep but scoped to the entire pipe, allowing Pi to
+ * suggest description changes, schema updates, step reordering, new
+ * steps, or multi-step modifications.
+ *
+ * @param {string} prompt — the user's instruction for Pi
+ * @return {void}
+ */
+PD.actions.askPiForPipe = function(prompt) {
+  if (!PD.state.selectedPipe || !prompt) return;
+
+  PD.state.proposalLoading = true;
+  PD.state.proposalError = null;
+  PD.state.activeProposal = null;
+  PD.state.drawerOpen = true;
+  PD.state.drawerMode = "proposal";
+  PD.state.drawerLabel = "Pi: generating proposal...";
+  PD.state.drawerStatus = "running";
+  PD.state.drawerError = null;
+  m.redraw();
+
+  fetch("/api/pi/proposals", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      project: PD.state.selectedPipe.projectName,
+      pipe: PD.state.selectedPipe.pipeName,
+      scopeType: "pipe",
+      prompt: prompt
+    })
+  }).then(function(res) {
+    if (!res.ok) {
+      return res.text().then(function(bodyText) {
+        var msg = PD.utils.parseErrorBody(bodyText);
+        PD.state.proposalError = msg;
+        PD.state.proposalLoading = false;
+        PD.state.drawerStatus = "error";
+        PD.state.drawerLabel = "Pi: proposal failed";
+        PD.state.drawerError = { status: res.status, statusText: res.statusText, message: msg };
+        m.redraw.sync();
+      });
+    }
+    return res.json().then(function(proposal) {
+      PD.state.activeProposal = proposal;
+      PD.state.proposalLoading = false;
+      PD.state.drawerStatus = "done";
+      PD.state.drawerLabel = "Pi Proposal: " + (proposal.summary || "ready");
+      m.redraw();
+    });
+  }).catch(function(err) {
+    PD.state.proposalError = err.message;
+    PD.state.proposalLoading = false;
+    PD.state.drawerStatus = "error";
+    PD.state.drawerLabel = "Pi: proposal failed";
+    PD.state.drawerError = { status: 0, statusText: "Network Error", message: err.message };
+    m.redraw();
+  });
+};
+
+/**
+ * applyProposal — Apply the active proposal to index.json.
+ *
+ * POSTs to /api/pi/proposals/:proposalId/apply, which applies all
+ * operations from the proposal to the pipe's index.json. On success,
+ * refreshes pipe data and sets syncState to "json_dirty".
+ *
+ * @return {void}
+ * Ref: POST /api/pi/proposals/:id/apply in buildandserve.ts
+ */
+PD.actions.applyProposal = function() {
+  if (!PD.state.activeProposal || !PD.state.selectedPipe) return;
+
+  var proposal = PD.state.activeProposal;
+  var url = "/api/pi/proposals/" + encodeURIComponent(proposal.proposalId) + "/apply";
+
+  PD.state.proposalLoading = true;
+  m.redraw();
+
+  fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      project: PD.state.selectedPipe.projectName,
+      pipe: PD.state.selectedPipe.pipeName
+    })
+  }).then(function(res) {
+    if (!res.ok) {
+      return res.text().then(function(bodyText) {
+        var msg = PD.utils.parseErrorBody(bodyText);
+        PD.state.proposalError = msg;
+        PD.state.proposalLoading = false;
+        PD.state.drawerError = { status: res.status, statusText: res.statusText, message: msg };
+        PD.state.drawerStatus = "error";
+        m.redraw.sync();
+      });
+    }
+    return res.json().then(function() {
+      // Clear proposal state and refresh.
+      PD.state.activeProposal = null;
+      PD.state.proposalLoading = false;
+      PD.state.proposalError = null;
+      PD.state.drawerMode = null;
+      PD.state.drawerStatus = "done";
+      PD.state.drawerLabel = "Proposal applied";
+      PD.state.syncState = "json_dirty";
+      PD.actions.refreshPipe();
+      m.redraw();
+    });
+  }).catch(function(err) {
+    PD.state.proposalError = err.message;
+    PD.state.proposalLoading = false;
+    PD.state.drawerError = { status: 0, statusText: "Network Error", message: err.message };
+    PD.state.drawerStatus = "error";
+    m.redraw();
+  });
+};
+
+/**
+ * discardProposal — Discard the active proposal without applying.
+ *
+ * POSTs to /api/pi/proposals/:proposalId/discard, which sets the
+ * proposal's status to "discarded". Clears the proposal from the UI.
+ *
+ * @return {void}
+ * Ref: POST /api/pi/proposals/:id/discard in buildandserve.ts
+ */
+PD.actions.discardProposal = function() {
+  if (!PD.state.activeProposal || !PD.state.selectedPipe) return;
+
+  var proposal = PD.state.activeProposal;
+  var url = "/api/pi/proposals/" + encodeURIComponent(proposal.proposalId) + "/discard";
+
+  fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      project: PD.state.selectedPipe.projectName,
+      pipe: PD.state.selectedPipe.pipeName
+    })
+  }).then(function(res) {
+    if (!res.ok) throw new Error("Discard failed: " + res.statusText);
+    // Clear proposal state and close drawer.
+    PD.state.activeProposal = null;
+    PD.state.proposalError = null;
+    PD.state.drawerMode = null;
+    PD.state.drawerOpen = false;
+    m.redraw();
+  }).catch(function(err) {
+    PD.state.proposalError = err.message;
+    m.redraw();
+  });
+};
+
+/**
+ * refineProposal — Refine the active proposal with user feedback.
+ *
+ * POSTs to /api/pi/proposals/:proposalId/refine with the user's feedback.
+ * The LLM generates a new proposal that supersedes the current one.
+ * The old proposal is marked "superseded" and the new one becomes active.
+ *
+ * @param {string} feedback — the user's refinement feedback
+ * @return {void}
+ * Ref: POST /api/pi/proposals/:id/refine in buildandserve.ts
+ */
+PD.actions.refineProposal = function(feedback) {
+  if (!PD.state.activeProposal || !PD.state.selectedPipe || !feedback) return;
+
+  var proposal = PD.state.activeProposal;
+  var url = "/api/pi/proposals/" + encodeURIComponent(proposal.proposalId) + "/refine";
+
+  PD.state.proposalLoading = true;
+  PD.state.proposalError = null;
+  PD.state.drawerLabel = "Pi: refining proposal...";
+  PD.state.drawerStatus = "running";
+  m.redraw();
+
+  fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      project: PD.state.selectedPipe.projectName,
+      pipe: PD.state.selectedPipe.pipeName,
+      feedback: feedback
+    })
+  }).then(function(res) {
+    if (!res.ok) {
+      return res.text().then(function(bodyText) {
+        var msg = PD.utils.parseErrorBody(bodyText);
+        PD.state.proposalError = msg;
+        PD.state.proposalLoading = false;
+        PD.state.drawerStatus = "error";
+        PD.state.drawerLabel = "Pi: refinement failed";
+        PD.state.drawerError = { status: res.status, statusText: res.statusText, message: msg };
+        m.redraw.sync();
+      });
+    }
+    return res.json().then(function(newProposal) {
+      PD.state.activeProposal = newProposal;
+      PD.state.proposalLoading = false;
+      PD.state.drawerStatus = "done";
+      PD.state.drawerLabel = "Pi Proposal: " + (newProposal.summary || "refined");
+      m.redraw();
+    });
+  }).catch(function(err) {
+    PD.state.proposalError = err.message;
+    PD.state.proposalLoading = false;
+    PD.state.drawerStatus = "error";
+    PD.state.drawerLabel = "Pi: refinement failed";
+    PD.state.drawerError = { status: 0, statusText: "Network Error", message: err.message };
+    m.redraw();
+  });
 };

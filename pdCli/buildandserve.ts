@@ -47,6 +47,22 @@ import {
   listSessions,
   executeSession,
 } from "./sessionManager.ts";
+// Proposal manager — creates, persists, applies, and discards Pi-generated
+// patch proposals. Proposals mutate index.json only (never markdown directly)
+// and the user explicitly applies or discards them via the web UI.
+// Ref: WEB_FIRST_WORKFLOW_PLAN.md §6 — Pi / LLM Integration Plan
+// Ref: proposalManager.ts for full implementation
+import {
+  createProposal,
+  persistProposal,
+  readProposal as readProposalFromDisk,
+  listProposals as listProposalsFromDisk,
+  applyProposal,
+  discardProposal,
+  buildProposalPrompt,
+  buildRefinementPrompt,
+  parseLLMProposalResponse,
+} from "./proposalManager.ts";
 
 let _controller: ReadableStreamDefaultController<string> | null = null;
 
@@ -1916,6 +1932,316 @@ ${step.code}
 
         return new Response(JSON.stringify(rerun), {
           headers: { "content-type": "application/json" },
+        });
+      } catch (e) {
+        return new Response(
+          JSON.stringify({ error: (e as Error).message }),
+          { status: 500, headers: { "content-type": "application/json" } },
+        );
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // ── Phase 3: Pi Proposal API Endpoints ──
+    // These endpoints implement the Pi proposal workflow: generate proposals
+    // via LLM, review them, apply/discard/refine them. Proposals mutate
+    // index.json only — markdown is updated later via `pd sync`.
+    //
+    // Routes:
+    //   POST /api/pi/proposals              — generate a Pi proposal
+    //   POST /api/pi/proposals/:id/apply     — apply a proposal
+    //   POST /api/pi/proposals/:id/discard   — discard a proposal
+    //   POST /api/pi/proposals/:id/refine    — refine a proposal with feedback
+    //   GET  /api/pi/proposals/:project/:pipe — list proposals for a pipe
+    //
+    // Ref: WEB_FIRST_WORKFLOW_PLAN.md §6 — Pi / LLM Integration Plan
+    // Ref: proposalManager.ts — proposal CRUD, prompt assembly, LLM parsing
+    // ═══════════════════════════════════════════════════════════════════════
+
+    // ── POST /api/pi/proposals — Generate a Pi proposal ──
+    // Body: { project, pipe, scopeType, stepIndex?, prompt }
+    // Builds the project, constructs a proposal prompt, calls the LLM,
+    // parses the response, creates and persists a PatchProposal.
+    // Returns the proposal object with status "ready".
+    if (request.method === "POST" && url.pathname === "/api/pi/proposals") {
+      try {
+        const body = await request.json();
+        const { project: projectName, pipe: pipeName, scopeType, stepIndex, prompt: userPrompt } = body;
+
+        if (!projectName || !pipeName || !userPrompt) {
+          return new Response(
+            JSON.stringify({ error: "Missing required fields: project, pipe, prompt" }),
+            { status: 400, headers: { "content-type": "application/json" } },
+          );
+        }
+
+        const project = await resolveProject(projectName);
+        if (!project) return new Response("Project not found", { status: 404 });
+
+        // Optimistic rebuild: ensure .pd/ is current before reading pipe data
+        await buildProject(project.path);
+
+        // Load the pipe's index.json for prompt context.
+        const pipeData = await readPipeIndex(project.path, pipeName);
+        if (!pipeData) {
+          return new Response(
+            JSON.stringify({ error: `Pipe "${pipeName}" not found (run pd build first)` }),
+            { status: 404, headers: { "content-type": "application/json" } },
+          );
+        }
+
+        // Build the proposal prompt based on scope (step or pipe).
+        // Ref: proposalManager.ts — buildProposalPrompt
+        const promptText = await buildProposalPrompt(
+          pipeData,
+          { type: scopeType || "pipe", stepIndex },
+          userPrompt,
+        );
+
+        // Call the LLM to generate the proposal.
+        // Ref: llmCommand.ts — callLLM
+        const rawResponse = await callLLM(promptText);
+
+        // Parse the LLM response — handles clean JSON, code-fenced JSON,
+        // and JSON with preamble text.
+        // Ref: proposalManager.ts — parseLLMProposalResponse
+        const parsed = parseLLMProposalResponse(rawResponse);
+
+        // Create the proposal object with all metadata.
+        const proposal = createProposal({
+          scopeType: scopeType || "pipe",
+          scopeRef: {
+            pipeName,
+            stepIndex: stepIndex !== undefined ? stepIndex : undefined,
+            stepId: stepIndex !== undefined && pipeData.steps[stepIndex]
+              ? pipeData.steps[stepIndex].stepId
+              : undefined,
+          },
+          prompt: userPrompt,
+          operations: parsed.operations,
+          summary: parsed.summary || "Pi-generated proposal",
+          rationale: parsed.rationale,
+        });
+
+        // Persist the proposal to disk.
+        await persistProposal(project.path, pipeName, proposal);
+
+        return new Response(JSON.stringify(proposal), {
+          headers: { "content-type": "application/json" },
+        });
+      } catch (e) {
+        return new Response(
+          JSON.stringify({ error: (e as Error).message }),
+          { status: 500, headers: { "content-type": "application/json" } },
+        );
+      }
+    }
+
+    // ── POST /api/pi/proposals/:proposalId/apply — Apply a proposal ──
+    // Body: { project, pipe }
+    // Reads the proposal, applies its operations to index.json via
+    // structuredEdit functions, updates the proposal status to "applied",
+    // broadcasts an SSE event, and returns the updated pipe data.
+    if (
+      request.method === "POST" &&
+      url.pathname.match(/^\/api\/pi\/proposals\/[^/]+\/apply$/)
+    ) {
+      try {
+        const segments = url.pathname.split("/");
+        // URL shape: /api/pi/proposals/:proposalId/apply
+        // segments: ['', 'api', 'pi', 'proposals', proposalId, 'apply']
+        const proposalId = decodeURIComponent(segments[4]);
+
+        const body = await request.json();
+        const { project: projectName, pipe: pipeName } = body;
+
+        if (!projectName || !pipeName) {
+          return new Response(
+            JSON.stringify({ error: "Missing required fields: project, pipe" }),
+            { status: 400, headers: { "content-type": "application/json" } },
+          );
+        }
+
+        const project = await resolveProject(projectName);
+        if (!project) return new Response("Project not found", { status: 404 });
+
+        // Read the proposal from disk.
+        const proposal = await readProposalFromDisk(project.path, pipeName, proposalId);
+        if (!proposal) {
+          return new Response(
+            JSON.stringify({ error: "Proposal not found" }),
+            { status: 404, headers: { "content-type": "application/json" } },
+          );
+        }
+
+        // Apply the proposal — this updates index.json on disk.
+        const updatedPipe = await applyProposal(project.path, pipeName, proposal);
+
+        // Broadcast SSE event so other tabs/windows refresh.
+        broadcastSSE({
+          type: "proposal_applied",
+          project: projectName,
+          pipe: pipeName,
+          proposalId,
+        });
+
+        return new Response(JSON.stringify(updatedPipe), {
+          headers: { "content-type": "application/json" },
+        });
+      } catch (e) {
+        return new Response(
+          JSON.stringify({ error: (e as Error).message }),
+          { status: 500, headers: { "content-type": "application/json" } },
+        );
+      }
+    }
+
+    // ── POST /api/pi/proposals/:proposalId/discard — Discard a proposal ──
+    // Body: { project, pipe }
+    // Marks the proposal as "discarded" and re-persists it.
+    if (
+      request.method === "POST" &&
+      url.pathname.match(/^\/api\/pi\/proposals\/[^/]+\/discard$/)
+    ) {
+      try {
+        const segments = url.pathname.split("/");
+        const proposalId = decodeURIComponent(segments[4]);
+
+        const body = await request.json();
+        const { project: projectName, pipe: pipeName } = body;
+
+        if (!projectName || !pipeName) {
+          return new Response(
+            JSON.stringify({ error: "Missing required fields: project, pipe" }),
+            { status: 400, headers: { "content-type": "application/json" } },
+          );
+        }
+
+        const project = await resolveProject(projectName);
+        if (!project) return new Response("Project not found", { status: 404 });
+
+        const discarded = await discardProposal(project.path, pipeName, proposalId);
+        if (!discarded) {
+          return new Response(
+            JSON.stringify({ error: "Proposal not found" }),
+            { status: 404, headers: { "content-type": "application/json" } },
+          );
+        }
+
+        return new Response(JSON.stringify({ success: true }), {
+          headers: { "content-type": "application/json" },
+        });
+      } catch (e) {
+        return new Response(
+          JSON.stringify({ error: (e as Error).message }),
+          { status: 500, headers: { "content-type": "application/json" } },
+        );
+      }
+    }
+
+    // ── POST /api/pi/proposals/:proposalId/refine — Refine a proposal ──
+    // Body: { project, pipe, feedback }
+    // Reads the existing proposal, builds a refinement prompt that includes
+    // the current proposal + user feedback, generates a new proposal via LLM,
+    // sets the old proposal to "superseded", and returns the new proposal.
+    if (
+      request.method === "POST" &&
+      url.pathname.match(/^\/api\/pi\/proposals\/[^/]+\/refine$/)
+    ) {
+      try {
+        const segments = url.pathname.split("/");
+        const proposalId = decodeURIComponent(segments[4]);
+
+        const body = await request.json();
+        const { project: projectName, pipe: pipeName, feedback } = body;
+
+        if (!projectName || !pipeName || !feedback) {
+          return new Response(
+            JSON.stringify({ error: "Missing required fields: project, pipe, feedback" }),
+            { status: 400, headers: { "content-type": "application/json" } },
+          );
+        }
+
+        const project = await resolveProject(projectName);
+        if (!project) return new Response("Project not found", { status: 404 });
+
+        // Read the existing proposal to refine.
+        const oldProposal = await readProposalFromDisk(project.path, pipeName, proposalId);
+        if (!oldProposal) {
+          return new Response(
+            JSON.stringify({ error: "Proposal not found" }),
+            { status: 404, headers: { "content-type": "application/json" } },
+          );
+        }
+
+        // Load pipe data for refinement prompt context.
+        const pipeData = await readPipeIndex(project.path, pipeName);
+        if (!pipeData) {
+          return new Response(
+            JSON.stringify({ error: `Pipe "${pipeName}" not found` }),
+            { status: 404, headers: { "content-type": "application/json" } },
+          );
+        }
+
+        // Build the refinement prompt — includes the old proposal + feedback.
+        const refinementPrompt = await buildRefinementPrompt(pipeData, oldProposal, feedback);
+
+        // Call the LLM with the refinement prompt.
+        const rawResponse = await callLLM(refinementPrompt);
+        const parsed = parseLLMProposalResponse(rawResponse);
+
+        // Create a new proposal that supersedes the old one.
+        const newProposal = createProposal({
+          scopeType: oldProposal.scopeType,
+          scopeRef: oldProposal.scopeRef,
+          prompt: `${oldProposal.prompt || ""} [refined: ${feedback}]`,
+          operations: parsed.operations,
+          summary: parsed.summary || "Refined proposal",
+          rationale: parsed.rationale,
+        });
+
+        // Mark the old proposal as "superseded".
+        oldProposal.status = "superseded";
+        await persistProposal(project.path, pipeName, oldProposal);
+
+        // Persist the new proposal.
+        await persistProposal(project.path, pipeName, newProposal);
+
+        return new Response(JSON.stringify(newProposal), {
+          headers: { "content-type": "application/json" },
+        });
+      } catch (e) {
+        return new Response(
+          JSON.stringify({ error: (e as Error).message }),
+          { status: 500, headers: { "content-type": "application/json" } },
+        );
+      }
+    }
+
+    // ── GET /api/pi/proposals/:project/:pipe — List proposals for a pipe ──
+    // Returns recent proposals sorted by createdAt desc.
+    // Optional query param: ?limit=N (default 20)
+    if (
+      request.method === "GET" &&
+      url.pathname.match(/^\/api\/pi\/proposals\/[^/]+\/[^/]+$/)
+    ) {
+      try {
+        const segments = url.pathname.split("/");
+        // URL shape: /api/pi/proposals/:project/:pipe
+        // segments: ['', 'api', 'pi', 'proposals', project, pipe]
+        const projectName = decodeURIComponent(segments[4]);
+        const pipeName = decodeURIComponent(segments[5]);
+
+        const project = await resolveProject(projectName);
+        if (!project) return new Response("Project not found", { status: 404 });
+
+        const limitParam = url.searchParams.get("limit");
+        const limit = limitParam ? parseInt(limitParam) : 20;
+
+        const proposals = await listProposalsFromDisk(project.path, pipeName, limit);
+
+        return new Response(JSON.stringify(proposals), {
+          headers: { "content-type": "application/json", "cache-control": "no-store" },
         });
       } catch (e) {
         return new Response(

@@ -24,7 +24,7 @@ PD.components.RunDrawer = {
     vnode.state._onKeyDown = function(e) {
       if (e.key === "Escape" && PD.state.drawerOpen) {
         PD.actions.closeDrawer();
-        // Also clear input mode so reopening doesn't show stale editor state.
+        // Clear input/proposal mode so reopening doesn't show stale state.
         PD.state.drawerMode = null;
         // Mithril auto-redraws after DOM event handlers, but this keydown
         // is registered on document (outside Mithril's event delegation),
@@ -62,6 +62,35 @@ PD.components.RunDrawer = {
     // class controls visibility via transform.
     var isOpen = PD.state.drawerOpen;
     var isInputMode = PD.state.drawerMode === "input";
+    var isProposalMode = PD.state.drawerMode === "proposal";
+
+    // ── Proposal review mode ──
+    // When a Pi proposal is active, render the proposal review view
+    // with summary, rationale, operations, and action buttons.
+    // Ref: WEB_FIRST_WORKFLOW_PLAN.md §6.5 — apply flow
+    if (isProposalMode) {
+      return m("div", [
+        isOpen ? m(".drawer-backdrop", {
+          onclick: function() {
+            PD.actions.closeDrawer();
+            PD.state.drawerMode = null;
+          }
+        }) : null,
+        m(".run-drawer", { class: isOpen ? "open" : "" }, [
+          m("div.run-drawer-header", [
+            m("span.run-drawer-label", PD.state.drawerLabel || "Pi Proposal"),
+            m("button.run-drawer-close", {
+              onclick: function() {
+                PD.actions.closeDrawer();
+                PD.state.drawerMode = null;
+              },
+              title: "Close drawer (Esc)"
+            }, "\u00D7")
+          ]),
+          m(".run-drawer-body", PD.utils.drawerProposalContent())
+        ])
+      ]);
+    }
 
     // ── Input editor mode ──
     // When the user opened "Custom Input...", render the JSON editor view
@@ -589,4 +618,282 @@ PD.utils.drawerBodyContent = function() {
   var rawText = PD.state.drawerOutput;
   if (!rawText) return [sessionPanel, m("div")];
   return [sessionPanel, m("div", m.trust(pd.ansiToHtml(rawText)))];
+};
+
+// ── drawerProposalContent ──
+// Renders the proposal review view inside the drawer body when
+// drawerMode is "proposal". Shows:
+//   1. Loading spinner while Pi is generating
+//   2. Error message if generation failed
+//   3. Summary and rationale
+//   4. Each operation as a card showing type, target, and new value
+//   5. Action buttons: Apply, Apply + Rerun, Refine, Discard
+//
+// Ref: WEB_FIRST_WORKFLOW_PLAN.md §6.5 — apply flow
+// Ref: pipedown.d.ts — PatchProposal, PatchOperation
+PD.utils.drawerProposalContent = function() {
+  var sections = [];
+
+  // ── Loading state ──
+  if (PD.state.proposalLoading) {
+    sections.push(m("div", {
+      style: "text-align: center; padding: var(--size-5); color: var(--text-2);"
+    }, [
+      m("div.spinner", { style: "font-size: var(--font-size-3); margin-block-end: var(--size-2);" }, "\u23F3"),
+      m("div", "Pi is generating a proposal...")
+    ]));
+    return sections;
+  }
+
+  // ── Error state ──
+  if (PD.state.drawerStatus === "error" && PD.state.drawerError) {
+    var err = PD.state.drawerError;
+    sections.push(m("div.drawer-error-panel", [
+      m("div.drawer-error-title", [
+        m("span.drawer-error-icon", "\u26A0"),
+        m("span", " Proposal generation failed"),
+        err.status ? m("span.drawer-error-status", err.status + " " + err.statusText) : null
+      ]),
+      m("div.drawer-error-message", err.message)
+    ]));
+    // Still show a Discard button so the user can close cleanly.
+    sections.push(m("div", { style: "margin-block-start: var(--size-3);" }, [
+      m("button.tb-btn", { onclick: function() {
+        PD.state.activeProposal = null;
+        PD.state.proposalError = null;
+        PD.state.drawerMode = null;
+        PD.state.drawerOpen = false;
+        m.redraw();
+      } }, "Close")
+    ]));
+    return sections;
+  }
+
+  // ── No proposal yet ──
+  var proposal = PD.state.activeProposal;
+  if (!proposal) {
+    sections.push(m("div", { style: "color: var(--text-2); padding: var(--size-3);" },
+      "No active proposal."
+    ));
+    return sections;
+  }
+
+  // ── Summary ──
+  sections.push(m("div", {
+    style: "margin-block-end: var(--size-3);"
+  }, [
+    m("div", {
+      style: "font-weight: var(--font-weight-6); font-size: var(--font-size-1); margin-block-end: var(--size-1);"
+    }, proposal.summary || "Pi Proposal"),
+    m("div", {
+      style: "font-size: var(--font-size-0); color: var(--text-2);"
+    }, [
+      m("span", "Scope: "),
+      m("code", proposal.scopeType),
+      proposal.scopeRef && proposal.scopeRef.stepIndex != null
+        ? m("span", " (step " + proposal.scopeRef.stepIndex + ")")
+        : null
+    ])
+  ]));
+
+  // ── Rationale ──
+  if (proposal.rationale) {
+    sections.push(m("div", {
+      style: [
+        "padding: var(--size-2);",
+        "background: var(--surface-1);",
+        "border: 1px solid var(--surface-3);",
+        "border-radius: var(--radius-2);",
+        "margin-block-end: var(--size-3);",
+        "font-size: var(--font-size-0);",
+        "color: var(--text-2);"
+      ].join(" ")
+    }, [
+      m("strong", "Rationale: "),
+      m("span", proposal.rationale)
+    ]));
+  }
+
+  // ── Operations ──
+  if (proposal.operations && proposal.operations.length > 0) {
+    sections.push(m("div", {
+      style: "margin-block-end: var(--size-3);"
+    }, [
+      m("div", {
+        style: "font-weight: var(--font-weight-6); font-size: var(--font-size-0); margin-block-end: var(--size-2);"
+      }, "Operations (" + proposal.operations.length + "):"),
+      proposal.operations.map(function(op, i) {
+        return PD.utils.renderOperationCard(op, i);
+      })
+    ]));
+  }
+
+  // ── Action buttons ──
+  sections.push(m("div", {
+    style: [
+      "display: flex;",
+      "gap: var(--size-2);",
+      "flex-wrap: wrap;",
+      "padding-block-start: var(--size-3);",
+      "border-block-start: 1px solid var(--surface-3);"
+    ].join(" ")
+  }, [
+    // Apply button (primary)
+    m("button.tb-btn.primary", {
+      onclick: PD.actions.applyProposal,
+      disabled: PD.state.proposalLoading,
+      title: "Apply this proposal to index.json"
+    }, "\u2713 Apply"),
+    // Apply + Rerun button
+    m("button.tb-btn.primary", {
+      onclick: function() {
+        // Apply, then create and run a session.
+        // We chain the apply action by overriding the completion logic.
+        if (!PD.state.activeProposal || !PD.state.selectedPipe) return;
+        var proposal = PD.state.activeProposal;
+        var applyUrl = "/api/pi/proposals/" + encodeURIComponent(proposal.proposalId) + "/apply";
+        PD.state.proposalLoading = true;
+        m.redraw();
+        fetch(applyUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            project: PD.state.selectedPipe.projectName,
+            pipe: PD.state.selectedPipe.pipeName
+          })
+        }).then(function(res) {
+          if (!res.ok) throw new Error("Apply failed: " + res.statusText);
+          return res.json();
+        }).then(function() {
+          PD.state.activeProposal = null;
+          PD.state.proposalLoading = false;
+          PD.state.drawerMode = null;
+          PD.state.syncState = "json_dirty";
+          PD.actions.refreshPipe();
+          // Now run a session.
+          PD.actions.createAndRunSession("full");
+        }).catch(function(err) {
+          PD.state.proposalError = err.message;
+          PD.state.proposalLoading = false;
+          m.redraw();
+        });
+      },
+      disabled: PD.state.proposalLoading,
+      title: "Apply this proposal, then run the full pipe"
+    }, "\u2713 Apply + Rerun"),
+    // Refine button — prompts for feedback, then calls refineProposal.
+    m("button.tb-btn", {
+      onclick: function() {
+        // Use window.prompt for the first cut (as specified in the task).
+        // Ref: https://developer.mozilla.org/en-US/docs/Web/API/Window/prompt
+        var feedback = window.prompt("How should Pi refine this proposal?");
+        if (feedback) {
+          PD.actions.refineProposal(feedback);
+        }
+      },
+      disabled: PD.state.proposalLoading,
+      title: "Send feedback to Pi for a refined proposal"
+    }, "\u270E Refine"),
+    // Discard button
+    m("button.tb-btn", {
+      onclick: PD.actions.discardProposal,
+      disabled: PD.state.proposalLoading,
+      title: "Discard this proposal without applying",
+      style: "color: var(--red-6);"
+    }, "\u2717 Discard")
+  ]));
+
+  return sections;
+};
+
+// ── renderOperationCard ──
+// Renders a single PatchOperation as a card in the proposal review view.
+// Shows the operation type, target path, and the new value (with special
+// handling for code values which get a monospace code block).
+//
+// @param {object} op — PatchOperation object
+// @param {number} index — operation index (for keying)
+// @return {Mithril.Vnode}
+PD.utils.renderOperationCard = function(op, index) {
+  // Format the operation type for display.
+  // "replace_step_code" → "Replace step code"
+  var typeLabel = (op.type || "unknown")
+    .replace(/_/g, " ")
+    .replace(/^\w/, function(c) { return c.toUpperCase(); });
+
+  var children = [
+    // ── Operation header ──
+    m("div", {
+      style: "display: flex; justify-content: space-between; align-items: center; margin-block-end: var(--size-1);"
+    }, [
+      m("span", {
+        style: "font-weight: var(--font-weight-6); font-size: var(--font-size-0);"
+      }, typeLabel),
+      m("code", {
+        style: "font-size: var(--font-size-00); color: var(--text-2);"
+      }, op.path || "")
+    ])
+  ];
+
+  // ── New value display ──
+  if (op.newValue !== undefined && op.newValue !== null) {
+    var isCode = op.type === "replace_step_code";
+    var isConfig = op.type === "replace_step_config" || op.type === "insert_step_after";
+    var value = typeof op.newValue === "string" ? op.newValue : JSON.stringify(op.newValue, null, 2);
+
+    if (isCode) {
+      // Code changes get a monospace pre block.
+      children.push(m("pre", {
+        style: [
+          "padding: var(--size-2);",
+          "background: var(--surface-2);",
+          "border: 1px solid var(--surface-3);",
+          "border-radius: var(--radius-1);",
+          "font-family: var(--font-mono, monospace);",
+          "font-size: var(--font-size-00);",
+          "overflow-x: auto;",
+          "white-space: pre-wrap;",
+          "word-break: break-word;",
+          "max-height: 300px;",
+          "overflow-y: auto;"
+        ].join(" ")
+      }, m("code", value)));
+    } else if (isConfig) {
+      // Config/structural operations show JSON.
+      children.push(m("pre", {
+        style: [
+          "padding: var(--size-2);",
+          "background: var(--surface-2);",
+          "border: 1px solid var(--surface-3);",
+          "border-radius: var(--radius-1);",
+          "font-family: var(--font-mono, monospace);",
+          "font-size: var(--font-size-00);",
+          "max-height: 200px;",
+          "overflow-y: auto;"
+        ].join(" ")
+      }, m("code", value)));
+    } else {
+      // Text changes (title, description, pipe description, schema).
+      children.push(m("div", {
+        style: [
+          "padding: var(--size-2);",
+          "background: var(--surface-2);",
+          "border: 1px solid var(--surface-3);",
+          "border-radius: var(--radius-1);",
+          "font-size: var(--font-size-0);"
+        ].join(" ")
+      }, value));
+    }
+  }
+
+  return m("div", {
+    key: "op-" + index,
+    style: [
+      "padding: var(--size-2);",
+      "margin-block-end: var(--size-2);",
+      "border: 1px solid var(--surface-3);",
+      "border-radius: var(--radius-2);",
+      "background: var(--surface-1);"
+    ].join(" ")
+  }, children);
 };
