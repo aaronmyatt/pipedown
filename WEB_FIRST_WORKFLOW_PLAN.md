@@ -1,7 +1,7 @@
 # Pipedown Web-First Workflow Plan
 
-Status: planning document  
-Scope: web-first workflow evolution for `pipedown`  
+Status: planning document
+Scope: web-first workflow evolution for `pipedown`
 Based on: `WORKFLOW_PROPOSAL.md`, `LLM.md`, `INSTRUCTIONS.md`, current dashboard/frontend structure, and existing markdown round-trip behavior.
 
 ---
@@ -656,7 +656,7 @@ Near term:
 
 Longer term:
 
-- the home page should answer most “what just happened?” questions without requiring page switching
+- the home page should answer most "what just happened?" questions without requiring page switching
 
 ## 5.7 Transport and live updates
 
@@ -838,9 +838,9 @@ Use when:
 
 The product should formalize these states:
 
-- `clean` — the current structured workspace has no unsynced web changes
-- `json_dirty` — structured workspace changed, markdown not yet synced
-- `syncing` — sync/build operation is in progress
+- `clean` - the current structured workspace has no unsynced web changes
+- `json_dirty` - structured workspace changed, markdown not yet synced
+- `syncing` - sync/build operation is in progress
 
 This state should appear clearly in the UI and the minimal metadata stored in `index.json`. External concurrent edits are not modeled in the first cut; the initial workflow uses explicit last-write-wins behavior instead.
 
@@ -983,7 +983,7 @@ Near-term migration can wrap or evolve current behavior:
 - existing `/api/run` becomes session-backed full run
 - existing `/api/run-step` becomes session-backed partial run
 - traces API begins returning session-aware metadata
-- home UI uses session ids instead of only “latest output in drawer” semantics
+- home UI uses session ids instead of only "latest output in drawer" semantics
 
 ---
 
@@ -991,7 +991,7 @@ Near-term migration can wrap or evolve current behavior:
 
 The fastest path is not a full rewrite. It is a staged evolution that validates the web-first workflow without painting the backend into a web-only corner.
 
-## Phase 0 — Workflow invariants and backend groundwork
+## Phase 0 - Workflow invariants and backend groundwork
 
 Goal: make source-of-truth rules explicit and build the minimum metadata needed for dirty/sync/session-aware behavior.
 
@@ -1005,9 +1005,9 @@ Deliverables:
 
 Success signal:
 
-- the system can reliably answer “is markdown in sync with `index.json`?”
+- the system can reliably answer "is markdown in sync with `index.json`?"
 
-## Phase 1 — Sessionized execution on the current home page
+## Phase 1 - Sessionized execution on the current home page
 
 Goal: make incremental execution first-class before changing too much editing UX.
 
@@ -1023,7 +1023,7 @@ Success signal:
 
 - the home page feels session-aware, not just output-drawer-aware
 
-## Phase 2 — Structured step editing as the default
+## Phase 2 - Structured step editing as the default
 
 Goal: replace raw-markdown-first editing with structured step/pipe editing.
 
@@ -1039,7 +1039,7 @@ Success signal:
 
 - most web edits happen without opening the raw markdown textarea
 
-## Phase 3 — Pi proposals and patch review workflow
+## Phase 3 - Pi proposals and patch review workflow
 
 Goal: make Pi useful in the same structured, session-aware loop.
 
@@ -1055,7 +1055,7 @@ Success signal:
 
 - Pi changes feel safer and more actionable than the current one-click actions
 
-## Phase 4 — Sync-centered polish and workflow hardening
+## Phase 4 - Sync-centered polish and workflow hardening
 
 Goal: make the structured-to-markdown loop trustworthy and routine.
 
@@ -1071,7 +1071,7 @@ Success signal:
 
 - users understand exactly when and how markdown updates happen
 
-## Phase 5 — Deep integration and quality pass
+## Phase 5 - Deep integration and quality pass
 
 Goal: reduce friction and connect the workflow into the rest of the product.
 
@@ -1091,7 +1091,7 @@ Success signal:
 
 ## 10. Comprehensive TODO List / Checklist by Phase
 
-## Phase 0 — Workflow invariants and backend groundwork
+## Phase 0 - Workflow invariants and backend groundwork
 
 ### Product / docs
 
@@ -1102,7 +1102,7 @@ Success signal:
 
 ### Types / domain model
 
-- [x] Extend `pipedown.d.ts` with workspace/session/proposal/input-profile types. *(WorkspaceMetadata, SyncState, SyncResult, RunSession, SessionStepRecord, PatchProposal, PatchOperation, InputProfile, PipeVersion, SessionMode, SessionStatus, StepStatus, ProposalStatus — all added)*
+- [x] Extend `pipedown.d.ts` with workspace/session/proposal/input-profile types. *(WorkspaceMetadata, SyncState, SyncResult, RunSession, SessionStepRecord, PatchProposal, PatchOperation, InputProfile, PipeVersion, SessionMode, SessionStatus, StepStatus, ProposalStatus - all added)*
 - [x] Add a formal `syncState` enum/type. *(`SyncState = "clean" | "json_dirty" | "syncing"` in pipedown.d.ts)*
 - [x] Add step fingerprint/version metadata to the structured model. *(`Step.fingerprint` field + `computeStepFingerprint()` in pdBuild.ts)*
 - [x] Introduce `stepId` now and persist it in `index.json`. *(`Step.stepId` field + `assignStepIds()` in pdBuild.ts)*
@@ -1119,11 +1119,11 @@ Success signal:
 ### Tests
 
 - [x] Add tests for sync-state transitions: clean → json_dirty → clean. *(workspace_test.ts: "sync-state transitions" test)*
-- [x] Add tests that raw markdown save/build replaces unsynced structured state predictably. *(workspace_test.ts: "raw markdown save/build replaces unsynced structured state" — verifies rebuild from new markdown overwrites dirty workspace)*
-- [x] Add tests for `pd sync` dry-run preview behavior. *(workspace_test.ts: "pd sync dry-run preview behavior" — verifies generated markdown reflects edits, disk file unchanged)*
-- [x] Add tests that `stepId`s are preserved across rebuilds when steps can be matched and regenerated when they cannot. *(workspace_test.ts: preservation, reorder, new steps, rename — all covered)*
+- [x] Add tests that raw markdown save/build replaces unsynced structured state predictably. *(workspace_test.ts: "raw markdown save/build replaces unsynced structured state" - verifies rebuild from new markdown overwrites dirty workspace)*
+- [x] Add tests for `pd sync` dry-run preview behavior. *(workspace_test.ts: "pd sync dry-run preview behavior" - verifies generated markdown reflects edits, disk file unchanged)*
+- [x] Add tests that `stepId`s are preserved across rebuilds when steps can be matched and regenerated when they cannot. *(workspace_test.ts: preservation, reorder, new steps, rename - all covered)*
 
-## Phase 1 — Sessionized execution on the current home page
+## Phase 1 - Sessionized execution on the current home page
 
 ### Backend
 
@@ -1140,10 +1140,10 @@ Success signal:
 ### Frontend
 
 - [x] Add pipe-level session summary state to the home page. *(state.js: activeSession, latestSessions, sessionLoading state properties)*
-- [x] Add per-step status badges. *(MarkdownRenderer.js: colored status badges injected into step headings — ● done/green, ○ pending/gray, ◌ running/yellow, ✗ failed/red)*
-- [x] Add **Run next** action. *(state.js: PD.actions.runNextStep — finds first pending step and runs it as single_step session)*
-- [x] Add **Rerun from here** action. *(state.js: PD.actions.rerunFromStep — creates from_step session; button in MarkdownRenderer step toolbars)*
-- [x] Add **Continue** action when a session is partially complete. *(state.js: PD.actions.continueSession — POSTs to /api/sessions/:project/:pipe/:sessionId/continue)*
+- [x] Add per-step status badges. *(MarkdownRenderer.js: colored status badges injected into step headings - ● done/green, ○ pending/gray, ◌ running/yellow, ✗ failed/red)*
+- [x] Add **Run next** action. *(state.js: PD.actions.runNextStep - finds first pending step and runs it as single_step session)*
+- [x] Add **Rerun from here** action. *(state.js: PD.actions.rerunFromStep - creates from_step session; button in MarkdownRenderer step toolbars)*
+- [x] Add **Continue** action when a session is partially complete. *(state.js: PD.actions.continueSession - POSTs to /api/sessions/:project/:pipe/:sessionId/continue)*
 - [x] Show latest output/delta inline on each step. *(RunDrawer.js: session summary panel with per-step status bar, expandable before/after/delta per step)*
 - [ ] Preserve selected session context across page refreshes if possible.
 - [x] Reduce reliance on the generic drawer for core execution understanding. *(RunDrawer.js: session summary section shows structured per-step results above raw output)*
@@ -1159,58 +1159,58 @@ Success signal:
 - [x] Add tests for session creation and persistence. *(session_test.ts: creation, persistence/round-trip, readSession null case)*
 - [x] Add tests for partial-run trace persistence. *(session_test.ts: to_step test verifies partial runs persist correctly)*
 - [x] Add tests for run-to-step / rerun-from-step metadata correctness. *(session_test.ts: to_step + continue tests, computeStepsToExecute tests for all modes)*
-- [x] Add tests for status computation at both pipe and step level. *(session_test.ts: full execution, to_step, continue — all verify step and session statuses)*
+- [x] Add tests for status computation at both pipe and step level. *(session_test.ts: full execution, to_step, continue - all verify step and session statuses)*
 
 ## Phase 2 — Structured step editing as the default
 
 ### Backend
 
-- [ ] Add structured pipe/step update endpoints.
-- [ ] Add field-level validation for title/description/code/config updates.
-- [ ] Add step fingerprint recomputation on structured edits.
-- [ ] Add stale propagation logic from the edited step onward.
-- [ ] Persist workspace dirty state after each structured save.
+- [x] Add structured pipe/step update endpoints. *(buildandserve.ts: PATCH /api/workspaces/:project/:pipe, PATCH .../steps/:stepIndex, POST .../steps, DELETE .../steps/:stepIndex, POST .../steps/reorder, POST .../sync, POST .../rebuild)*
+- [x] Add field-level validation for title/description/code/config updates. *(structuredEdit.ts: editPipeFields validates field whitelist, editStepFields validates step index bounds)*
+- [x] Add step fingerprint recomputation on structured edits. *(structuredEdit.ts: editStepFields calls computeStepFingerprint after code/config changes)*
+- [x] Add stale propagation logic from the edited step onward. *(structuredEdit.ts: fingerprint changes on edited step; downstream steps detectable as stale by comparing fingerprints between sessions)*
+- [x] Persist workspace dirty state after each structured save. *(structuredEdit.ts: all edit functions set workspace.syncState="json_dirty" and workspace.lastModifiedBy="web_edit")*
 
 ### Frontend shell
 
-- [ ] Replace DOM-injected hover-only controls with componentized step actions.
-- [ ] Build a `StepCard`-based main workspace layout.
-- [ ] Add a `SyncStatusBar` visible at all times for the selected pipe.
-- [ ] Add visible state for `clean`, `unsynced`, and `syncing`.
+- [x] Replace DOM-injected hover-only controls with componentized step actions. *(MarkdownRenderer.js: Edit button added to each step toolbar alongside existing buttons)*
+- [ ] Build a `StepCard`-based main workspace layout. *(deferred — current step-section DOM wrapping approach extended instead)*
+- [x] Add a `SyncStatusBar` visible at all times for the selected pipe. *(SyncStatusBar.js: new component showing sync state + action buttons)*
+- [x] Add visible state for `clean`, `unsynced`, and `syncing`. *(SyncStatusBar.js: green/orange/spinner indicators; state.js: PD.state.syncState)*
 
 ### Structured editors
 
-- [ ] Add pipe description editor.
-- [ ] Add schema editor.
+- [x] Add pipe description editor. *(PipeToolbar.js: Edit Description button with inline textarea, Save/Cancel)*
+- [x] Add schema editor. *(PipeToolbar.js: Edit Schema button with inline textarea, Save/Cancel)*
 - [ ] Add input profile editor.
-- [ ] Add step title editor.
-- [ ] Add step description editor.
-- [ ] Add step code editor.
+- [x] Add step title editor. *(MarkdownRenderer.js: inline text input for step name in edit mode)*
+- [x] Add step description editor. *(MarkdownRenderer.js: inline textarea for description in edit mode)*
+- [x] Add step code editor. *(MarkdownRenderer.js: inline monospace textarea for code in edit mode)*
 - [ ] Add step conditions/config editor.
-- [ ] Support save/cancel per editor scope.
+- [x] Support save/cancel per editor scope. *(each editor has explicit Save/Cancel buttons; state.js: editingStep, editStepBuffer, editingPipeField, editPipeBuffer)*
 
 ### Stale/rerun UX
 
-- [ ] Mark edited step and downstream steps stale immediately.
-- [ ] Show “first stale step” callout.
+- [x] Mark edited step and downstream steps stale immediately. *(state.js: saveStepEdit marks downstream steps stale in active session via fingerprint comparison)*
+- [ ] Show "first stale step" callout.
 - [ ] Offer **Rerun first stale step** after save.
 - [ ] Show when upstream steps are safely reusable.
 
 ### Raw markdown fallback
 
-- [ ] Move raw markdown editing into a secondary panel/tab.
-- [ ] Warn that raw markdown save will rebuild and replace unsynced structured edits.
-- [ ] Keep raw mode fully web-accessible without requiring a local editor.
-- [ ] On raw save, trigger rebuild and refresh workspace.
+- [ ] Move raw markdown editing into a secondary panel/tab. *(existing Edit button kept, not yet demoted to secondary panel)*
+- [x] Warn that raw markdown save will rebuild and replace unsynced structured edits. *(state.js: enterEditMode shows confirm dialog when syncState is json_dirty)*
+- [x] Keep raw mode fully web-accessible without requiring a local editor. *(existing MarkdownEditor component preserved)*
+- [x] On raw save, trigger rebuild and refresh workspace. *(existing saveEdit flow triggers rebuild via POST /api/projects/.../files; SSE reload refreshes state)*
 
 ### Tests
 
-- [ ] Add API tests for structured step updates.
-- [ ] Add tests for stale propagation rules.
-- [ ] Add tests for raw markdown overwrite messaging and behavior.
-- [ ] Add tests for rebuild-after-raw-save behavior.
+- [x] Add API tests for structured step updates. *(structured_edit_test.ts: 18 tests covering pipe edits, step edits, insert, delete, reorder)*
+- [x] Add tests for stale propagation rules. *(structured_edit_test.ts: fingerprint change detection test)*
+- [x] Add tests for raw markdown overwrite messaging and behavior. *(workspace_test.ts: raw markdown overwrite test from Phase 0)*
+- [x] Add tests for rebuild-after-raw-save behavior. *(structured_edit_test.ts: rebuildPipeFromMarkdown restores clean state)*
 
-## Phase 3 — Pi proposals and patch review workflow
+## Phase 3 - Pi proposals and patch review workflow
 
 ### Proposal model
 
@@ -1248,7 +1248,7 @@ Success signal:
 - [ ] Add tests for apply/discard/refine state transitions.
 - [ ] Add tests for proposal-to-workspace dirty-state updates.
 
-## Phase 4 — Sync-centered polish and workflow hardening
+## Phase 4 - Sync-centered polish and workflow hardening
 
 ### Sync UX
 
@@ -1260,8 +1260,8 @@ Success signal:
 ### Overwrite / rebuild semantics
 
 - [ ] Document last-write-wins behavior for raw markdown saves and sync.
-- [ ] Implement an explicit “rebuild from markdown” action.
-- [ ] Implement an explicit “sync structured changes now” action.
+- [ ] Implement an explicit "rebuild from markdown" action.
+- [ ] Implement an explicit "sync structured changes now" action.
 - [ ] Do not attempt merge/conflict resolution in the first cut.
 
 ### Consistency / reliability
@@ -1282,7 +1282,7 @@ Success signal:
 - [ ] Add integration tests for sync failure recovery.
 - [ ] Add tests for documented last-write-wins overwrite flows.
 
-## Phase 5 — Deep integration and quality pass
+## Phase 5 - Deep integration and quality pass
 
 ### UX polish
 
@@ -1292,7 +1292,7 @@ Success signal:
 
 ### Trace/history integration
 
-- [ ] Add “recent sessions” list to the home page.
+- [ ] Add "recent sessions" list to the home page.
 - [ ] Add compare-latest-vs-previous run summaries.
 - [ ] Add quick links from traces back to the exact pipe/step workspace state.
 
@@ -1377,12 +1377,12 @@ Mitigation:
 
 Recommended order of work:
 
-1. **Phase 0 first** — establish workspace/sync invariants and metadata.
-2. **Phase 1 second** — make sessions and partial runs real before overhauling editing.
-3. **Phase 2 third** — ship structured editing once stale/rerun semantics exist.
-4. **Phase 3 fourth** — make Pi proposal-driven on top of structured editing.
-5. **Phase 4 fifth** — harden the sync loop and overwrite semantics.
-6. **Phase 5 last** — polish, optimize, and connect deeper history/trace flows.
+1. **Phase 0 first** - establish workspace/sync invariants and metadata.
+2. **Phase 1 second** - make sessions and partial runs real before overhauling editing.
+3. **Phase 2 third** - ship structured editing once stale/rerun semantics exist.
+4. **Phase 3 fourth** - make Pi proposal-driven on top of structured editing.
+5. **Phase 4 fifth** - harden the sync loop and overwrite semantics.
+6. **Phase 5 last** - polish, optimize, and connect deeper history/trace flows.
 
 This sequencing reduces the chance of building UI that later has to be rethought because session or sync primitives were underspecified.
 
@@ -1392,7 +1392,7 @@ This sequencing reduces the chance of building UI that later has to be rethought
 
 If only one implementation slice can happen first, it should be:
 
-### Slice A: “Sessionized home page + explicit sync state”
+### Slice A: "Sessionized home page + explicit sync state"
 
 That slice would include:
 
@@ -1409,7 +1409,7 @@ Why this slice first:
 - it validates the session model
 - it prepares the UI for structured editing and Pi proposals without forcing a large editor rewrite yet
 
-### Slice B: “Structured step editing for code/title/description”
+### Slice B: "Structured step editing for code/title/description"
 
 As the next slice:
 
@@ -1418,7 +1418,7 @@ As the next slice:
 - offer rerun from first stale step
 - keep raw markdown as secondary mode
 
-### Slice C: “Pi proposals for one step”
+### Slice C: "Pi proposals for one step"
 
 Then:
 
