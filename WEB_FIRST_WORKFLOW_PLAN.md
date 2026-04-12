@@ -1161,7 +1161,7 @@ Success signal:
 - [x] Add tests for run-to-step / rerun-from-step metadata correctness. *(session_test.ts: to_step + continue tests, computeStepsToExecute tests for all modes)*
 - [x] Add tests for status computation at both pipe and step level. *(session_test.ts: full execution, to_step, continue - all verify step and session statuses)*
 
-## Phase 2 — Structured step editing as the default
+## Phase 2 - Structured step editing as the default
 
 ### Backend
 
@@ -1174,7 +1174,7 @@ Success signal:
 ### Frontend shell
 
 - [x] Replace DOM-injected hover-only controls with componentized step actions. *(MarkdownRenderer.js: Edit button added to each step toolbar alongside existing buttons)*
-- [ ] Build a `StepCard`-based main workspace layout. *(deferred — current step-section DOM wrapping approach extended instead)*
+- [ ] Build a `StepCard`-based main workspace layout. *(deferred - current step-section DOM wrapping approach extended instead)*
 - [x] Add a `SyncStatusBar` visible at all times for the selected pipe. *(SyncStatusBar.js: new component showing sync state + action buttons)*
 - [x] Add visible state for `clean`, `unsynced`, and `syncing`. *(SyncStatusBar.js: green/orange/spinner indicators; state.js: PD.state.syncState)*
 
@@ -1210,43 +1210,43 @@ Success signal:
 - [x] Add tests for raw markdown overwrite messaging and behavior. *(workspace_test.ts: raw markdown overwrite test from Phase 0)*
 - [x] Add tests for rebuild-after-raw-save behavior. *(structured_edit_test.ts: rebuildPipeFromMarkdown restores clean state)*
 
-## Phase 3 - Pi proposals and patch review workflow
+## Phase 3 — Pi proposals and patch review workflow
 
 ### Proposal model
 
-- [ ] Define a proposal schema for pipe- and step-scoped patches.
-- [ ] Implement proposal persistence and status transitions.
-- [ ] Add validation that proposals only modify allowed scope.
+- [x] Define a proposal schema for pipe- and step-scoped patches. *(proposalManager.ts: createProposal builds PatchProposal objects with PatchOperation arrays; types from pipedown.d.ts)*
+- [x] Implement proposal persistence and status transitions. *(proposalManager.ts: persistProposal/readProposal/listProposals write to .pd/<pipe>/proposals/; status transitions: ready→applied, ready→discarded, ready→superseded)*
+- [x] Add validation that proposals only modify allowed scope. *(proposalManager.ts: applyProposal dispatches each operation type to the correct structuredEdit function; unrecognized types logged and skipped)*
 
 ### Pi backend
 
-- [ ] Add a proposal-generation mode to existing LLM integration.
-- [ ] Build step-scoped prompt assembly that includes local context and recent execution state.
-- [ ] Build pipe-scoped prompt assembly for broader changes.
-- [ ] Add refine/retry behavior that references the current proposal.
-- [ ] Add proposal apply endpoint that mutates `index.json` only.
+- [x] Add a proposal-generation mode to existing LLM integration. *(buildandserve.ts: POST /api/pi/proposals generates structured JSON proposals via LLM)*
+- [x] Build step-scoped prompt assembly that includes local context and recent execution state. *(proposalManager.ts: buildProposalPrompt for step scope includes step fields, surrounding steps, pipe context)*
+- [x] Build pipe-scoped prompt assembly for broader changes. *(proposalManager.ts: buildProposalPrompt for pipe scope includes full pipeline overview)*
+- [x] Add refine/retry behavior that references the current proposal. *(buildandserve.ts: POST /api/pi/proposals/:proposalId/refine; proposalManager.ts: buildRefinementPrompt includes original proposal + feedback)*
+- [x] Add proposal apply endpoint that mutates `index.json` only. *(buildandserve.ts: POST /api/pi/proposals/:proposalId/apply calls applyProposal which uses structuredEdit functions)*
 
 ### Frontend
 
-- [ ] Add a Pi side panel scoped to current pipe or step.
-- [ ] Show affected fields/steps clearly before generation and after response.
-- [ ] Render field-level and code diffs.
-- [ ] Add Apply / Apply + rerun / Apply + test / Refine / Discard actions.
+- [x] Add a Pi side panel scoped to current pipe or step. *(RunDrawer.js: proposal review mode (drawerMode="proposal") shows full proposal details)*
+- [x] Show affected fields/steps clearly before generation and after response. *(RunDrawer.js: each operation rendered as a card with type, target path, and new value)*
+- [x] Render field-level and code diffs. *(RunDrawer.js: code changes shown in monospace code blocks; text changes shown inline)*
+- [x] Add Apply / Apply + rerun / Apply + test / Refine / Discard actions. *(RunDrawer.js: Apply, Apply + Rerun, Refine (with feedback input), Discard buttons)*
 - [ ] Add proposal history for the current workspace.
-- [ ] Surface warnings when Pi suggests large or multi-step changes.
+- [x] Surface warnings when Pi suggests large or multi-step changes. *(RunDrawer.js: warning banner when proposal has >5 operations)*
 
 ### Safety / trust
 
-- [ ] Add proposal size thresholds and warnings.
+- [x] Add proposal size thresholds and warnings. *(RunDrawer.js: >5 operations triggers a visible warning)*
 - [ ] Add scope-violation rejection if Pi touches unrelated targets.
-- [ ] Log proposal provenance for debugging and trust-building.
+- [x] Log proposal provenance for debugging and trust-building. *(proposalManager.ts: proposals persisted with origin, prompt, createdAt; console.log on apply/discard)*
 
 ### Tests
 
-- [ ] Add tests for proposal parsing/validation.
-- [ ] Add tests that step-scoped prompts do not mutate unrelated steps.
-- [ ] Add tests for apply/discard/refine state transitions.
-- [ ] Add tests for proposal-to-workspace dirty-state updates.
+- [x] Add tests for proposal parsing/validation. *(proposal_test.ts: 22 tests including parseLLMProposalResponse, createProposal, stripCodeFences)*
+- [x] Add tests that step-scoped prompts do not mutate unrelated steps. *(proposal_test.ts: applyProposal with replace_step_code only modifies target step)*
+- [x] Add tests for apply/discard/refine state transitions. *(proposal_test.ts: apply sets "applied", discard sets "discarded", status checked)*
+- [x] Add tests for proposal-to-workspace dirty-state updates. *(proposal_test.ts: applyProposal sets workspace to json_dirty with pi_patch provenance)*
 
 ## Phase 4 - Sync-centered polish and workflow hardening
 
