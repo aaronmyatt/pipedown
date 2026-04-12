@@ -1139,14 +1139,14 @@ Success signal:
 
 ### Frontend
 
-- [ ] Add pipe-level session summary state to the home page.
-- [ ] Add per-step status badges.
-- [ ] Add **Run next** action.
-- [ ] Add **Rerun from here** action.
-- [ ] Add **Continue** action when a session is partially complete.
-- [ ] Show latest output/delta inline on each step.
+- [x] Add pipe-level session summary state to the home page. *(state.js: activeSession, latestSessions, sessionLoading state properties)*
+- [x] Add per-step status badges. *(MarkdownRenderer.js: colored status badges injected into step headings — ● done/green, ○ pending/gray, ◌ running/yellow, ✗ failed/red)*
+- [x] Add **Run next** action. *(state.js: PD.actions.runNextStep — finds first pending step and runs it as single_step session)*
+- [x] Add **Rerun from here** action. *(state.js: PD.actions.rerunFromStep — creates from_step session; button in MarkdownRenderer step toolbars)*
+- [x] Add **Continue** action when a session is partially complete. *(state.js: PD.actions.continueSession — POSTs to /api/sessions/:project/:pipe/:sessionId/continue)*
+- [x] Show latest output/delta inline on each step. *(RunDrawer.js: session summary panel with per-step status bar, expandable before/after/delta per step)*
 - [ ] Preserve selected session context across page refreshes if possible.
-- [ ] Reduce reliance on the generic drawer for core execution understanding.
+- [x] Reduce reliance on the generic drawer for core execution understanding. *(RunDrawer.js: session summary section shows structured per-step results above raw output)*
 
 ### Trace integration
 
