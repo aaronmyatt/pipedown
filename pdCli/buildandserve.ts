@@ -21,6 +21,17 @@ import { performExtraction, toKebabCase } from "../extractSteps.ts";
 // when the desktop app isn't running.
 // Ref: ./notifyTauri.ts for protocol details and event type definitions
 import { notifyTauri, TAURI_SOCKET_PATH } from "./notifyTauri.ts";
+// Session manager — CRUD + execution for run sessions. Provides the
+// session-based execution model described in WEB_FIRST_WORKFLOW_PLAN.md §8.
+// Sessions persist under `.pd/<pipe>/sessions/<sessionId>.json`.
+// Ref: sessionManager.ts for full implementation
+import {
+  createSession,
+  persistSession,
+  readSession,
+  listSessions,
+  executeSession,
+} from "./sessionManager.ts";
 
 let _controller: ReadableStreamDefaultController<string> | null = null;
 
@@ -420,6 +431,73 @@ export async function serve(input: BuildInput){
       return new Response(JSON.stringify(data), {
         headers: { "content-type": "application/json" },
       });
+    }
+
+    // ── Sync Preview API ──
+    // GET /api/workspaces/:pipeName/sync-preview
+    //
+    // Returns a SyncResult with the generated markdown included, equivalent
+    // to running `pd sync --dry-run` programmatically. The web UI uses this
+    // to show a sync preview panel without actually writing the markdown file.
+    //
+    // The endpoint reads index.json for the requested pipe, regenerates
+    // markdown via pipeToMarkdown, and returns a SyncResult envelope with
+    // `markdown` populated. No files are written.
+    //
+    // Ref: WEB_FIRST_WORKFLOW_PLAN.md §4.4 — workspace APIs
+    // Ref: WEB_FIRST_WORKFLOW_PLAN.md §7.5 — sync preview support
+    if (request.method === "GET" && url.pathname.match(/^\/api\/workspaces\/[^/]+\/sync-preview$/)) {
+      const segments = url.pathname.split("/");
+      // URL shape: /api/workspaces/:pipeName/sync-preview
+      // segments:   ['', 'api', 'workspaces', pipeName, 'sync-preview']
+      const pipeName = decodeURIComponent(segments[3]);
+
+      // The sync-preview endpoint works on the local project (the project
+      // whose directory the pd server was launched from), so we resolve
+      // index.json relative to the server's cwd/.pd/ directory.
+      const pdDir = std.join(Deno.cwd(), ".pd");
+      const indexJsonPath = std.join(pdDir, pipeName, "index.json");
+
+      try {
+        const raw = await Deno.readTextFile(indexJsonPath);
+        const pipeData = JSON.parse(raw);
+
+        // pipeToMarkdown uses lossless reconstruction when rawSource and
+        // sourceMap are available, otherwise falls back to field-based
+        // reconstruction. This is the same codepath `pd sync` uses.
+        // Ref: pipeToMarkdown.ts — pipeToMarkdown()
+        const markdown = pipeToMarkdown(pipeData);
+
+        // Build a SyncResult envelope matching the type in pipedown.d.ts.
+        // success=true because generation succeeded (even though no write happens).
+        const result = {
+          success: true,
+          pipeName,
+          mdPath: pipeData.mdPath || null,
+          indexJsonPath,
+          syncState: pipeData.workspace?.syncState ?? "clean",
+          markdown, // The key payload — generated markdown for preview
+          rebuilt: false,
+        };
+
+        return new Response(JSON.stringify(result), {
+          headers: { "content-type": "application/json", "cache-control": "no-store" },
+        });
+      } catch (e) {
+        // Return a failure SyncResult envelope so consumers get a consistent
+        // shape regardless of success or failure.
+        const result = {
+          success: false,
+          pipeName,
+          indexJsonPath,
+          syncState: "json_dirty",
+          error: (e as Error).message || "Failed to generate sync preview",
+        };
+        return new Response(JSON.stringify(result), {
+          status: 404,
+          headers: { "content-type": "application/json" },
+        });
+      }
     }
 
     // --- Action API routes (POST) ---
@@ -1206,6 +1284,348 @@ ${step.code}
       return new Response(tracePage(), {
         headers: { "content-type": "text/html", "cache-control": "no-store" },
       });
+    }
+
+    // ── Session API Routes ──
+    // These endpoints implement the session-based execution model described
+    // in WEB_FIRST_WORKFLOW_PLAN.md §8. Sessions enable incremental execution,
+    // partial runs, continue-from-here, and rerun-from-step operations.
+    //
+    // Routes:
+    //   POST /api/sessions              — create (and optionally execute) a session
+    //   GET  /api/sessions/:project/:pipe — list recent sessions for a pipe
+    //   GET  /api/sessions/:project/:pipe/:sessionId — get full session details
+    //   POST /api/sessions/:project/:pipe/:sessionId/continue — continue from last step
+    //   POST /api/sessions/:project/:pipe/:sessionId/rerun-from/:stepIndex — rerun from step
+    //
+    // Ref: pdCli/sessionManager.ts for CRUD + execution logic
+
+    // ── POST /api/sessions — Create and optionally execute a session ──
+    if (request.method === "POST" && url.pathname === "/api/sessions") {
+      try {
+        const body = await request.json();
+        const { project: projectName, pipe: pipeName, input: inputValue, mode, targetStepIndex, startStepIndex } = body;
+
+        if (!projectName || !pipeName) {
+          return new Response(
+            JSON.stringify({ error: "Missing required fields: project, pipe" }),
+            { status: 400, headers: { "content-type": "application/json" } },
+          );
+        }
+
+        // Resolve the project from the registry
+        const project = await resolveProject(projectName);
+        if (!project) return new Response("Project not found", { status: 404 });
+
+        // Optimistic rebuild: ensure .pd/ is current before reading pipe data
+        await buildProject(project.path);
+
+        // Load the pipe's index.json — needed for step metadata, fingerprints, etc.
+        const pipeData = await readPipeIndex(project.path, pipeName);
+        if (!pipeData) {
+          return new Response(
+            JSON.stringify({ error: `Pipe "${pipeName}" not found (run pd build first)` }),
+            { status: 404, headers: { "content-type": "application/json" } },
+          );
+        }
+
+        // Create the session from pipe metadata
+        const session = createSession(
+          projectName,
+          pipeData,
+          inputValue || {},
+          mode || "full",
+          { targetStepIndex, startStepIndex },
+        );
+
+        // Persist the created session immediately
+        await persistSession(project.path, session);
+
+        // If a mode was provided, execute the session immediately.
+        // This is the common path — create + run in one request.
+        if (mode) {
+          const { session: executed, output } = await executeSession(
+            project.path,
+            session,
+            pipeData,
+          );
+
+          // Broadcast SSE events for real-time UI updates.
+          // Step-level events let the frontend update individual step badges
+          // as execution progresses. The session-level event signals completion.
+          for (const step of executed.steps) {
+            if (step.status === "done" || step.status === "failed") {
+              broadcastSSE({
+                type: "session_step_updated",
+                project: projectName,
+                pipe: pipeName,
+                sessionId: executed.sessionId,
+                stepIndex: step.stepIndex,
+                status: step.status,
+              });
+            }
+          }
+          broadcastSSE({
+            type: "session_updated",
+            project: projectName,
+            pipe: pipeName,
+            sessionId: executed.sessionId,
+            status: executed.status,
+          });
+
+          return new Response(JSON.stringify(executed), {
+            headers: { "content-type": "application/json" },
+          });
+        }
+
+        // Mode not provided — just return the created session without executing
+        return new Response(JSON.stringify(session), {
+          headers: { "content-type": "application/json" },
+        });
+      } catch (e) {
+        return new Response(
+          JSON.stringify({ error: (e as Error).message }),
+          { status: 500, headers: { "content-type": "application/json" } },
+        );
+      }
+    }
+
+    // ── GET /api/sessions/:project/:pipe — List recent sessions ──
+    if (request.method === "GET" && url.pathname.match(/^\/api\/sessions\/[^/]+\/[^/]+$/)) {
+      try {
+        const segments = url.pathname.split("/");
+        const projectName = decodeURIComponent(segments[3]);
+        const pipeName = decodeURIComponent(segments[4]);
+
+        const project = await resolveProject(projectName);
+        if (!project) return new Response("Project not found", { status: 404 });
+
+        const limitParam = url.searchParams.get("limit");
+        const limit = limitParam ? parseInt(limitParam) : 10;
+
+        const sessions = await listSessions(project.path, pipeName, limit);
+
+        // For the list view, strip full snapshot data to keep responses small.
+        // The client can fetch full details via the individual session endpoint.
+        const summaries = sessions.map((s) => ({
+          ...s,
+          steps: s.steps.map((step) => ({
+            ...step,
+            // Remove inline snapshot/delta data — it can be large
+            beforeSnapshotRef: step.beforeSnapshotRef ? "[present]" : undefined,
+            afterSnapshotRef: step.afterSnapshotRef ? "[present]" : undefined,
+            deltaRef: step.deltaRef ? "[present]" : undefined,
+          })),
+        }));
+
+        return new Response(JSON.stringify(summaries), {
+          headers: { "content-type": "application/json", "cache-control": "no-store" },
+        });
+      } catch (e) {
+        return new Response(
+          JSON.stringify({ error: (e as Error).message }),
+          { status: 500, headers: { "content-type": "application/json" } },
+        );
+      }
+    }
+
+    // ── GET /api/sessions/:project/:pipe/:sessionId — Get full session details ──
+    if (request.method === "GET" && url.pathname.match(/^\/api\/sessions\/[^/]+\/[^/]+\/[^/]+$/)) {
+      try {
+        const segments = url.pathname.split("/");
+        const projectName = decodeURIComponent(segments[3]);
+        const pipeName = decodeURIComponent(segments[4]);
+        const sessionId = decodeURIComponent(segments[5]);
+
+        const project = await resolveProject(projectName);
+        if (!project) return new Response("Project not found", { status: 404 });
+
+        const session = await readSession(project.path, pipeName, sessionId);
+        if (!session) {
+          return new Response(
+            JSON.stringify({ error: "Session not found" }),
+            { status: 404, headers: { "content-type": "application/json" } },
+          );
+        }
+
+        return new Response(JSON.stringify(session), {
+          headers: { "content-type": "application/json", "cache-control": "no-store" },
+        });
+      } catch (e) {
+        return new Response(
+          JSON.stringify({ error: (e as Error).message }),
+          { status: 500, headers: { "content-type": "application/json" } },
+        );
+      }
+    }
+
+    // ── POST /api/sessions/:project/:pipe/:sessionId/continue — Continue session ──
+    // Resumes execution from the last completed step. Useful after a partial run
+    // (to_step) or after fixing a failed step and wanting to continue.
+    if (
+      request.method === "POST" &&
+      url.pathname.match(/^\/api\/sessions\/[^/]+\/[^/]+\/[^/]+\/continue$/)
+    ) {
+      try {
+        const segments = url.pathname.split("/");
+        const projectName = decodeURIComponent(segments[3]);
+        const pipeName = decodeURIComponent(segments[4]);
+        const sessionId = decodeURIComponent(segments[5]);
+
+        const project = await resolveProject(projectName);
+        if (!project) return new Response("Project not found", { status: 404 });
+
+        // Rebuild to ensure .pd/ is current
+        await buildProject(project.path);
+
+        // Load existing session
+        const session = await readSession(project.path, pipeName, sessionId);
+        if (!session) {
+          return new Response(
+            JSON.stringify({ error: "Session not found" }),
+            { status: 404, headers: { "content-type": "application/json" } },
+          );
+        }
+
+        // Load pipe data for execution
+        const pipeData = await readPipeIndex(project.path, pipeName);
+        if (!pipeData) {
+          return new Response(
+            JSON.stringify({ error: `Pipe "${pipeName}" not found` }),
+            { status: 404, headers: { "content-type": "application/json" } },
+          );
+        }
+
+        // Switch mode to continue and reset status for re-execution
+        session.mode = "continue";
+        session.status = "created";
+
+        // Allow optional input override from the request body
+        try {
+          const body = await request.json();
+          if (body.input !== undefined) {
+            session.inputValue = body.input;
+          }
+        } catch {
+          // No body or invalid JSON — continue with existing inputValue
+        }
+
+        const { session: continued } = await executeSession(
+          project.path,
+          session,
+          pipeData,
+        );
+
+        // Broadcast SSE completion event
+        broadcastSSE({
+          type: "session_updated",
+          project: projectName,
+          pipe: pipeName,
+          sessionId: continued.sessionId,
+          status: continued.status,
+        });
+
+        return new Response(JSON.stringify(continued), {
+          headers: { "content-type": "application/json" },
+        });
+      } catch (e) {
+        return new Response(
+          JSON.stringify({ error: (e as Error).message }),
+          { status: 500, headers: { "content-type": "application/json" } },
+        );
+      }
+    }
+
+    // ── POST /api/sessions/:project/:pipe/:sessionId/rerun-from/:stepIndex ──
+    // Creates a new execution starting from the specified step index.
+    // Steps before stepIndex retain their previous results; steps from
+    // stepIndex onward are re-executed.
+    if (
+      request.method === "POST" &&
+      url.pathname.match(/^\/api\/sessions\/[^/]+\/[^/]+\/[^/]+\/rerun-from\/\d+$/)
+    ) {
+      try {
+        const segments = url.pathname.split("/");
+        const projectName = decodeURIComponent(segments[3]);
+        const pipeName = decodeURIComponent(segments[4]);
+        const sessionId = decodeURIComponent(segments[5]);
+        // segments[6] is "rerun-from", segments[7] is the step index
+        const stepIndex = parseInt(segments[7]);
+
+        if (isNaN(stepIndex) || stepIndex < 0) {
+          return new Response(
+            JSON.stringify({ error: "Invalid step index" }),
+            { status: 400, headers: { "content-type": "application/json" } },
+          );
+        }
+
+        const project = await resolveProject(projectName);
+        if (!project) return new Response("Project not found", { status: 404 });
+
+        // Rebuild to ensure .pd/ is current
+        await buildProject(project.path);
+
+        // Load existing session
+        const session = await readSession(project.path, pipeName, sessionId);
+        if (!session) {
+          return new Response(
+            JSON.stringify({ error: "Session not found" }),
+            { status: 404, headers: { "content-type": "application/json" } },
+          );
+        }
+
+        // Load pipe data for execution
+        const pipeData = await readPipeIndex(project.path, pipeName);
+        if (!pipeData) {
+          return new Response(
+            JSON.stringify({ error: `Pipe "${pipeName}" not found` }),
+            { status: 404, headers: { "content-type": "application/json" } },
+          );
+        }
+
+        // Switch mode to from_step, starting at the requested stepIndex.
+        // Steps before stepIndex keep their existing results (done/snapshot).
+        // Steps from stepIndex onward are reset to "pending" for re-execution.
+        session.mode = "from_step";
+        session.startStepIndex = stepIndex;
+        session.status = "created";
+
+        // Reset steps from stepIndex onward to "pending" so they get re-executed
+        for (let i = stepIndex; i < session.steps.length; i++) {
+          session.steps[i].status = "pending";
+          session.steps[i].beforeSnapshotRef = undefined;
+          session.steps[i].afterSnapshotRef = undefined;
+          session.steps[i].deltaRef = undefined;
+          session.steps[i].errorRef = undefined;
+          session.steps[i].durationMs = undefined;
+          session.steps[i].startedAt = undefined;
+          session.steps[i].completedAt = undefined;
+        }
+
+        const { session: rerun } = await executeSession(
+          project.path,
+          session,
+          pipeData,
+        );
+
+        // Broadcast SSE completion event
+        broadcastSSE({
+          type: "session_updated",
+          project: projectName,
+          pipe: pipeName,
+          sessionId: rerun.sessionId,
+          status: rerun.status,
+        });
+
+        return new Response(JSON.stringify(rerun), {
+          headers: { "content-type": "application/json" },
+        });
+      } catch (e) {
+        return new Response(
+          JSON.stringify({ error: (e as Error).message }),
+          { status: 500, headers: { "content-type": "application/json" } },
+        );
+      }
     }
 
     // Frontend static assets (CSS + JS)
