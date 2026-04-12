@@ -173,6 +173,28 @@ input.result = capitalize(input.validated);
     assertStringIncludes(script.script!, 'from "npm:lodash"');
   });
 
+  await t.step("duplicate imports are deduplicated in generated output", async () => {
+    const { script } = await fullPipeline(`# Duplicate Import Test
+
+## First
+
+\`\`\`ts
+import { shared } from "npm:shared";
+input.first = shared();
+\`\`\`
+
+## Second
+
+\`\`\`ts
+import { shared } from "npm:shared";
+input.second = shared();
+\`\`\`
+`);
+    assertEquals(script.success, true);
+    const importCount = script.script!.match(/import \{ shared \} from "npm:shared";/g)?.length ?? 0;
+    assertEquals(importCount, 1);
+  });
+
   await t.step("skip blocks are excluded from steps and generated script", async () => {
     const { pipe, script } = await fullPipeline(`# Skip Test
 

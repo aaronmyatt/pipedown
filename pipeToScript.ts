@@ -4,23 +4,45 @@ import { sanitizeString } from "./pdUtils.ts";
 
 const detectImports = /import.*from.*/gm;
 
+/**
+ * Deduplicate hoisted step imports while preserving first-seen order.
+ *
+ * We intentionally dedupe by exact import statement text instead of by module
+ * specifier alone. For example, `import { a } from "x"` and
+ * `import { b } from "x"` are both valid and not interchangeable, so only
+ * literally repeated imports should collapse.
+ *
+ * JavaScript `Set` preserves insertion order during iteration, which makes it
+ * a small, predictable fit for this build-time normalization pass.
+ * Ref: https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Set
+ *
+ * @param imports - Hoisted import statements collected from all pipe steps
+ * @returns Import statements with exact duplicates removed
+ */
+const dedupeImports = (imports: string[]): string[] => [...new Set(imports)];
+
 export const pipeToScript = async (input: PipeToScriptInput) => {
   const extractImportsFromSteps = (input: PipeToScriptInput) => {
-    input.pipeImports = input.pipe.steps.reduce(
-      (acc: string[], step: Step) => {
-        const stepImports = step.code.matchAll(detectImports);
-        if (stepImports) {
-          for (const match of stepImports) {
-            acc.push(match[0]);
+    input.pipeImports = dedupeImports(
+      input.pipe.steps.reduce(
+        (acc: string[], step: Step) => {
+          const stepImports = step.code.matchAll(detectImports);
+          if (stepImports) {
+            for (const match of stepImports) {
+              // Normalize leading/trailing whitespace before hoisting so that
+              // semantically identical imports from different steps dedupe
+              // cleanly in the generated module header.
+              acc.push(match[0].trim());
+            }
           }
-        }
-        return acc;
-      },
-      [],
-    )
-      .filter((importStatement: string) => {
-        return !importStatement.startsWith("//");
-      });
+          return acc;
+        },
+        [],
+      )
+        .filter((importStatement: string) => {
+          return !importStatement.startsWith("//");
+        }),
+    );
     return input;
   };
 

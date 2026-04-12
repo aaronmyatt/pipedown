@@ -138,6 +138,59 @@ Deno.test("pipeToScript", async (t) => {
     assertStringIncludes(result.script!, 'from "npm:pkg-b"');
   });
 
+  await t.step("deduplicates identical imports across steps", async () => {
+    const pipe = makePipe({
+      steps: [
+        {
+          code: 'import { shared } from "npm:shared";\ninput.first = shared();',
+          range: [0, 0],
+          name: "First",
+          funcName: "First",
+          inList: false,
+        },
+        {
+          code: 'import { shared } from "npm:shared";\ninput.second = shared();',
+          range: [1, 1],
+          name: "Second",
+          funcName: "Second",
+          inList: false,
+        },
+      ],
+    });
+
+    const result = await pipeToScript({ pipe });
+    assertEquals(result.success, true);
+    const importCount = result.script!.match(/import \{ shared \} from "npm:shared";/g)?.length ?? 0;
+    assertEquals(importCount, 1);
+  });
+
+  await t.step("keeps distinct import clauses from the same library", async () => {
+    const pipe = makePipe({
+      steps: [
+        {
+          code: 'import { a } from "npm:shared";\ninput.a = a();',
+          range: [0, 0],
+          name: "StepA",
+          funcName: "StepA",
+          inList: false,
+        },
+        {
+          code: 'import { b } from "npm:shared";\ninput.b = b();',
+          range: [1, 1],
+          name: "StepB",
+          funcName: "StepB",
+          inList: false,
+        },
+      ],
+    });
+
+    const result = await pipeToScript({ pipe });
+    assertEquals(result.success, true);
+    const sharedImportCount = result.script!.split("\n")
+      .filter((line) => line.includes('from "npm:shared"')).length;
+    assertEquals(sharedImportCount, 2);
+  });
+
   await t.step("handles steps with no imports", async () => {
     const pipe = makePipe({
       steps: [
