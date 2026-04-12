@@ -1127,15 +1127,15 @@ Success signal:
 
 ### Backend
 
-- [ ] Introduce a run session model and persistence format.
-- [ ] Add session-aware wrappers around existing run/full and run-step flows.
-- [ ] Persist partial runs with metadata equivalent to full runs.
-- [ ] Store per-step before/after snapshots for executed steps.
-- [ ] Compute/store per-step deltas.
-- [ ] Track per-step status transitions.
-- [ ] Add session ids to run responses.
-- [ ] Add session-fetch API.
-- [ ] Add session event streaming over SSE.
+- [x] Introduce a run session model and persistence format. *(pdCli/sessionManager.ts: RunSession persisted as `.pd/<pipe>/sessions/<sessionId>.json`)*
+- [x] Add session-aware wrappers around existing run/full and run-step flows. *(sessionManager.ts: `executeSession()` wraps step execution with session tracking)*
+- [x] Persist partial runs with metadata equivalent to full runs. *(sessionManager.ts: partial runs via `to_step`, `from_step`, `single_step`, `continue` modes all persist identically)*
+- [x] Store per-step before/after snapshots for executed steps. *(sessionManager.ts: `safeSnapshot()` captures before/after inline in SessionStepRecord)*
+- [x] Compute/store per-step deltas. *(sessionManager.ts: `computeDelta()` stores added/modified/removed keys per step)*
+- [x] Track per-step status transitions. *(sessionManager.ts: `updateStepStatus()` transitions pending→running→done/failed)*
+- [x] Add session ids to run responses. *(buildandserve.ts: POST /api/sessions returns full session JSON with sessionId)*
+- [x] Add session-fetch API. *(buildandserve.ts: GET /api/sessions/:project/:pipe/:sessionId)*
+- [x] Add session event streaming over SSE. *(buildandserve.ts: broadcasts `session_step_updated` and `session_updated` events)*
 
 ### Frontend
 
@@ -1156,10 +1156,10 @@ Success signal:
 
 ### Tests
 
-- [ ] Add tests for session creation and persistence.
-- [ ] Add tests for partial-run trace persistence.
-- [ ] Add tests for run-to-step / rerun-from-step metadata correctness.
-- [ ] Add tests for status computation at both pipe and step level.
+- [x] Add tests for session creation and persistence. *(session_test.ts: creation, persistence/round-trip, readSession null case)*
+- [x] Add tests for partial-run trace persistence. *(session_test.ts: to_step test verifies partial runs persist correctly)*
+- [x] Add tests for run-to-step / rerun-from-step metadata correctness. *(session_test.ts: to_step + continue tests, computeStepsToExecute tests for all modes)*
+- [x] Add tests for status computation at both pipe and step level. *(session_test.ts: full execution, to_step, continue — all verify step and session statuses)*
 
 ## Phase 2 — Structured step editing as the default
 
