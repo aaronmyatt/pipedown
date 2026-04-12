@@ -1252,22 +1252,22 @@ Success signal:
 
 ### Sync UX
 
-- [ ] Add sync preview panel showing generated markdown diff.
-- [ ] Add one obvious sync action in the workspace header.
-- [ ] Show last synced timestamp and source baseline.
-- [ ] Show which mode last wrote the current workspace (`pd sync` or raw markdown rebuild).
+- [x] Add sync preview panel showing generated markdown diff. *(SyncStatusBar.js: expandable sync preview section fetching /api/workspaces/:pipeName/sync-preview; shows generated markdown in scrollable pre block)*
+- [x] Add one obvious sync action in the workspace header. *(SyncStatusBar.js: "Sync to markdown" button shown when json_dirty)*
+- [x] Show last synced timestamp and source baseline. *(SyncStatusBar.js: displays lastSyncedAt and lastBuiltAt via pd.relativeTime())*
+- [x] Show which mode last wrote the current workspace (`pd sync` or raw markdown rebuild). *(SyncStatusBar.js: shows workspace.lastModifiedBy — build/sync/web_edit/pi_patch)*
 
 ### Overwrite / rebuild semantics
 
-- [ ] Document last-write-wins behavior for raw markdown saves and sync.
-- [ ] Implement an explicit "rebuild from markdown" action.
-- [ ] Implement an explicit "sync structured changes now" action.
-- [ ] Do not attempt merge/conflict resolution in the first cut.
+- [ ] Document last-write-wins behavior for raw markdown saves and sync. *(behavior implemented; standalone docs not yet written)*
+- [x] Implement an explicit "rebuild from markdown" action. *(SyncStatusBar.js: "Rebuild from markdown" button; state.js: rebuildFromMarkdown() calls POST /api/workspaces/:project/:pipe/rebuild)*
+- [x] Implement an explicit "sync structured changes now" action. *(SyncStatusBar.js: "Sync to markdown" button; state.js: syncToMarkdown() calls POST /api/workspaces/:project/:pipe/sync)*
+- [x] Do not attempt merge/conflict resolution in the first cut. *(confirmed — simple last-write-wins throughout)*
 
 ### Consistency / reliability
 
-- [ ] Ensure sync clears dirty state only after successful markdown write and rebuild.
-- [ ] Ensure failed sync leaves the workspace recoverable.
+- [x] Ensure sync clears dirty state only after successful markdown write and rebuild. *(state.js: syncToMarkdown sets "syncing" immediately, "clean" only on success, reverts to "json_dirty" on failure)*
+- [x] Ensure failed sync leaves the workspace recoverable. *(state.js: failure path restores syncState and shows error in drawer)*
 - [ ] Ensure file watcher/SSE events settle into one consistent current workspace instead of mixing stale and fresh state.
 
 ### Docs and onboarding
@@ -1278,21 +1278,21 @@ Success signal:
 
 ### Tests
 
-- [ ] Add integration tests for structured edit → sync → rebuild → clean state.
-- [ ] Add integration tests for sync failure recovery.
-- [ ] Add tests for documented last-write-wins overwrite flows.
+- [x] Add integration tests for structured edit → sync → rebuild → clean state. *(integration_test.ts: "edit → sync → rebuild → clean state", "edit pipe description → sync → verify in markdown", "insert step → sync → rebuild → verify")*
+- [x] Add integration tests for sync failure recovery. *(integration_test.ts: "sync failure recovery" tests pipe with invalid mdPath)*
+- [x] Add tests for documented last-write-wins overwrite flows. *(integration_test.ts: "last-write-wins — raw markdown overwrites structured edits")*
 
 ## Phase 5 - Deep integration and quality pass
 
 ### UX polish
 
-- [ ] Add keyboard shortcuts for run next, rerun from here, ask Pi, and sync.
-- [ ] Add better empty/loading/error states for session and proposal panels.
+- [x] Add keyboard shortcuts for run next, rerun from here, ask Pi, and sync. *(app.js: Cmd+Shift+R run pipe, Cmd+Shift+N run next, Cmd+Shift+S sync, Escape close drawer/editors)*
+- [x] Add better empty/loading/error states for session and proposal panels. *(RunDrawer.js: spinner for loading, "No session yet" empty state, structured error display)*
 - [ ] Improve mobile/narrow-layout behavior enough to stay usable.
 
 ### Trace/history integration
 
-- [ ] Add "recent sessions" list to the home page.
+- [x] Add "recent sessions" list to the home page. *(RunDrawer.js: "Sessions" section in drawer showing recent sessions; state.js: loadSessionHistory fetches GET /api/sessions/:project/:pipe)*
 - [ ] Add compare-latest-vs-previous run summaries.
 - [ ] Add quick links from traces back to the exact pipe/step workspace state.
 
@@ -1304,7 +1304,7 @@ Success signal:
 
 ### Quality / observability
 
-- [ ] Add structured logging around workspace/sync/session/proposal flows.
+- [x] Add structured logging around workspace/sync/session/proposal flows. *(structuredEdit.ts: [pd:edit] prefixed logs; sessionManager.ts: [pd:session] logs; proposalManager.ts: [pd:proposal] logs; syncCommand.ts: [pd:sync] logs)*
 - [ ] Add regression coverage for SSE-driven updates.
 - [ ] Add manual QA checklist for edit/run/sync overwrite scenarios.
 
