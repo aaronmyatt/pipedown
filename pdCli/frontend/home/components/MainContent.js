@@ -35,6 +35,12 @@ PD.components.MainContent = {
 
     return m("div.detail", [
       m(PD.components.PipeToolbar),
+      // ── Sync Status Bar ──
+      // Shows the current sync state between index.json and markdown.
+      // Visible at all times when a pipe is selected so the user always
+      // knows whether structured edits need syncing.
+      // Ref: SyncStatusBar.js, WEB_FIRST_WORKFLOW_PLAN.md §7.3
+      m(PD.components.SyncStatusBar),
       // ── Conditional render: editor vs renderer ──
       // editMode toggles between the raw textarea and the rendered markdown.
       // Both components occupy the same layout slot.

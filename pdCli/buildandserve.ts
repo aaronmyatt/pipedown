@@ -1,7 +1,7 @@
-import type { BuildInput } from "../pipedown.d.ts";
+import type { BuildInput, Pipe, Step, WorkspaceMetadata } from "../pipedown.d.ts";
 import { std } from "../deps.ts";
 
-import { pdBuild } from "../pdBuild.ts";
+import { pdBuild, computeStepFingerprint } from "../pdBuild.ts";
 // pipeToMarkdown converts a Pipe JSON object back to markdown source.
 // Used here to persist LLM-generated changes (descriptions, schemas, code, etc.)
 // back to the original .md file — the same round-trip mechanism that `pd sync` uses.
@@ -25,6 +25,21 @@ import { notifyTauri, TAURI_SOCKET_PATH } from "./notifyTauri.ts";
 // session-based execution model described in WEB_FIRST_WORKFLOW_PLAN.md §8.
 // Sessions persist under `.pd/<pipe>/sessions/<sessionId>.json`.
 // Ref: sessionManager.ts for full implementation
+// Structured edit helpers — pure functions for mutating pipe/step data
+// in index.json. These are the core edit primitives used by the PATCH
+// endpoints (Phase 2) and tested directly in structured_edit_test.ts.
+// Ref: WEB_FIRST_WORKFLOW_PLAN.md §2 — Phase 2 checklist
+import {
+  editPipeFields,
+  editStepFields,
+  insertStep,
+  deleteStep,
+  reorderStep,
+  syncPipeToMarkdown,
+  rebuildPipeFromMarkdown,
+  readPipeData,
+  writePipeData,
+} from "./structuredEdit.ts";
 import {
   createSession,
   persistSession,
@@ -501,6 +516,288 @@ export async function serve(input: BuildInput){
     }
 
     // --- Action API routes (POST) ---
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // ── Phase 2: Structured Edit Endpoints ──
+    // These endpoints implement structured pipe/step editing that operates
+    // on index.json rather than raw markdown. Edits mark the workspace as
+    // "json_dirty"; the user explicitly syncs to markdown when ready.
+    //
+    // Ref: WEB_FIRST_WORKFLOW_PLAN.md §2 — Phase 2 checklist
+    // Ref: structuredEdit.ts — pure edit logic (testable without HTTP)
+    // ═══════════════════════════════════════════════════════════════════════
+
+    // ── PATCH /api/workspaces/:project/:pipe ── Pipe-level structured edit
+    // Accepts JSON body: { pipeDescription?: string, schema?: string }
+    // Updates pipe-level fields in index.json without touching steps.
+    // Ref: WEB_FIRST_WORKFLOW_PLAN.md §4.4
+    if (
+      request.method === "PATCH" &&
+      url.pathname.match(/^\/api\/workspaces\/[^/]+\/[^/]+$/)
+    ) {
+      try {
+        const segments = url.pathname.split("/");
+        const projectName = decodeURIComponent(segments[3]);
+        const pipeName = decodeURIComponent(segments[4]);
+
+        const project = await resolveProject(projectName);
+        if (!project) return new Response("Project not found", { status: 404 });
+
+        const body = await request.json();
+        const pipeData = await readPipeData(project.path, pipeName);
+        editPipeFields(pipeData, body);
+        await writePipeData(project.path, pipeName, pipeData);
+
+        // Broadcast SSE so other tabs/windows refresh.
+        broadcastSSE({ type: "workspace_changed", project: projectName, pipe: pipeName });
+
+        return new Response(JSON.stringify(pipeData), {
+          headers: { "content-type": "application/json" },
+        });
+      } catch (e) {
+        return new Response(
+          JSON.stringify({ error: (e as Error).message }),
+          { status: 500, headers: { "content-type": "application/json" } },
+        );
+      }
+    }
+
+    // ── PATCH /api/workspaces/:project/:pipe/steps/:stepIndex ──
+    // Step-level structured edit. Accepts JSON body:
+    //   { name?: string, description?: string, code?: string }
+    // Updates the step at the given index, recomputes fingerprint,
+    // and marks workspace as dirty.
+    // Ref: WEB_FIRST_WORKFLOW_PLAN.md §4.4
+    if (
+      request.method === "PATCH" &&
+      url.pathname.match(/^\/api\/workspaces\/[^/]+\/[^/]+\/steps\/\d+$/)
+    ) {
+      try {
+        const segments = url.pathname.split("/");
+        const projectName = decodeURIComponent(segments[3]);
+        const pipeName = decodeURIComponent(segments[4]);
+        const stepIndex = parseInt(segments[6]);
+
+        const project = await resolveProject(projectName);
+        if (!project) return new Response("Project not found", { status: 404 });
+
+        const body = await request.json();
+        const pipeData = await readPipeData(project.path, pipeName);
+        const updatedStep = await editStepFields(pipeData, stepIndex, body);
+
+        if (!updatedStep) {
+          return new Response(
+            JSON.stringify({ error: `Step index ${stepIndex} out of bounds` }),
+            { status: 400, headers: { "content-type": "application/json" } },
+          );
+        }
+
+        await writePipeData(project.path, pipeName, pipeData);
+
+        // Broadcast SSE with the specific step that changed.
+        broadcastSSE({
+          type: "workspace_changed",
+          project: projectName,
+          pipe: pipeName,
+          stepIndex,
+        });
+
+        return new Response(JSON.stringify(updatedStep), {
+          headers: { "content-type": "application/json" },
+        });
+      } catch (e) {
+        return new Response(
+          JSON.stringify({ error: (e as Error).message }),
+          { status: 500, headers: { "content-type": "application/json" } },
+        );
+      }
+    }
+
+    // ── POST /api/workspaces/:project/:pipe/sync ── Trigger sync from web UI
+    // Reads index.json, generates markdown via pipeToMarkdown(), writes to disk,
+    // rebuilds, and returns workspace to "clean" state.
+    // Ref: WEB_FIRST_WORKFLOW_PLAN.md §7.2, §7.5
+    if (
+      request.method === "POST" &&
+      url.pathname.match(/^\/api\/workspaces\/[^/]+\/[^/]+\/sync$/)
+    ) {
+      try {
+        const segments = url.pathname.split("/");
+        const projectName = decodeURIComponent(segments[3]);
+        const pipeName = decodeURIComponent(segments[4]);
+
+        const project = await resolveProject(projectName);
+        if (!project) return new Response("Project not found", { status: 404 });
+
+        const result = await syncPipeToMarkdown(project.path, pipeName);
+
+        // Broadcast sync state change so the UI can update badges.
+        broadcastSSE({
+          type: "sync_state_changed",
+          project: projectName,
+          pipe: pipeName,
+          syncState: result.syncState,
+        });
+
+        return new Response(JSON.stringify(result), {
+          headers: { "content-type": "application/json" },
+        });
+      } catch (e) {
+        return new Response(
+          JSON.stringify({ error: (e as Error).message }),
+          { status: 500, headers: { "content-type": "application/json" } },
+        );
+      }
+    }
+
+    // ── POST /api/workspaces/:project/:pipe/rebuild ── Rebuild from markdown
+    // Runs pdBuild() to regenerate index.json from the source markdown.
+    // Returns workspace to "clean" state.
+    // Ref: WEB_FIRST_WORKFLOW_PLAN.md §7.2
+    if (
+      request.method === "POST" &&
+      url.pathname.match(/^\/api\/workspaces\/[^/]+\/[^/]+\/rebuild$/)
+    ) {
+      try {
+        const segments = url.pathname.split("/");
+        const projectName = decodeURIComponent(segments[3]);
+        const pipeName = decodeURIComponent(segments[4]);
+
+        const project = await resolveProject(projectName);
+        if (!project) return new Response("Project not found", { status: 404 });
+
+        const success = await rebuildPipeFromMarkdown(project.path);
+
+        // Broadcast workspace change so the UI refreshes.
+        broadcastSSE({
+          type: "workspace_changed",
+          project: projectName,
+          pipe: pipeName,
+        });
+
+        return new Response(
+          JSON.stringify({ success, syncState: "clean" }),
+          { headers: { "content-type": "application/json" } },
+        );
+      } catch (e) {
+        return new Response(
+          JSON.stringify({ error: (e as Error).message }),
+          { status: 500, headers: { "content-type": "application/json" } },
+        );
+      }
+    }
+
+    // ── POST /api/workspaces/:project/:pipe/steps ── Insert a new step
+    // Body: { afterIndex?: number, name: string, code: string, description?: string }
+    // Inserts a step at the given position, assigns UUID, computes fingerprint.
+    if (
+      request.method === "POST" &&
+      url.pathname.match(/^\/api\/workspaces\/[^/]+\/[^/]+\/steps$/)
+    ) {
+      try {
+        const segments = url.pathname.split("/");
+        const projectName = decodeURIComponent(segments[3]);
+        const pipeName = decodeURIComponent(segments[4]);
+
+        const project = await resolveProject(projectName);
+        if (!project) return new Response("Project not found", { status: 404 });
+
+        const body = await request.json();
+        const pipeData = await readPipeData(project.path, pipeName);
+        const newStep = await insertStep(pipeData, body.afterIndex, body);
+        await writePipeData(project.path, pipeName, pipeData);
+
+        broadcastSSE({ type: "workspace_changed", project: projectName, pipe: pipeName });
+
+        return new Response(JSON.stringify(newStep), {
+          status: 201,
+          headers: { "content-type": "application/json" },
+        });
+      } catch (e) {
+        return new Response(
+          JSON.stringify({ error: (e as Error).message }),
+          { status: 500, headers: { "content-type": "application/json" } },
+        );
+      }
+    }
+
+    // ── DELETE /api/workspaces/:project/:pipe/steps/:stepIndex ── Delete a step
+    if (
+      request.method === "DELETE" &&
+      url.pathname.match(/^\/api\/workspaces\/[^/]+\/[^/]+\/steps\/\d+$/)
+    ) {
+      try {
+        const segments = url.pathname.split("/");
+        const projectName = decodeURIComponent(segments[3]);
+        const pipeName = decodeURIComponent(segments[4]);
+        const stepIndex = parseInt(segments[6]);
+
+        const project = await resolveProject(projectName);
+        if (!project) return new Response("Project not found", { status: 404 });
+
+        const pipeData = await readPipeData(project.path, pipeName);
+        const removed = deleteStep(pipeData, stepIndex);
+
+        if (!removed) {
+          return new Response(
+            JSON.stringify({ error: `Step index ${stepIndex} out of bounds` }),
+            { status: 400, headers: { "content-type": "application/json" } },
+          );
+        }
+
+        await writePipeData(project.path, pipeName, pipeData);
+        broadcastSSE({ type: "workspace_changed", project: projectName, pipe: pipeName });
+
+        return new Response(JSON.stringify({ success: true, removed }), {
+          headers: { "content-type": "application/json" },
+        });
+      } catch (e) {
+        return new Response(
+          JSON.stringify({ error: (e as Error).message }),
+          { status: 500, headers: { "content-type": "application/json" } },
+        );
+      }
+    }
+
+    // ── POST /api/workspaces/:project/:pipe/steps/reorder ── Reorder steps
+    // Body: { fromIndex: number, toIndex: number }
+    if (
+      request.method === "POST" &&
+      url.pathname.match(/^\/api\/workspaces\/[^/]+\/[^/]+\/steps\/reorder$/)
+    ) {
+      try {
+        const segments = url.pathname.split("/");
+        const projectName = decodeURIComponent(segments[3]);
+        const pipeName = decodeURIComponent(segments[4]);
+
+        const project = await resolveProject(projectName);
+        if (!project) return new Response("Project not found", { status: 404 });
+
+        const body = await request.json();
+        const pipeData = await readPipeData(project.path, pipeName);
+        const success = reorderStep(pipeData, body.fromIndex, body.toIndex);
+
+        if (!success) {
+          return new Response(
+            JSON.stringify({ error: "Invalid fromIndex or toIndex" }),
+            { status: 400, headers: { "content-type": "application/json" } },
+          );
+        }
+
+        await writePipeData(project.path, pipeName, pipeData);
+        broadcastSSE({ type: "workspace_changed", project: projectName, pipe: pipeName });
+
+        return new Response(
+          JSON.stringify({ success: true, steps: pipeData.steps.map((s) => s.name) }),
+          { headers: { "content-type": "application/json" } },
+        );
+      } catch (e) {
+        return new Response(
+          JSON.stringify({ error: (e as Error).message }),
+          { status: 500, headers: { "content-type": "application/json" } },
+        );
+      }
+    }
 
     if (request.method === "POST" && url.pathname === "/api/llm") {
       try {

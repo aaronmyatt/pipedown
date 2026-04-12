@@ -58,6 +58,36 @@ eventSource.onmessage = function(event) {
     }
   }
 
+  // ── Workspace/sync SSE events ──
+  // These events are broadcast by the structured edit endpoints when
+  // index.json is modified or when a sync/rebuild changes the state.
+  //
+  // Event types:
+  //   workspace_changed   — pipe/step data was modified in index.json
+  //   sync_state_changed  — sync state transitioned (e.g. json_dirty → clean)
+  //
+  // Ref: buildandserve.ts — broadcastSSE() calls in PATCH/POST endpoints
+  // Ref: state.js — PD.state.syncState
+  if (parsed?.type === "workspace_changed") {
+    // Refresh the pipe data if the event is for the currently selected pipe.
+    // This picks up any changes made by other tabs or the sync process.
+    if (PD.state.selectedPipe &&
+        PD.state.selectedPipe.pipeName === parsed.pipe) {
+      PD.actions.refreshPipe();
+    }
+    return;
+  }
+
+  if (parsed?.type === "sync_state_changed") {
+    // Update the sync state directly if the event is for the current pipe.
+    if (PD.state.selectedPipe &&
+        PD.state.selectedPipe.pipeName === parsed.pipe) {
+      PD.state.syncState = parsed.syncState || "clean";
+      m.redraw();
+    }
+    return;
+  }
+
   if (parsed?.type === "pipe_executed") {
     // ── Auto-focus the executed pipe ──
     // Refresh the pipe list first (the executed pipe's mtime will have

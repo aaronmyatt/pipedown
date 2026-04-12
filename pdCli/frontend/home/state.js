@@ -113,6 +113,29 @@ window.PD = {
     extractName: "",               // user-entered name for the new sub-pipe
     extracting: false,             // true while the POST /api/extract is in flight
 
+    // ── Sync/workspace state ──
+    // Tracks whether the structured workspace (index.json) is in sync with
+    // the markdown file on disk. Populated from pipeData.workspace.syncState
+    // when a pipe is selected, and updated by SSE events.
+    // Ref: WEB_FIRST_WORKFLOW_PLAN.md §7.3 — sync state model
+    // Ref: pipedown.d.ts — SyncState type
+    syncState: "clean",        // "clean" | "json_dirty" | "syncing"
+
+    // ── Step editing state ──
+    // Controls inline structured editing of individual steps. When
+    // editingStep is non-null, the step at that index shows form fields
+    // instead of rendered markdown content.
+    // Ref: WEB_FIRST_WORKFLOW_PLAN.md §2 — Phase 2 structured editing
+    editingStep: null,          // step index being edited, or null
+    editStepBuffer: null,       // { name, description, code } being edited
+
+    // ── Pipe-level structured editing state ──
+    // Controls inline editing of pipe-level fields (description, schema).
+    // When editingPipeField is non-null, the corresponding editor replaces
+    // the toolbar button with a textarea + Save/Cancel.
+    editingPipeField: null,     // "description" | "schema" | null
+    editPipeBuffer: "",         // current edit text
+
     // ── Session state ──
     // Tracks the current run session, recent sessions for the selected pipe,
     // and loading state for session API calls. Sessions enable incremental
@@ -351,6 +374,13 @@ PD.actions.selectPipe = function(pipe) {
   PD.state.editDirty = false;
   PD.state.editSaving = false;
 
+  // Reset structured edit state when switching pipes.
+  PD.state.editingStep = null;
+  PD.state.editStepBuffer = null;
+  PD.state.editingPipeField = null;
+  PD.state.editPipeBuffer = "";
+  PD.state.syncState = "clean";
+
   PD.state.selectedPipe = pipe;
 
   // ── Persist selection to URL hash ──
@@ -413,6 +443,16 @@ PD.actions.selectPipe = function(pipe) {
     PD.state.pipeData = results[1];
     PD.state.markdownHtml = PD.utils.renderMarkdownWithAnnotations(results[0], results[1]);
     PD.state.markdownLoading = false;
+
+    // ── Read sync state from pipe workspace metadata ──
+    // The workspace block in index.json tracks whether structured edits
+    // are in sync with the markdown file on disk.
+    // Ref: WEB_FIRST_WORKFLOW_PLAN.md §7.3 — sync state model
+    if (results[1] && results[1].workspace && results[1].workspace.syncState) {
+      PD.state.syncState = results[1].workspace.syncState;
+    } else {
+      PD.state.syncState = "clean";
+    }
 
     // After pipe data loads, fetch the most recent sessions for this pipe.
     // This populates session badges and the session panel in the drawer.
@@ -624,6 +664,13 @@ PD.actions.refreshPipe = function() {
     PD.state.markdownHtml = PD.utils.renderMarkdownWithAnnotations(results[0], results[1]);
     PD.state.markdownLoading = false;
 
+    // ── Refresh sync state from workspace metadata ──
+    if (results[1] && results[1].workspace && results[1].workspace.syncState) {
+      PD.state.syncState = results[1].workspace.syncState;
+    } else {
+      PD.state.syncState = "clean";
+    }
+
     // Also refresh the active session if one is open, so per-step status
     // badges stay current after file changes trigger a rebuild.
     if (PD.state.activeSession) {
@@ -798,10 +845,27 @@ PD.actions.loadPipeTraces = function() {
 
 // enterEditMode — switches to the textarea editor, copying the current raw
 // markdown into an editable buffer.
+// When syncState is "json_dirty", shows a warning that saving raw markdown
+// will overwrite any unsynced structured edits.
+// Ref: WEB_FIRST_WORKFLOW_PLAN.md §2 — raw markdown as secondary mode
 PD.actions.enterEditMode = function() {
+  // Warn if there are unsynced structured edits that would be lost
+  if (PD.state.syncState === "json_dirty") {
+    if (!confirm(
+      "You have unsynced structured edits. " +
+      "Saving raw markdown will replace them. Continue?"
+    )) {
+      return;
+    }
+  }
   PD.state.editMode = true;
   PD.state.editBuffer = PD.state.rawMarkdown || "";
   PD.state.editDirty = false;
+  // Cancel any active structured editors when entering raw mode
+  PD.state.editingStep = null;
+  PD.state.editStepBuffer = null;
+  PD.state.editingPipeField = null;
+  PD.state.editPipeBuffer = "";
 };
 
 // exitEditMode — discards any unsaved changes and returns to the rendered
@@ -836,10 +900,14 @@ PD.actions.saveEdit = function() {
   }).then(function(res) {
     if (!res.ok) throw new Error("Save failed: " + res.statusText);
     // Exit edit mode and re-select the pipe to refresh markdown + pipeData.
+    // Set syncState to "clean" because saving raw markdown triggers a rebuild
+    // which overwrites index.json — any unsynced structured edits are lost.
+    // Ref: WEB_FIRST_WORKFLOW_PLAN.md §7.4 — saving raw markdown rebuilds
     PD.state.editMode = false;
     PD.state.editBuffer = null;
     PD.state.editDirty = false;
     PD.state.editSaving = false;
+    PD.state.syncState = "clean";
     PD.actions.selectPipe(pipe);
   }).catch(function(err) {
     PD.state.editSaving = false;
@@ -1741,4 +1809,234 @@ PD.utils.stepStatusSymbol = function(status) {
 // Ref: styles.css — .step-status-badge--pending, --running, --done, etc.
 PD.utils.stepStatusClass = function(status) {
   return "step-status-badge--" + (status || "pending");
+};
+
+// ═══════════════════════════════════════════════════════════════════════
+// ── Phase 2: Structured Edit + Sync Actions ──
+// These actions interact with the structured edit API endpoints to enable
+// pipe-level and step-level editing via index.json, plus sync/rebuild.
+//
+// Ref: WEB_FIRST_WORKFLOW_PLAN.md §2 — Phase 2 checklist
+// Ref: buildandserve.ts — PATCH /api/workspaces, POST /api/workspaces/.../sync
+// ═══════════════════════════════════════════════════════════════════════
+
+/**
+ * syncToMarkdown — Triggers a structured-to-markdown sync via the API.
+ * Reads the current index.json, generates markdown with pipeToMarkdown(),
+ * writes the .md file, and rebuilds. Updates syncState throughout.
+ *
+ * @return {void}
+ * Ref: POST /api/workspaces/:project/:pipe/sync in buildandserve.ts
+ */
+PD.actions.syncToMarkdown = function() {
+  if (!PD.state.selectedPipe) return;
+  PD.state.syncState = "syncing";
+  m.redraw();
+
+  var url = "/api/workspaces/" +
+    encodeURIComponent(PD.state.selectedPipe.projectName) +
+    "/" + encodeURIComponent(PD.state.selectedPipe.pipeName) +
+    "/sync";
+
+  fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "{}"
+  }).then(function(res) {
+    if (!res.ok) throw new Error("Sync failed: " + res.statusText);
+    return res.json();
+  }).then(function(result) {
+    // Update sync state from the result envelope
+    PD.state.syncState = result.syncState || "clean";
+    // Refresh pipe data to reflect the rebuilt index.json
+    PD.actions.refreshPipe();
+  }).catch(function(err) {
+    // Revert to dirty on failure — the sync didn't complete.
+    PD.state.syncState = "json_dirty";
+    PD.state.drawerOpen = true;
+    PD.state.drawerLabel = "Sync error";
+    PD.state.drawerStatus = "error";
+    PD.state.drawerOutput = err.message || "Sync failed";
+    m.redraw();
+  });
+};
+
+/**
+ * rebuildFromMarkdown — Discards structured edits by rebuilding index.json
+ * from the markdown source file. Returns workspace to "clean" state.
+ *
+ * @return {void}
+ * Ref: POST /api/workspaces/:project/:pipe/rebuild in buildandserve.ts
+ */
+PD.actions.rebuildFromMarkdown = function() {
+  if (!PD.state.selectedPipe) return;
+  PD.state.syncState = "syncing";
+  m.redraw();
+
+  var url = "/api/workspaces/" +
+    encodeURIComponent(PD.state.selectedPipe.projectName) +
+    "/" + encodeURIComponent(PD.state.selectedPipe.pipeName) +
+    "/rebuild";
+
+  fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "{}"
+  }).then(function(res) {
+    if (!res.ok) throw new Error("Rebuild failed: " + res.statusText);
+    return res.json();
+  }).then(function() {
+    PD.state.syncState = "clean";
+    // Reset any in-progress edits since we just rebuilt
+    PD.state.editingStep = null;
+    PD.state.editStepBuffer = null;
+    PD.state.editingPipeField = null;
+    PD.state.editPipeBuffer = "";
+    PD.actions.refreshPipe();
+  }).catch(function(err) {
+    PD.state.syncState = "json_dirty";
+    PD.state.drawerOpen = true;
+    PD.state.drawerLabel = "Rebuild error";
+    PD.state.drawerStatus = "error";
+    PD.state.drawerOutput = err.message || "Rebuild failed";
+    m.redraw();
+  });
+};
+
+/**
+ * saveStepEdit — Sends a PATCH request to update a step's fields
+ * via the structured edit API. On success, refreshes pipe data and
+ * sets syncState to "json_dirty".
+ *
+ * @param {number} stepIndex — the zero-based step index to update
+ * @param {object} fields — { name?, description?, code? }
+ * @return {void}
+ * Ref: PATCH /api/workspaces/:project/:pipe/steps/:stepIndex
+ */
+PD.actions.saveStepEdit = function(stepIndex, fields) {
+  if (!PD.state.selectedPipe) return;
+
+  var url = "/api/workspaces/" +
+    encodeURIComponent(PD.state.selectedPipe.projectName) +
+    "/" + encodeURIComponent(PD.state.selectedPipe.pipeName) +
+    "/steps/" + stepIndex;
+
+  fetch(url, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(fields)
+  }).then(function(res) {
+    if (!res.ok) throw new Error("Save failed: " + res.statusText);
+    return res.json();
+  }).then(function() {
+    // Exit step edit mode
+    PD.state.editingStep = null;
+    PD.state.editStepBuffer = null;
+    PD.state.syncState = "json_dirty";
+    // Refresh pipe to pick up the updated index.json
+    PD.actions.refreshPipe();
+  }).catch(function(err) {
+    PD.state.drawerOpen = true;
+    PD.state.drawerLabel = "Step edit error";
+    PD.state.drawerStatus = "error";
+    PD.state.drawerOutput = err.message || "Failed to save step edit";
+    m.redraw();
+  });
+};
+
+/**
+ * savePipeFieldEdit — Sends a PATCH request to update pipe-level fields
+ * (description, schema) via the structured edit API.
+ *
+ * @param {object} fields — { pipeDescription?, schema? }
+ * @return {void}
+ * Ref: PATCH /api/workspaces/:project/:pipe
+ */
+PD.actions.savePipeFieldEdit = function(fields) {
+  if (!PD.state.selectedPipe) return;
+
+  var url = "/api/workspaces/" +
+    encodeURIComponent(PD.state.selectedPipe.projectName) +
+    "/" + encodeURIComponent(PD.state.selectedPipe.pipeName);
+
+  fetch(url, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(fields)
+  }).then(function(res) {
+    if (!res.ok) throw new Error("Save failed: " + res.statusText);
+    return res.json();
+  }).then(function() {
+    // Exit pipe field edit mode
+    PD.state.editingPipeField = null;
+    PD.state.editPipeBuffer = "";
+    PD.state.syncState = "json_dirty";
+    PD.actions.refreshPipe();
+  }).catch(function(err) {
+    PD.state.drawerOpen = true;
+    PD.state.drawerLabel = "Pipe edit error";
+    PD.state.drawerStatus = "error";
+    PD.state.drawerOutput = err.message || "Failed to save pipe edit";
+    m.redraw();
+  });
+};
+
+/**
+ * enterStepEditMode — Enters inline edit mode for a step. Copies the
+ * step's current name, description, and code into the edit buffer.
+ *
+ * @param {number} stepIndex — zero-based index of the step to edit
+ * @return {void}
+ */
+PD.actions.enterStepEditMode = function(stepIndex) {
+  if (!PD.state.pipeData || !PD.state.pipeData.steps) return;
+  var step = PD.state.pipeData.steps[stepIndex];
+  if (!step) return;
+
+  PD.state.editingStep = stepIndex;
+  PD.state.editStepBuffer = {
+    name: step.name || "",
+    description: step.description || "",
+    code: step.code || ""
+  };
+  m.redraw();
+};
+
+/**
+ * cancelStepEdit — Exits step edit mode without saving.
+ * @return {void}
+ */
+PD.actions.cancelStepEdit = function() {
+  PD.state.editingStep = null;
+  PD.state.editStepBuffer = null;
+  m.redraw();
+};
+
+/**
+ * enterPipeFieldEdit — Enters inline edit mode for a pipe-level field.
+ * Copies the current value into editPipeBuffer.
+ *
+ * @param {string} fieldName — "description" or "schema"
+ * @return {void}
+ */
+PD.actions.enterPipeFieldEdit = function(fieldName) {
+  if (!PD.state.pipeData) return;
+
+  PD.state.editingPipeField = fieldName;
+  if (fieldName === "description") {
+    PD.state.editPipeBuffer = PD.state.pipeData.pipeDescription || "";
+  } else if (fieldName === "schema") {
+    PD.state.editPipeBuffer = PD.state.pipeData.schema || "";
+  }
+  m.redraw();
+};
+
+/**
+ * cancelPipeFieldEdit — Exits pipe field edit mode without saving.
+ * @return {void}
+ */
+PD.actions.cancelPipeFieldEdit = function() {
+  PD.state.editingPipeField = null;
+  PD.state.editPipeBuffer = "";
+  m.redraw();
 };

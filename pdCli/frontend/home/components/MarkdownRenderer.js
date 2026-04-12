@@ -192,10 +192,26 @@ function injectStepToolbars(container) {
       }
 
       // ── Normal mode: full step toolbar ──
-      // Split "Run to here" button with input dropdown, LLM buttons, and
-      // the Extract button that enters extraction mode.
+      // Split "Run to here" button with input dropdown, LLM buttons,
+      // Edit button for structured editing, and the Extract button.
       // Ref: PD.utils.renderInputDropdownItems, state.js inputDropdownStep
       m.render(toolbar, [
+        // ── Structured Edit button ──
+        // Opens inline form fields (title, description, code) for this step.
+        // Replaces the step section content with editable inputs.
+        // Ref: state.js — PD.actions.enterStepEditMode
+        m("button.tb-btn", {
+          onclick: function() {
+            PD.actions.enterStepEditMode(idx);
+            // Re-render toolbars after entering edit mode so the
+            // step section updates with the inline editor.
+            requestAnimationFrame(function() {
+              var mdViewer = document.querySelector(".md-viewer");
+              if (mdViewer) injectStepToolbars(mdViewer);
+            });
+          },
+          style: PD.state.editingStep === idx ? "background: var(--blue-3); color: var(--blue-9);" : ""
+        }, "Edit"),
         m("button.tb-btn", { onclick: function() { PD.actions.llmAction("step-title", { stepIndex: idx }); } }, "Title"),
         m("button.tb-btn", { onclick: function() { PD.actions.llmAction("step-description", { stepIndex: idx }); } }, "Describe"),
         m("button.tb-btn", { onclick: function() { PD.actions.llmAction("step-code", { stepIndex: idx }); } }, "Code"),
@@ -302,11 +318,123 @@ function injectStepToolbars(container) {
     }
   });
 
-  // Update DSL/trace displays
+  // Update DSL/trace displays and inline step editors
   PD.state.pipeData.steps.forEach(function(step, idx) {
     var extraEl = document.getElementById("step-extra-" + idx);
     if (!extraEl) return;
     var children = [];
+
+    // ── Inline step editor ──
+    // When PD.state.editingStep matches this step's index, render
+    // form fields (title input, description textarea, code textarea)
+    // with Save and Cancel buttons. Uses the m.render() approach
+    // already established by injectStepToolbars.
+    // Ref: state.js — PD.state.editingStep, PD.state.editStepBuffer
+    if (PD.state.editingStep === idx && PD.state.editStepBuffer) {
+      var buf = PD.state.editStepBuffer;
+      children.push(
+        m(".step-inline-editor", {
+          style: [
+            "padding: var(--size-3);",
+            "background: var(--surface-1);",
+            "border: 1px solid var(--surface-4);",
+            "border-radius: var(--radius-2);",
+            "margin-block: var(--size-2);"
+          ].join(" ")
+        }, [
+          // ── Title field ──
+          m("label", { style: "display: block; margin-block-end: var(--size-2); font-weight: 600; font-size: var(--font-size-0);" }, "Title"),
+          m("input[type=text].step-edit-title", {
+            value: buf.name,
+            oninput: function(e) {
+              PD.state.editStepBuffer.name = e.target.value;
+            },
+            style: [
+              "width: 100%;",
+              "padding: var(--size-1) var(--size-2);",
+              "font-size: var(--font-size-1);",
+              "border: 1px solid var(--surface-4);",
+              "border-radius: var(--radius-2);",
+              "background: var(--surface-2);",
+              "color: var(--text-1);",
+              "margin-block-end: var(--size-3);"
+            ].join(" ")
+          }),
+
+          // ── Description field ──
+          m("label", { style: "display: block; margin-block-end: var(--size-2); font-weight: 600; font-size: var(--font-size-0);" }, "Description"),
+          m("textarea.step-edit-description", {
+            value: buf.description,
+            oninput: function(e) {
+              PD.state.editStepBuffer.description = e.target.value;
+            },
+            rows: 3,
+            style: [
+              "width: 100%;",
+              "padding: var(--size-1) var(--size-2);",
+              "font-size: var(--font-size-0);",
+              "border: 1px solid var(--surface-4);",
+              "border-radius: var(--radius-2);",
+              "background: var(--surface-2);",
+              "color: var(--text-1);",
+              "resize: vertical;",
+              "margin-block-end: var(--size-3);"
+            ].join(" ")
+          }),
+
+          // ── Code field ──
+          m("label", { style: "display: block; margin-block-end: var(--size-2); font-weight: 600; font-size: var(--font-size-0);" }, "Code"),
+          m("textarea.step-edit-code", {
+            value: buf.code,
+            oninput: function(e) {
+              PD.state.editStepBuffer.code = e.target.value;
+            },
+            rows: 10,
+            style: [
+              "width: 100%;",
+              "padding: var(--size-2);",
+              "font-family: var(--font-mono, 'Fira Code', 'Cascadia Code', monospace);",
+              "font-size: var(--font-size-0);",
+              "border: 1px solid var(--surface-4);",
+              "border-radius: var(--radius-2);",
+              "background: var(--surface-2);",
+              "color: var(--text-1);",
+              "resize: vertical;",
+              "tab-size: 2;",
+              "margin-block-end: var(--size-3);"
+            ].join(" ")
+          }),
+
+          // ── Action buttons ──
+          m("div", { style: "display: flex; gap: var(--size-2);" }, [
+            m("button.tb-btn.primary", {
+              onclick: function() {
+                // Build the fields object with only changed values
+                var fields = {};
+                if (buf.name !== step.name) fields.name = buf.name;
+                if (buf.description !== (step.description || "")) fields.description = buf.description;
+                if (buf.code !== step.code) fields.code = buf.code;
+                PD.actions.saveStepEdit(idx, fields);
+              }
+            }, "Save"),
+            m("button.tb-btn", {
+              onclick: function() {
+                PD.actions.cancelStepEdit();
+                // Re-inject toolbars to restore normal rendering
+                requestAnimationFrame(function() {
+                  var mdViewer = document.querySelector(".md-viewer");
+                  if (mdViewer) injectStepToolbars(mdViewer);
+                });
+              }
+            }, "Cancel")
+          ])
+        ])
+      );
+      // Render the editor and return early — don't show DSL/traces
+      // while editing to keep the UI focused.
+      m.render(extraEl, children);
+      return;
+    }
     if (PD.state.showListDSL[idx]) {
       var dslLines = PD.utils.buildDSLLines(step.config);
       if (dslLines.length > 0) {

@@ -102,9 +102,27 @@ PD.components.PipeToolbar = {
     return m("div", { style: "position: sticky; top: 0; z-index: 15; background: var(--surface-2);" }, [
       // ── Action buttons ──
       m(".toolbar-overlay", { style: "position: relative; opacity: 1; pointer-events: all; right: auto; transform: none; margin-block-end: var(--size-3);" }, [
-        m("button.tb-btn", { onclick: function() { PD.actions.llmAction("description"); } }, "Description"),
-        m("button.tb-btn", { onclick: function() { PD.actions.llmAction("schema"); } }, "Schema"),
+        // ── LLM action buttons ──
+        m("button.tb-btn", { onclick: function() { PD.actions.llmAction("description"); } }, "AI Desc"),
+        m("button.tb-btn", { onclick: function() { PD.actions.llmAction("schema"); } }, "AI Schema"),
         m("button.tb-btn", { onclick: function() { PD.actions.llmAction("tests"); } }, "Tests"),
+        // ── Structured edit buttons for pipe-level fields ──
+        // These open inline textareas for directly editing the pipe's
+        // description or schema. Unlike the LLM buttons above (which
+        // generate content via AI), these let the user type manually.
+        // Ref: state.js — PD.actions.enterPipeFieldEdit
+        m("button.tb-btn", {
+          onclick: function() {
+            PD.actions.enterPipeFieldEdit("description");
+          },
+          style: PD.state.editingPipeField === "description" ? "background: var(--blue-3); color: var(--blue-9);" : ""
+        }, "Edit Desc"),
+        m("button.tb-btn", {
+          onclick: function() {
+            PD.actions.enterPipeFieldEdit("schema");
+          },
+          style: PD.state.editingPipeField === "schema" ? "background: var(--blue-3); color: var(--blue-9);" : ""
+        }, "Edit Schema"),
         // ── Split Run button ──
         // Left half: runs the pipe with no custom input (default behaviour).
         // Right half (▾): opens the input history dropdown.
@@ -154,7 +172,79 @@ PD.components.PipeToolbar = {
       // Shows the whole-pipeline input and output from the most recent trace
       // files. Uses the shared pd.jsonTree component for collapsible display.
       // Ref: shared/jsonTree.js pd.jsonTree
-      renderPipeTracesPanel()
+      renderPipeTracesPanel(),
+
+      // ── Inline pipe-level field editor ──
+      // Renders a textarea for editing pipe description or schema when
+      // PD.state.editingPipeField is set. Appears below the toolbar.
+      // Ref: state.js — PD.state.editingPipeField, PD.state.editPipeBuffer
+      renderPipeFieldEditor()
     ]);
   }
 };
+
+// ── Pipe-level inline field editor ──
+// Renders a textarea + Save/Cancel for editing the pipe description or schema.
+// Returns null when no field is being edited.
+// Ref: state.js — PD.actions.savePipeFieldEdit, PD.actions.cancelPipeFieldEdit
+function renderPipeFieldEditor() {
+  if (!PD.state.editingPipeField) return null;
+
+  var fieldName = PD.state.editingPipeField;
+  var label = fieldName === "description" ? "Pipe Description" : "Pipe Schema";
+  var rows = fieldName === "schema" ? 10 : 4;
+
+  return m(".pipe-field-editor", {
+    style: [
+      "padding: var(--size-3);",
+      "background: var(--surface-1);",
+      "border: 1px solid var(--surface-4);",
+      "border-radius: var(--radius-2);",
+      "margin-block-end: var(--size-3);"
+    ].join(" ")
+  }, [
+    m("label", {
+      style: "display: block; margin-block-end: var(--size-2); font-weight: 600; font-size: var(--font-size-0);"
+    }, label),
+    m("textarea", {
+      value: PD.state.editPipeBuffer,
+      oninput: function(e) {
+        PD.state.editPipeBuffer = e.target.value;
+      },
+      rows: rows,
+      style: [
+        "width: 100%;",
+        "padding: var(--size-2);",
+        fieldName === "schema"
+          ? "font-family: var(--font-mono, 'Fira Code', 'Cascadia Code', monospace);"
+          : "",
+        "font-size: var(--font-size-0);",
+        "border: 1px solid var(--surface-4);",
+        "border-radius: var(--radius-2);",
+        "background: var(--surface-2);",
+        "color: var(--text-1);",
+        "resize: vertical;",
+        "margin-block-end: var(--size-2);"
+      ].join(" ")
+    }),
+    m("div", { style: "display: flex; gap: var(--size-2);" }, [
+      m("button.tb-btn.primary", {
+        onclick: function() {
+          // Build the patch based on which field is being edited
+          var fields = {};
+          if (fieldName === "description") {
+            fields.pipeDescription = PD.state.editPipeBuffer;
+          } else if (fieldName === "schema") {
+            fields.schema = PD.state.editPipeBuffer;
+          }
+          PD.actions.savePipeFieldEdit(fields);
+        }
+      }, "Save"),
+      m("button.tb-btn", {
+        onclick: function() {
+          PD.actions.cancelPipeFieldEdit();
+        }
+      }, "Cancel")
+    ])
+  ]);
+}
