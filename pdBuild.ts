@@ -162,6 +162,56 @@ async function mergeParentDirConfig(input: BuildInput) {
   }
 }
 
+// ── Step Fingerprinting ──
+// Each step gets a content-based fingerprint (SHA-256 hex) derived from
+// its meaningful content: code, funcName, and config. This fingerprint
+// is used by the session layer to detect whether a step has changed
+// between runs — unchanged upstream steps can safely reuse prior
+// snapshots, making "rerun from here" fast and trustworthy.
+//
+// Ref: WEB_FIRST_WORKFLOW_PLAN.md §4.1-C (step fingerprint)
+// Ref: WEB_FIRST_WORKFLOW_PLAN.md §8.3 (snapshot reuse model)
+// Ref: https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/digest
+
+/**
+ * Computes a SHA-256 hex fingerprint from a step's meaningful content.
+ *
+ * The fingerprint captures three fields that define what a step *does*:
+ *   1. `code`     — the actual executable logic
+ *   2. `funcName` — the sanitised identifier (reflects heading changes)
+ *   3. `config`   — conditional execution guards (checks, routes, etc.)
+ *
+ * Fields like `description`, `name`, `sourceMap`, and `range` are
+ * deliberately excluded — they affect documentation and positioning
+ * but not execution behaviour.
+ *
+ * @param step - The step to fingerprint
+ * @returns Hex-encoded SHA-256 hash string
+ */
+export async function computeStepFingerprint(step: Step): Promise<string> {
+  // Build a deterministic string from the meaningful fields.
+  // JSON.stringify on config ensures object key order is consistent
+  // (V8 preserves insertion order for string keys).
+  const content = [
+    step.code ?? "",
+    step.funcName ?? "",
+    step.config ? JSON.stringify(step.config) : "",
+  ].join("\n");
+
+  // Use the Web Crypto API (available in Deno) to compute SHA-256.
+  // Ref: https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/digest
+  const encoder = new TextEncoder();
+  const data = encoder.encode(content);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+
+  // Convert the ArrayBuffer to a hex string.
+  // Ref: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Uint8Array
+  const hashArray = new Uint8Array(hashBuffer);
+  return Array.from(hashArray)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
 // ── Step ID Assignment ──
 // Stable `stepId` values allow the web UI, sessions, and Pi patch proposals
 // to reference steps durably across rebuilds. IDs are persisted in index.json
@@ -256,6 +306,11 @@ export async function assignStepIds(input: BuildInput) {
 
       step.stepId = assignedId;
       usedIds.add(assignedId);
+
+      // Compute content-based fingerprint for snapshot reuse detection.
+      // This runs alongside ID assignment so both are set before index.json
+      // is written. Ref: WEB_FIRST_WORKFLOW_PLAN.md §8.3
+      step.fingerprint = await computeStepFingerprint(step);
     }
 
     // Set workspace metadata — after a build, the workspace is always "clean"
