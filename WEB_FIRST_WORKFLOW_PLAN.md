@@ -1095,33 +1095,33 @@ Success signal:
 
 ### Product / docs
 
-- [ ] Document the dual-truth model clearly: markdown for humans, `index.json` for machine edits.
-- [ ] Document that `pd sync` is the only structured-to-markdown path.
-- [ ] Document that raw markdown editing is secondary and explicit.
-- [ ] Document that TUI is out of near-term scope.
+- [ ] Document the dual-truth model clearly: markdown for humans, `index.json` for machine edits. *(described in this plan doc; no standalone reference doc yet)*
+- [ ] Document that `pd sync` is the only structured-to-markdown path. *(described in this plan doc; no standalone reference doc yet)*
+- [ ] Document that raw markdown editing is secondary and explicit. *(described in this plan doc; no standalone reference doc yet)*
+- [ ] Document that TUI is out of near-term scope. *(described in this plan doc; no standalone reference doc yet)*
 
 ### Types / domain model
 
-- [ ] Extend `pipedown.d.ts` with workspace/session/proposal/input-profile types.
-- [ ] Add a formal `syncState` enum/type.
-- [ ] Add step fingerprint/version metadata to the structured model.
-- [ ] Introduce `stepId` now and persist it in `index.json`.
+- [x] Extend `pipedown.d.ts` with workspace/session/proposal/input-profile types. *(WorkspaceMetadata, SyncState, SyncResult, RunSession, SessionStepRecord, PatchProposal, PatchOperation, InputProfile, PipeVersion, SessionMode, SessionStatus, StepStatus, ProposalStatus — all added)*
+- [x] Add a formal `syncState` enum/type. *(`SyncState = "clean" | "json_dirty" | "syncing"` in pipedown.d.ts)*
+- [x] Add step fingerprint/version metadata to the structured model. *(`Step.fingerprint` field + `computeStepFingerprint()` in pdBuild.ts)*
+- [x] Introduce `stepId` now and persist it in `index.json`. *(`Step.stepId` field + `assignStepIds()` in pdBuild.ts)*
 
 ### Build/sync backend
 
-- [ ] Add minimal workspace metadata inside `index.json` for sync-state tracking.
-- [ ] Persist `stepId` values in `index.json` and preserve them across rebuilds by matching against the prior `index.json` where possible.
-- [ ] Extend `pd sync` to return a machine-readable result envelope.
-- [ ] Add `pd sync --dry-run` improvements suitable for UI consumption.
-- [ ] Add sync preview support in backend APIs.
-- [ ] Auto-run `pd build` after `pd sync` and implement consistently.
+- [x] Add minimal workspace metadata inside `index.json` for sync-state tracking. *(`Pipe.workspace` set by `assignStepIds()` during build)*
+- [x] Persist `stepId` values in `index.json` and preserve them across rebuilds by matching against the prior `index.json` where possible. *(exact-match-by-index + name-match fallback in `assignStepIds()`)*
+- [x] Extend `pd sync` to return a machine-readable result envelope. *(`SyncResult` populated on `input.syncResult` in syncCommand.ts)*
+- [x] Add `pd sync --dry-run` improvements suitable for UI consumption. *(syncCommand.ts returns `SyncResult` with `markdown` field in dry-run mode)*
+- [x] Add sync preview support in backend APIs. *(`GET /api/workspaces/:pipeName/sync-preview` in buildandserve.ts)*
+- [x] Auto-run `pd build` after `pd sync` and implement consistently. *(syncCommand.ts calls `pdBuild()` after writing markdown, then stamps `lastSyncedAt`)*
 
 ### Tests
 
-- [ ] Add tests for sync-state transitions: clean → json_dirty → clean.
-- [ ] Add tests that raw markdown save/build replaces unsynced structured state predictably.
-- [ ] Add tests for `pd sync` dry-run preview behavior.
-- [ ] Add tests that `stepId`s are preserved across rebuilds when steps can be matched and regenerated when they cannot.
+- [x] Add tests for sync-state transitions: clean → json_dirty → clean. *(workspace_test.ts: "sync-state transitions" test)*
+- [x] Add tests that raw markdown save/build replaces unsynced structured state predictably. *(workspace_test.ts: "raw markdown save/build replaces unsynced structured state" — verifies rebuild from new markdown overwrites dirty workspace)*
+- [x] Add tests for `pd sync` dry-run preview behavior. *(workspace_test.ts: "pd sync dry-run preview behavior" — verifies generated markdown reflects edits, disk file unchanged)*
+- [x] Add tests that `stepId`s are preserved across rebuilds when steps can be matched and regenerated when they cannot. *(workspace_test.ts: preservation, reorder, new steps, rename — all covered)*
 
 ## Phase 1 — Sessionized execution on the current home page
 
