@@ -3,6 +3,79 @@ m.mount(document.getElementById("app"), {
   view: function() { return m(PD.components.Layout); }
 });
 
+// ── Global Keyboard Shortcuts ──
+// Registers keyboard shortcuts for common actions so power users can
+// drive the workspace without reaching for toolbar buttons.
+//
+// Shortcuts use Cmd (macOS) / Ctrl (other) as the modifier key combined
+// with Shift to avoid clashing with browser-native shortcuts.
+//
+// Ref: https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent
+// Ref: WEB_FIRST_WORKFLOW_PLAN.md Phase 5 — keyboard shortcuts
+document.addEventListener("keydown", function(e) {
+  var mod = e.metaKey || e.ctrlKey;
+
+  // ── Cmd/Ctrl + Shift + R → Run pipe (createAndRunSession) ──
+  // Creates a new full session and executes all steps.
+  // Ref: state.js — PD.actions.createAndRunSession
+  if (mod && e.shiftKey && e.key === "R") {
+    e.preventDefault();
+    if (PD.state.selectedPipe) {
+      PD.actions.createAndRunSession("full");
+      m.redraw();
+    }
+    return;
+  }
+
+  // ── Cmd/Ctrl + Shift + N → Run next step ──
+  // Finds the first pending step and runs it as a single_step session.
+  // Ref: state.js — PD.actions.runNextStep
+  if (mod && e.shiftKey && e.key === "N") {
+    e.preventDefault();
+    if (PD.state.selectedPipe) {
+      PD.actions.runNextStep();
+      m.redraw();
+    }
+    return;
+  }
+
+  // ── Cmd/Ctrl + Shift + S → Sync to markdown ──
+  // Triggers structured-to-markdown sync when workspace is dirty.
+  // Ref: state.js — PD.actions.syncToMarkdown
+  if (mod && e.shiftKey && e.key === "S") {
+    e.preventDefault();
+    if (PD.state.selectedPipe && PD.state.syncState === "json_dirty") {
+      PD.actions.syncToMarkdown();
+      m.redraw();
+    }
+    return;
+  }
+
+  // ── Escape → Close drawer / close any open editor ──
+  // The RunDrawer already has its own Escape handler, but this catches
+  // the case where the drawer isn't open but a step/pipe editor is.
+  // Ref: state.js — PD.actions.cancelStepEdit, PD.actions.cancelPipeFieldEdit
+  if (e.key === "Escape") {
+    // Close structured editors if open.
+    if (PD.state.editingStep !== null) {
+      PD.actions.cancelStepEdit();
+      m.redraw();
+      return;
+    }
+    if (PD.state.editingPipeField !== null) {
+      PD.actions.cancelPipeFieldEdit();
+      m.redraw();
+      return;
+    }
+    // Close sync preview if open.
+    if (PD.state.syncPreviewOpen) {
+      PD.state.syncPreviewOpen = false;
+      m.redraw();
+      return;
+    }
+  }
+});
+
 // ── SSE hot reload + auto-focus ──
 // Watches for server-sent events via the /sse endpoint. Two event types:
 //

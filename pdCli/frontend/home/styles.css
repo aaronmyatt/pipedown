@@ -735,3 +735,26 @@
 .session-step-dot:hover {
   transform: scale(1.3);
 }
+
+/* ════════════════════════════════════════════════════════════════════════
+   ── Sync Preview Panel ──
+   Expandable panel below the SyncStatusBar that shows the generated
+   markdown preview. Visible only when PD.state.syncPreviewOpen is true
+   and the workspace is in "json_dirty" state.
+   Ref: SyncStatusBar.js — sync preview rendering
+   ════════════════════════════════════════════════════════════════════════ */
+
+.sync-preview-panel {
+  animation: sync-preview-slide 0.2s ease;
+}
+
+@keyframes sync-preview-slide {
+  from {
+    opacity: 0;
+    max-height: 0;
+  }
+  to {
+    opacity: 1;
+    max-height: 500px;
+  }
+}

@@ -121,6 +121,15 @@ window.PD = {
     // Ref: pipedown.d.ts — SyncState type
     syncState: "clean",        // "clean" | "json_dirty" | "syncing"
 
+    // ── Sync preview state ──
+    // Tracks the expandable sync preview panel in SyncStatusBar.
+    // When the workspace is json_dirty, the user can click "Preview sync"
+    // to see the generated markdown before committing the sync.
+    // Ref: WEB_FIRST_WORKFLOW_PLAN.md Phase 4 — sync preview panel
+    syncPreview: null,           // markdown preview text from sync-preview API
+    syncPreviewLoading: false,   // loading state for preview fetch
+    syncPreviewOpen: false,      // whether preview panel is expanded
+
     // ── Pi proposal state ──
     // Tracks the current Pi-generated patch proposal being reviewed.
     // Proposals are generated via POST /api/pi/proposals and contain
@@ -156,7 +165,15 @@ window.PD = {
     activeSession: null,        // current RunSession object (or null)
     sessionLoading: false,      // true while session API calls in flight
     latestSessions: [],         // recent sessions for the currently selected pipe
-    _sessionExpandedStep: null  // which step is expanded in the drawer session panel (index or null)
+    _sessionExpandedStep: null, // which step is expanded in the drawer session panel (index or null)
+
+    // ── Session history state ──
+    // Tracks the "Sessions" tab/section in the drawer, showing a list of
+    // recent sessions with compact metadata. Click a session to set it as active.
+    // Ref: WEB_FIRST_WORKFLOW_PLAN.md Phase 5 — session history browsing
+    showSessionHistory: false,
+    sessionHistory: [],
+    sessionHistoryLoading: false
   },
   actions: {},
   utils: {},
@@ -391,6 +408,9 @@ PD.actions.selectPipe = function(pipe) {
   PD.state.editingPipeField = null;
   PD.state.editPipeBuffer = "";
   PD.state.syncState = "clean";
+  PD.state.syncPreview = null;
+  PD.state.syncPreviewLoading = false;
+  PD.state.syncPreviewOpen = false;
 
   PD.state.selectedPipe = pipe;
 
@@ -427,6 +447,9 @@ PD.actions.selectPipe = function(pipe) {
   PD.state.latestSessions = [];
   PD.state.sessionLoading = false;
   PD.state._sessionExpandedStep = null;
+  PD.state.showSessionHistory = false;
+  PD.state.sessionHistory = [];
+  PD.state.sessionHistoryLoading = false;
 
   // Reset proposal state — stale proposal from the previous pipe
   // must not linger when switching.
@@ -1842,12 +1865,20 @@ PD.utils.stepStatusClass = function(status) {
  * Reads the current index.json, generates markdown with pipeToMarkdown(),
  * writes the .md file, and rebuilds. Updates syncState throughout.
  *
+ * Phase 4 enhancement: sets syncState to "syncing" immediately, refreshes
+ * pipeData on success (which should show syncState "clean"), and shows
+ * an error in the drawer on failure while keeping the dirty state.
+ *
  * @return {void}
  * Ref: POST /api/workspaces/:project/:pipe/sync in buildandserve.ts
  */
 PD.actions.syncToMarkdown = function() {
   if (!PD.state.selectedPipe) return;
+  // Immediately mark as syncing so the UI shows a spinner.
   PD.state.syncState = "syncing";
+  // Close the sync preview panel since we're about to sync.
+  PD.state.syncPreviewOpen = false;
+  PD.state.syncPreview = null;
   m.redraw();
 
   var url = "/api/workspaces/" +
@@ -1863,18 +1894,64 @@ PD.actions.syncToMarkdown = function() {
     if (!res.ok) throw new Error("Sync failed: " + res.statusText);
     return res.json();
   }).then(function(result) {
-    // Update sync state from the result envelope
+    // Update sync state from the result envelope.
+    // On success, syncState should be "clean" and pipeData refresh
+    // will confirm via the workspace metadata in index.json.
     PD.state.syncState = result.syncState || "clean";
-    // Refresh pipe data to reflect the rebuilt index.json
+    // Refresh pipe data to reflect the rebuilt index.json.
+    // The SSE sync_state_changed event may also trigger a refresh.
     PD.actions.refreshPipe();
   }).catch(function(err) {
     // Revert to dirty on failure — the sync didn't complete.
+    // The workspace remains recoverable with unsynced edits intact.
     PD.state.syncState = "json_dirty";
     PD.state.drawerOpen = true;
     PD.state.drawerLabel = "Sync error";
     PD.state.drawerStatus = "error";
     PD.state.drawerOutput = err.message || "Sync failed";
+    PD.state.drawerError = {
+      status: 0,
+      statusText: "Sync Failed",
+      message: err.message || "Sync failed"
+    };
     m.redraw();
+  });
+};
+
+/**
+ * loadSyncPreview — Fetches the generated markdown preview from the
+ * sync-preview API without actually writing to disk. The preview is
+ * displayed in the expandable panel below the SyncStatusBar.
+ *
+ * Uses GET /api/workspaces/:pipeName/sync-preview which reads index.json,
+ * generates markdown via pipeToMarkdown(), and returns a SyncResult
+ * envelope with the markdown field populated.
+ *
+ * @return {void}
+ * Ref: GET /api/workspaces/:pipeName/sync-preview in buildandserve.ts
+ */
+PD.actions.loadSyncPreview = function() {
+  if (!PD.state.selectedPipe || PD.state.syncPreviewLoading) return;
+  PD.state.syncPreviewLoading = true;
+  PD.state.syncPreview = null;
+  m.redraw();
+
+  // The sync-preview endpoint uses just pipeName (not project/pipe).
+  // URL shape: /api/workspaces/:pipeName/sync-preview
+  // Ref: buildandserve.ts — GET /api/workspaces/:pipeName/sync-preview
+  var url = "/api/workspaces/" +
+    encodeURIComponent(PD.state.selectedPipe.pipeName) +
+    "/sync-preview";
+
+  m.request({ method: "GET", url: url }).then(function(result) {
+    // The result is a SyncResult envelope; we want the .markdown field.
+    PD.state.syncPreview = result.markdown || null;
+    PD.state.syncPreviewLoading = false;
+  }).catch(function(err) {
+    PD.state.syncPreview = null;
+    PD.state.syncPreviewLoading = false;
+    // Show the error in the sync preview panel (not the drawer).
+    console.error("[pd:sync] loadSyncPreview failed:", err.message);
   });
 };
 
@@ -1888,6 +1965,9 @@ PD.actions.syncToMarkdown = function() {
 PD.actions.rebuildFromMarkdown = function() {
   if (!PD.state.selectedPipe) return;
   PD.state.syncState = "syncing";
+  // Close sync preview panel since rebuild makes it stale.
+  PD.state.syncPreviewOpen = false;
+  PD.state.syncPreview = null;
   m.redraw();
 
   var url = "/api/workspaces/" +
@@ -1916,7 +1996,39 @@ PD.actions.rebuildFromMarkdown = function() {
     PD.state.drawerLabel = "Rebuild error";
     PD.state.drawerStatus = "error";
     PD.state.drawerOutput = err.message || "Rebuild failed";
+    PD.state.drawerError = {
+      status: 0,
+      statusText: "Rebuild Failed",
+      message: err.message || "Rebuild failed"
+    };
     m.redraw();
+  });
+};
+
+/**
+ * loadSessionHistory — Fetches recent sessions for the currently selected
+ * pipe. Populates the session history panel in the drawer.
+ *
+ * @return {void}
+ * Ref: GET /api/sessions/:project/:pipe in buildandserve.ts
+ */
+PD.actions.loadSessionHistory = function() {
+  if (!PD.state.selectedPipe || PD.state.sessionHistoryLoading) return;
+  PD.state.sessionHistoryLoading = true;
+  PD.state.sessionHistory = [];
+  m.redraw();
+
+  var pipeName = PD.state.selectedPipe.pipeName;
+  var url = "/api/sessions/" +
+    encodeURIComponent(PD.state.selectedPipe.projectName) +
+    "/" + encodeURIComponent(pipeName) + "?limit=20";
+
+  m.request({ method: "GET", url: url }).then(function(sessions) {
+    PD.state.sessionHistory = sessions || [];
+    PD.state.sessionHistoryLoading = false;
+  }).catch(function() {
+    PD.state.sessionHistory = [];
+    PD.state.sessionHistoryLoading = false;
   });
 };
 

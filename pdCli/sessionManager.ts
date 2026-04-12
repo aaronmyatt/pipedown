@@ -291,6 +291,7 @@ export function createSession(
     ...(options.endStepIndex !== undefined ? { endStepIndex: options.endStepIndex } : {}),
   };
 
+  console.log(`[pd:session] createSession: id=${sessionId.substring(0, 8)}… pipe="${pipeName}" mode=${mode} steps=${steps.length}`);
   return session;
 }
 
@@ -314,6 +315,7 @@ export async function persistSession(projectPath: string, session: RunSession): 
   await Deno.mkdir(dir, { recursive: true });
   const filePath = sessionFilePath(projectPath, session.pipeName, session.sessionId);
   await Deno.writeTextFile(filePath, JSON.stringify(session, null, 2));
+  console.log(`[pd:session] persistSession: ${session.sessionId.substring(0, 8)}… status=${session.status}`);
 }
 
 /**
@@ -400,6 +402,7 @@ export async function updateSessionStatus(
   session: RunSession,
   status: SessionStatus,
 ): Promise<void> {
+  console.log(`[pd:session] updateSessionStatus: ${session.sessionId.substring(0, 8)}… ${session.status} → ${status}`);
   session.status = status;
   if (status === "completed" || status === "failed") {
     session.completedAt = new Date().toISOString();
@@ -422,6 +425,7 @@ export async function updateStepStatus(
   status: StepStatus,
 ): Promise<void> {
   if (stepIndex >= 0 && stepIndex < session.steps.length) {
+    console.log(`[pd:session] updateStepStatus: session=${session.sessionId.substring(0, 8)}… step[${stepIndex}] → ${status}`);
     session.steps[stepIndex].status = status;
     await persistSession(projectPath, session);
   }

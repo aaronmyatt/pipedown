@@ -61,6 +61,7 @@ export async function syncCommand(input: CliInput) {
   const indexJsonPath = std.join(PD_DIR, pipeName, "index.json");
   const isDryRun = !!input.flags["dry-run"];
 
+  console.log(`[pd:sync] syncCommand: starting sync for "${pipeName}" (dry-run=${isDryRun})`);
   try {
     // Read the current structured pipe data from index.json.
     // This is the machine-edit source of truth for all structured/web edits.
@@ -140,7 +141,7 @@ export async function syncCommand(input: CliInput) {
 
       await pdBuild(buildInput);
       rebuilt = true;
-      console.log(`Rebuilt ${pipeName} after sync`);
+      console.log(`[pd:sync] syncCommand: rebuilt ${pipeName} after sync`);
 
       // After a successful rebuild, update workspace metadata in the
       // just-written index.json to reflect the clean synced state.
@@ -177,7 +178,7 @@ export async function syncCommand(input: CliInput) {
     input.syncResult = result;
 
   } catch (e) {
-    console.error(`Error: ${e.message}`);
+    console.error(`[pd:sync] syncCommand: failed for "${pipeName}": ${e.message}`);
     input.errors = input.errors || [];
     input.errors.push(e);
 

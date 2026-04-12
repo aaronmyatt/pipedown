@@ -340,7 +340,41 @@ PD.utils.drawerInputEditorContent = function() {
 // Ref: PD.utils.stepStatusSymbol, PD.utils.stepStatusClass in state.js
 PD.utils.sessionSummaryPanel = function() {
   var session = PD.state.activeSession;
-  if (!session) return null;
+
+  // ── Loading state ──
+  // Show a spinner when session data is being fetched.
+  // Ref: WEB_FIRST_WORKFLOW_PLAN.md Phase 5 — loading states
+  if (PD.state.sessionLoading && !session) {
+    return m("div.session-summary-panel", {
+      style: "border: 1px solid var(--surface-3); border-radius: var(--radius-2); padding: var(--size-3); margin-block-end: var(--size-3); background: var(--surface-1); text-align: center; color: var(--text-2);"
+    }, [
+      m("div", { style: "font-size: var(--font-size-1); margin-block-end: var(--size-1);" }, "\u23F3"),
+      m("div", "Loading session\u2026")
+    ]);
+  }
+
+  // ── Empty state ──
+  // When no active session exists, show a helpful message.
+  // Ref: WEB_FIRST_WORKFLOW_PLAN.md Phase 5 — empty states
+  if (!session) {
+    return m("div.session-summary-panel", {
+      style: "border: 1px solid var(--surface-3); border-radius: var(--radius-2); padding: var(--size-3); margin-block-end: var(--size-3); background: var(--surface-1); text-align: center; color: var(--text-2);"
+    }, [
+      m("div", { style: "font-size: var(--font-size-0);" }, "No session yet. Run the pipe to create one."),
+      // ── Session history toggle ──
+      m("button.tb-btn", {
+        style: "margin-block-start: var(--size-2); font-size: var(--font-size-00);",
+        onclick: function() {
+          PD.state.showSessionHistory = !PD.state.showSessionHistory;
+          if (PD.state.showSessionHistory) {
+            PD.actions.loadSessionHistory();
+          }
+        }
+      }, PD.state.showSessionHistory ? "Hide sessions" : "\uD83D\uDCCB Sessions"),
+      // Render session history inline when toggled
+      PD.state.showSessionHistory ? PD.utils.sessionHistoryPanel() : null
+    ]);
+  }
 
   var sections = [];
 
@@ -373,7 +407,20 @@ PD.utils.sessionSummaryPanel = function() {
             style: "margin-inline-start: auto; font-size: var(--font-size-00);",
             title: "Continue from last completed step"
           }, "\u25B6 Continue")
-        : null
+        : null,
+      // ── Session history toggle ──
+      // Opens a section showing recent sessions for this pipe.
+      // Ref: WEB_FIRST_WORKFLOW_PLAN.md Phase 5 — session history
+      m("button.tb-btn", {
+        onclick: function() {
+          PD.state.showSessionHistory = !PD.state.showSessionHistory;
+          if (PD.state.showSessionHistory) {
+            PD.actions.loadSessionHistory();
+          }
+        },
+        style: "font-size: var(--font-size-00);",
+        title: "Browse recent sessions"
+      }, PD.state.showSessionHistory ? "Hide sessions" : "\uD83D\uDCCB Sessions")
     ])
   );
 
@@ -486,10 +533,99 @@ PD.utils.sessionSummaryPanel = function() {
     }
   }
 
+  // ── Session history section (inline, toggled by Sessions button) ──
+  if (PD.state.showSessionHistory) {
+    sections.push(PD.utils.sessionHistoryPanel());
+  }
+
   // Wrap the entire session panel in a bordered container.
   return m("div.session-summary-panel", {
     style: "border: 1px solid var(--surface-3); border-radius: var(--radius-2); padding: var(--size-2); margin-block-end: var(--size-3); background: var(--surface-1);"
   }, sections);
+};
+
+// ── sessionHistoryPanel ──
+// Renders the session history section showing a compact list of recent sessions.
+// Each session shows: truncated ID, mode, status, createdAt (relative time),
+// and a step summary. Clicking a session sets it as activeSession.
+//
+// Ref: WEB_FIRST_WORKFLOW_PLAN.md Phase 5 — session history browsing
+PD.utils.sessionHistoryPanel = function() {
+  // ── Loading state ──
+  if (PD.state.sessionHistoryLoading) {
+    return m("div", {
+      style: "padding: var(--size-2); text-align: center; color: var(--text-2); font-size: var(--font-size-00);"
+    }, "Loading sessions\u2026");
+  }
+
+  var history = PD.state.sessionHistory;
+  if (!history || history.length === 0) {
+    return m("div", {
+      style: "padding: var(--size-2); text-align: center; color: var(--text-2); font-size: var(--font-size-00);"
+    }, "No sessions found.");
+  }
+
+  return m("div", {
+    style: "margin-block-start: var(--size-2); border-block-start: 1px solid var(--surface-3); padding-block-start: var(--size-2);"
+  }, [
+    m("div", {
+      style: "font-weight: var(--font-weight-6); font-size: var(--font-size-00); margin-block-end: var(--size-1); color: var(--text-2);"
+    }, "Recent Sessions"),
+    history.map(function(s, i) {
+      // Truncate session ID to first 8 chars for compact display.
+      var shortId = s.sessionId ? s.sessionId.substring(0, 8) + "\u2026" : "unknown";
+
+      // Determine status colour for visual distinction.
+      var statusColor = "var(--text-2)";
+      if (s.status === "completed") statusColor = "var(--green-6)";
+      if (s.status === "failed") statusColor = "var(--red-6)";
+      if (s.status === "running") statusColor = "var(--yellow-6)";
+
+      // Build a step summary: e.g. "3/5 done"
+      var stepSummary = "";
+      if (s.steps && s.steps.length > 0) {
+        var done = s.steps.filter(function(st) { return st.status === "done"; }).length;
+        stepSummary = done + "/" + s.steps.length + " steps";
+      }
+
+      // Determine if this is the currently active session.
+      var isActive = PD.state.activeSession && PD.state.activeSession.sessionId === s.sessionId;
+
+      return m("button", {
+        key: "hist-" + s.sessionId,
+        onclick: function(e) {
+          e.stopPropagation();
+          // Set this session as the active session and refresh its full data.
+          PD.state.activeSession = s;
+          PD.actions.refreshActiveSession();
+          m.redraw();
+        },
+        style: [
+          "display: flex;",
+          "align-items: center;",
+          "gap: var(--size-2);",
+          "width: 100%;",
+          "padding: var(--size-1) var(--size-2);",
+          "border: 1px solid " + (isActive ? "var(--green-4)" : "var(--surface-3)") + ";",
+          "background: " + (isActive ? "var(--green-1, var(--surface-2))" : "var(--surface-2)") + ";",
+          "border-radius: var(--radius-1);",
+          "cursor: pointer;",
+          "font-size: var(--font-size-00);",
+          "color: var(--text-1);",
+          "margin-block-end: 2px;",
+          "text-align: left;",
+          "font-family: var(--font-sans);"
+        ].join(" "),
+        title: "Session " + s.sessionId
+      }, [
+        m("code", { style: "font-size: var(--font-size-00);" }, shortId),
+        m("span", s.mode || ""),
+        m("span", { style: "color: " + statusColor + "; font-weight: var(--font-weight-6);" }, s.status || ""),
+        s.createdAt ? m("span", { style: "color: var(--text-2); opacity: 0.7;" }, pd.relativeTime(s.createdAt)) : null,
+        stepSummary ? m("span", { style: "color: var(--text-2); margin-inline-start: auto;" }, stepSummary) : null
+      ]);
+    })
+  ]);
 };
 
 PD.utils.drawerBodyContent = function() {

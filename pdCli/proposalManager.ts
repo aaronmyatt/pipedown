@@ -98,8 +98,10 @@ export function createProposal(params: {
   summary: string;
   rationale?: string;
 }): PatchProposal {
+  const id = crypto.randomUUID();
+  console.log(`[pd:proposal] createProposal: id=${id.substring(0, 8)}… scope=${params.scopeType} ops=${params.operations.length} summary="${params.summary}"`);
   return {
-    proposalId: crypto.randomUUID(),
+    proposalId: id,
     scopeType: params.scopeType,
     scopeRef: params.scopeRef,
     origin: "pi",
@@ -134,6 +136,7 @@ export async function persistProposal(
   const dir = await ensureProposalDir(projectPath, pipeName);
   const filePath = std.join(dir, `${proposal.proposalId}.json`);
   await Deno.writeTextFile(filePath, JSON.stringify(proposal, null, 2));
+  console.log(`[pd:proposal] persistProposal: ${proposal.proposalId.substring(0, 8)}… status=${proposal.status}`);
 }
 
 // ── readProposal ──
@@ -376,6 +379,7 @@ export async function applyProposal(
   proposal.status = "applied";
   await persistProposal(projectPath, pipeName, proposal);
 
+  console.log(`[pd:proposal] applyProposal: ${proposal.proposalId.substring(0, 8)}… applied ${proposal.operations.length} ops to pipe "${pipeName}"`);
   return pipeData;
 }
 
@@ -402,6 +406,7 @@ export async function discardProposal(
 
   proposal.status = "discarded";
   await persistProposal(projectPath, pipeName, proposal);
+  console.log(`[pd:proposal] discardProposal: ${proposalId.substring(0, 8)}… discarded`);
   return proposal;
 }
 

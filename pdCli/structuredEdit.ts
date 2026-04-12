@@ -44,6 +44,9 @@ export function editPipeFields(
   pipeData: Pipe,
   updates: { pipeDescription?: string; schema?: string },
 ): Pipe {
+  const fields = Object.keys(updates);
+  console.log(`[pd:workspace] editPipeFields: updating ${fields.join(", ")} on pipe "${pipeData.name || pipeData.cleanName}"`);
+
   // Apply only the fields that were explicitly provided.
   // Using `hasOwnProperty` ensures we don't skip updates with empty-string values.
   if (Object.prototype.hasOwnProperty.call(updates, "pipeDescription")) {
@@ -58,6 +61,7 @@ export function editPipeFields(
   // Ref: WEB_FIRST_WORKFLOW_PLAN.md §7.3 — sync state model
   stampDirty(pipeData);
 
+  console.log(`[pd:workspace] editPipeFields: pipe "${pipeData.name || pipeData.cleanName}" → syncState=json_dirty`);
   return pipeData;
 }
 
@@ -114,6 +118,7 @@ export async function editStepFields(
   // Mark workspace dirty
   stampDirty(pipeData);
 
+  console.log(`[pd:workspace] editStepFields: step[${stepIndex}] "${step.name}" updated (fields: ${Object.keys(updates).join(", ")}) → syncState=json_dirty`);
   return step;
 }
 
@@ -170,6 +175,7 @@ export async function insertStep(
   // Mark workspace dirty
   stampDirty(pipeData);
 
+  console.log(`[pd:workspace] insertStep: "${newStep.name}" inserted at position ${insertAt} (stepId=${newStep.stepId})`);
   return newStep;
 }
 
@@ -199,6 +205,7 @@ export function deleteStep(
   // Mark workspace dirty
   stampDirty(pipeData);
 
+  console.log(`[pd:workspace] deleteStep: removed step[${stepIndex}] "${removed.name}" (stepId=${removed.stepId})`);
   return removed;
 }
 
@@ -233,6 +240,7 @@ export function reorderStep(
   // Mark workspace dirty
   stampDirty(pipeData);
 
+  console.log(`[pd:workspace] reorderStep: moved "${moved.name}" from index ${fromIndex} → ${toIndex}`);
   return true;
 }
 
@@ -257,6 +265,7 @@ export async function syncPipeToMarkdown(
   const indexJsonPath = std.join(projectPath, ".pd", pipeName, "index.json");
 
   try {
+    console.log(`[pd:sync] syncPipeToMarkdown: starting sync for pipe "${pipeName}" in ${projectPath}`);
     // Read the current structured pipe data
     const raw = await Deno.readTextFile(indexJsonPath);
     const pipeData: Pipe = JSON.parse(raw);
@@ -311,6 +320,7 @@ export async function syncPipeToMarkdown(
       console.error(`Warning: rebuild after sync failed: ${(buildErr as Error).message}`);
     }
 
+    console.log(`[pd:sync] syncPipeToMarkdown: completed successfully for "${pipeName}" (rebuilt=${rebuilt})`);
     return {
       success: true,
       pipeName,
@@ -320,6 +330,7 @@ export async function syncPipeToMarkdown(
       rebuilt,
     };
   } catch (e) {
+    console.error(`[pd:sync] syncPipeToMarkdown: failed for "${pipeName}": ${(e as Error).message}`);
     return {
       success: false,
       pipeName,
