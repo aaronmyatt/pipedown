@@ -29,12 +29,16 @@
  * @module
  */
 
-import type { CliInput } from "../pipedown.d.ts";
+import type { CliInput, PDError } from "../pipedown.d.ts";
 import { pd, std } from "../deps.ts";
 import { PD_DIR } from "./helpers.ts";
 import { pdBuild } from "../pdBuild.ts";
 import { cliHelpTemplate } from "../stringTemplates.ts";
-import { parseStepIndices, performExtraction, toKebabCase } from "../extractSteps.ts";
+import {
+  parseStepIndices,
+  performExtraction,
+  toKebabCase,
+} from "../extractSteps.ts";
 
 const helpText = cliHelpTemplate({
   title: "Extract",
@@ -82,7 +86,8 @@ export async function extractCommand(input: CliInput) {
     // The .pd/ directory uses a sanitized version of the filename (no extension,
     // no special chars). This matches the logic in pdBuild.ts:parseMdFiles.
     // Ref: pdUtils.ts — sanitizeString strips non-word chars and joins words
-    const pipeName = fileName.replace(/\.md$/, "").replace(/[\W_]+/g, " ").trim().replace(/\s+/g, "");
+    const pipeName = fileName.replace(/\.md$/, "").replace(/[\W_]+/g, " ")
+      .trim().replace(/\s+/g, "");
     const indexJsonPath = std.join(PD_DIR, pipeName, "index.json");
 
     // ── Load the full Pipe object from index.json ──
@@ -102,7 +107,8 @@ export async function extractCommand(input: CliInput) {
     const stepIndices = parseStepIndices(stepSpec, steps.length - 1);
     console.log(
       std.colors.brightCyan(
-        "Extracting step(s) " + stepIndices.join(", ") + " from " + fileName + " → " + toKebabCase(newName) + ".md",
+        "Extracting step(s) " + stepIndices.join(", ") + " from " + fileName +
+          " → " + toKebabCase(newName) + ".md",
       ),
     );
 
@@ -112,7 +118,9 @@ export async function extractCommand(input: CliInput) {
     // delegation step resolves correctly after build.
     const parentMdPath = pipeData.mdPath;
     if (!parentMdPath) {
-      console.error("Error: pipe has no mdPath — cannot determine source file location");
+      console.error(
+        "Error: pipe has no mdPath — cannot determine source file location",
+      );
       return input;
     }
 
@@ -126,7 +134,8 @@ export async function extractCommand(input: CliInput) {
       await Deno.stat(newFilePath);
       // If stat succeeds, the file already exists
       console.error(
-        "Error: file already exists: " + newFilePath + "\nChoose a different name or remove the existing file first.",
+        "Error: file already exists: " + newFilePath +
+          "\nChoose a different name or remove the existing file first.",
       );
       return input;
     } catch (e) {
@@ -145,9 +154,13 @@ export async function extractCommand(input: CliInput) {
 
     // ── Dry-run mode: preview without writing ──
     if (input.flags["dry-run"]) {
-      console.log(std.colors.brightYellow("\n── New pipe: " + newFileName + " ──"));
+      console.log(
+        std.colors.brightYellow("\n── New pipe: " + newFileName + " ──"),
+      );
       console.log(newPipeMarkdown);
-      console.log(std.colors.brightYellow("\n── Modified parent: " + fileName + " ──"));
+      console.log(
+        std.colors.brightYellow("\n── Modified parent: " + fileName + " ──"),
+      );
       console.log(modifiedParentMarkdown);
       return input;
     }
@@ -165,7 +178,9 @@ export async function extractCommand(input: CliInput) {
   } catch (e) {
     console.error("Error: " + (e as Error).message);
     input.errors = input.errors || [];
-    input.errors.push(e as Error);
+    // PDError requires a `func` field to identify the failing step.
+    // Spread the caught Error and add func; cast to satisfy the PDError union.
+    input.errors.push({ ...(e as Error), func: "extract" } as PDError);
   }
 
   return input;

@@ -1,6 +1,8 @@
 // Home page mount point
 m.mount(document.getElementById("app"), {
-  view: function() { return m(PD.components.Layout); }
+  view: function () {
+    return m(PD.components.Layout);
+  },
 });
 
 // ── SSE hot reload + auto-focus ──
@@ -20,7 +22,7 @@ m.mount(document.getElementById("app"), {
 // Ref: buildandserve.ts — broadcastSSE() helper, _controller SSE stream
 // Ref: https://developer.mozilla.org/en-US/docs/Web/API/EventSource
 const eventSource = new EventSource("/sse");
-eventSource.onmessage = function(event) {
+eventSource.onmessage = function (event) {
   // ── Try to parse as structured JSON event ──
   // The server sends either plain "reload" strings or JSON objects with a
   // `type` field. We attempt JSON parse first; if it fails, fall through
@@ -52,8 +54,8 @@ eventSource.onmessage = function(event) {
       //
       // Helper: searches recentPipes and selects or refreshes the match.
       // Ref: state.js — PD.actions.selectPipe, PD.actions.refreshPipe
-      const focusPipe = function() {
-        const match = PD.state.recentPipes.find(function(p) {
+      const focusPipe = function () {
+        const match = PD.state.recentPipes.find(function (p) {
           return p.projectName === parsed.project && p.pipeName === parsed.pipe;
         });
         if (!match) return false;
@@ -61,7 +63,10 @@ eventSource.onmessage = function(event) {
         // If the user already has this pipe open, use refreshPipe() to
         // preserve scroll position. Otherwise, do a full selectPipe().
         const current = PD.state.selectedPipe;
-        if (current && current.projectName === match.projectName && current.pipeName === match.pipeName) {
+        if (
+          current && current.projectName === match.projectName &&
+          current.pipeName === match.pipeName
+        ) {
           PD.actions.refreshPipe();
         } else {
           PD.actions.selectPipe(match);
@@ -104,26 +109,26 @@ eventSource.onmessage = function(event) {
 // the action: once pipes load, attempt to restore from hash.
 // Ref: shared/hashRouter.js — pd.hashRouter.getSegments()
 // Ref: state.js — PD.actions.restoreFromHash()
-(function() {
+(function () {
   // Kick off both fetches in parallel: the 10 most recent (for "Recent"
   // section) and the full list (for "Projects" section).
   PD.actions.loadAllPipes();
   PD.actions.loadRecentPipes()
-  .then(function() {
-    // After loadRecentPipes completes, attempt to restore
-    // selection from the URL hash. This handles the case where the user
-    // refreshes the page with a pipe selected — we want to re-select it
-    // after reload.
-    PD.actions.restoreFromHash();
-  });
+    .then(function () {
+      // After loadRecentPipes completes, attempt to restore
+      // selection from the URL hash. This handles the case where the user
+      // refreshes the page with a pipe selected — we want to re-select it
+      // after reload.
+      PD.actions.restoreFromHash();
+    });
 })();
 
 // ── hashchange listener ──
 // When the user navigates with browser back/forward buttons, the hash
 // changes. Re-read it and update the selection accordingly.
 // Ref: https://developer.mozilla.org/en-US/docs/Web/API/Window/hashchange_event
-pd.hashRouter.onHashChange(function() {
-  var segments = pd.hashRouter.getSegments();
+pd.hashRouter.onHashChange(function () {
+  const segments = pd.hashRouter.getSegments();
   if (segments.length === 2) {
     // Hash has a pipe selection — restore it
     PD.actions.restoreFromHash();

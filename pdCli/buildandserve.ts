@@ -8,10 +8,31 @@ import { pdBuild } from "../pdBuild.ts";
 // Ref: see pipeToMarkdown.ts for lossless vs lossy reconstruction modes
 import { pipeToMarkdown } from "../pipeToMarkdown.ts";
 import { reportErrors } from "./reportErrors.ts";
-import { scanTraces, readTrace, tracePage } from "./traceDashboard.ts";
-import { enrichProjects, readProjectsRegistry, scanProjectPipes, readPipeMarkdown, projectsPage, readGlobalConfig, writeGlobalConfig, createProject } from "./projectsDashboard.ts";
-import { scanRecentPipes, scanAllPipes, readPipeIndex, recentStepTraces, recentPipeTraces, homePage } from "./homeDashboard.ts";
-import { findTargetStep, buildContextPrompt, callLLM, getPipedownSystemPrompt } from "./llmCommand.ts";
+import { readTrace, scanTraces, tracePage } from "./traceDashboard.ts";
+import {
+  createProject,
+  enrichProjects,
+  projectsPage,
+  readGlobalConfig,
+  readPipeMarkdown,
+  readProjectsRegistry,
+  scanProjectPipes,
+  writeGlobalConfig,
+} from "./projectsDashboard.ts";
+import {
+  homePage,
+  readPipeIndex,
+  recentPipeTraces,
+  recentStepTraces,
+  scanAllPipes,
+  scanRecentPipes,
+} from "./homeDashboard.ts";
+import {
+  buildContextPrompt,
+  callLLM,
+  findTargetStep,
+  getPipedownSystemPrompt,
+} from "./llmCommand.ts";
 // performExtraction splits a pipe's steps into a new sub-pipe and rewrites
 // the parent with a delegation step. Used by POST /api/extract.
 // Ref: extractSteps.ts — parseStepIndices, buildExtractedPipe, buildReplacementStep
@@ -141,8 +162,13 @@ function stripCodeFences(text: string): string {
  * @param stepIndex - Zero-based index of the target step
  * @returns A formatted context string to prepend to any step-level prompt
  */
-// deno-lint-ignore no-explicit-any
-async function buildPipeContextHeader(pipeData: any, steps: any[], stepIndex: number): Promise<string> {
+async function buildPipeContextHeader(
+  // deno-lint-ignore no-explicit-any
+  pipeData: any,
+  // deno-lint-ignore no-explicit-any
+  steps: any[],
+  stepIndex: number,
+): Promise<string> {
   const parts: string[] = [];
 
   // Start with the comprehensive Pipedown system prompt so the LLM
@@ -165,10 +191,16 @@ async function buildPipeContextHeader(pipeData: any, steps: any[], stepIndex: nu
     // understands what test data exists and how the pipe is configured.
     const { inputs, ...rest } = pipeData.config;
     if (inputs && inputs.length > 0) {
-      parts.push(`\nTest inputs (${inputs.length} entries):\n\`\`\`json\n${JSON.stringify(inputs.slice(0, 3), null, 2)}\n\`\`\``);
+      parts.push(
+        `\nTest inputs (${inputs.length} entries):\n\`\`\`json\n${
+          JSON.stringify(inputs.slice(0, 3), null, 2)
+        }\n\`\`\``,
+      );
     }
     if (Object.keys(rest).length > 0) {
-      parts.push(`\nConfig:\n\`\`\`json\n${JSON.stringify(rest, null, 2)}\n\`\`\``);
+      parts.push(
+        `\nConfig:\n\`\`\`json\n${JSON.stringify(rest, null, 2)}\n\`\`\``,
+      );
     }
   }
 
@@ -179,12 +211,22 @@ async function buildPipeContextHeader(pipeData: any, steps: any[], stepIndex: nu
   const preceding = steps.slice(0, stepIndex);
   if (preceding.length > 0) {
     parts.push("\n## Preceding steps in this pipeline:");
-    preceding.forEach((s: { name: string; description?: string; code: string; config?: any }, i: number) => {
-      parts.push(`\n### Step ${i + 1}: ${s.name}`);
-      if (s.description) parts.push(`Description: ${s.description}`);
-      if (s.config) parts.push(`Conditionals: ${JSON.stringify(s.config)}`);
-      parts.push(`Code:\n\`\`\`ts\n${s.code}\n\`\`\``);
-    });
+    preceding.forEach(
+      (
+        s: {
+          name: string;
+          description?: string;
+          code: string;
+          config?: Record<string, unknown>;
+        },
+        i: number,
+      ) => {
+        parts.push(`\n### Step ${i + 1}: ${s.name}`);
+        if (s.description) parts.push(`Description: ${s.description}`);
+        if (s.config) parts.push(`Conditionals: ${JSON.stringify(s.config)}`);
+        parts.push(`Code:\n\`\`\`ts\n${s.code}\n\`\`\``);
+      },
+    );
   }
 
   return parts.join("\n");
@@ -214,7 +256,10 @@ const lazyIO = std.debounce(async (input = { errors: [] }) => {
  * @param templateName - File name of the template (e.g. "trace.ts", "cli.ts")
  * @returns Absolute path to the template in the pipe directory
  */
-async function ensureTemplate(pipeDir: string, templateName: string): Promise<string> {
+async function ensureTemplate(
+  pipeDir: string,
+  templateName: string,
+): Promise<string> {
   const dest = std.join(pipeDir, templateName);
   if (!await std.exists(dest)) {
     // Ref: templates/ in the pipedown source tree — these are the canonical
@@ -226,7 +271,9 @@ async function ensureTemplate(pipeDir: string, templateName: string): Promise<st
 }
 
 // Helper to resolve a project path from the registry by name
-async function resolveProject(name: string): Promise<{ name: string; path: string } | null> {
+async function resolveProject(
+  name: string,
+): Promise<{ name: string; path: string } | null> {
   const raw = await readProjectsRegistry();
   return raw.find((p) => p.name === name) || null;
 }
@@ -248,7 +295,11 @@ async function resolveProject(name: string): Promise<{ name: string; path: strin
  * Ref: https://docs.deno.com/api/deno/~/Deno.Command
  * Ref: https://developer.mozilla.org/en-US/docs/Web/API/ReadableStream
  */
-function spawnAndStream(cmd: string[], cwd?: string, onComplete?: (success: boolean) => void): Response {
+function spawnAndStream(
+  cmd: string[],
+  cwd?: string,
+  onComplete?: (success: boolean) => void,
+): Response {
   const process = new Deno.Command(cmd[0], {
     args: cmd.slice(1),
     stdout: "piped",
@@ -290,18 +341,22 @@ function spawnAndStream(cmd: string[], cwd?: string, onComplete?: (success: bool
 
 async function watchFs(input: BuildInput) {
   for await (const event of Deno.watchFs(Deno.cwd(), { recursive: true })) {
-    const pathRegex = new RegExp(/\.pd|deno|dist|\.git|\.vscode|\.github|\.cache|\.history|\.log|\.lock|\.swp/)
-    const notInProtectedDir = event.paths.every((path) => !path.match(pathRegex));
+    const pathRegex = new RegExp(
+      /\.pd|deno|dist|\.git|\.vscode|\.github|\.cache|\.history|\.log|\.lock|\.swp/,
+    );
+    const notInProtectedDir = event.paths.every((path) =>
+      !path.match(pathRegex)
+    );
 
     const extensions = [".md"];
     const hasValidExtension = event.paths.every((path) =>
       extensions.some((ext) => path.endsWith(ext))
-  );
+    );
 
-  if (
-    event.kind === "modify" && event.paths.length === 1 &&
-    notInProtectedDir && hasValidExtension
-  ) {
+    if (
+      event.kind === "modify" && event.paths.length === 1 &&
+      notInProtectedDir && hasValidExtension
+    ) {
       const fileName = event.paths[0];
       console.log(std.colors.brightGreen(`File changed: ${fileName}`));
       lazyIO(Object.assign(input, { match: fileName }));
@@ -328,12 +383,12 @@ function tellClientToReload() {
   });
 }
 
-function findOpenPort(defaultPort = 8000){
+function findOpenPort(defaultPort = 8000) {
   let port = defaultPort;
-  while(true){
+  while (true) {
     try {
-      Deno.listen({port});
-    } catch (e) {
+      Deno.listen({ port });
+    } catch (_e) {
       port += 1;
       continue;
     }
@@ -341,7 +396,7 @@ function findOpenPort(defaultPort = 8000){
   }
 }
 
-export async function serve(input: BuildInput){
+export async function serve(input: BuildInput) {
   pdBuild(input);
   watchFs(input);
 
@@ -360,7 +415,10 @@ export async function serve(input: BuildInput){
       // responses here would hide newly created or recently modified pipes.
       // Ref: https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Cache-Control#no-store
       return new Response(JSON.stringify(pipes), {
-        headers: { "content-type": "application/json", "cache-control": "no-store" },
+        headers: {
+          "content-type": "application/json",
+          "cache-control": "no-store",
+        },
       });
     }
 
@@ -374,7 +432,10 @@ export async function serve(input: BuildInput){
       // the freshest list after pipe creation, deletion, or project changes.
       // Ref: https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Cache-Control#no-store
       return new Response(JSON.stringify(pipes), {
-        headers: { "content-type": "application/json", "cache-control": "no-store" },
+        headers: {
+          "content-type": "application/json",
+          "cache-control": "no-store",
+        },
       });
     }
 
@@ -386,13 +447,20 @@ export async function serve(input: BuildInput){
       const project = await resolveProject(projectName);
       if (!project) return new Response("Project not found", { status: 404 });
       const data = await readPipeIndex(project.path, pipeName);
-      if (!data) return new Response("Pipe index not found (run pd build first)", { status: 404 });
+      if (!data) {
+        return new Response("Pipe index not found (run pd build first)", {
+          status: 404,
+        });
+      }
       // no-store ensures refreshPipe() always gets the latest index.json
       // after LLM actions or manual edits rebuild .pd/. Without this header,
       // XHR-based m.request() may serve a cached 200 and the UI won't update.
       // Ref: https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Cache-Control#no-store
       return new Response(JSON.stringify(data), {
-        headers: { "content-type": "application/json", "cache-control": "no-store" },
+        headers: {
+          "content-type": "application/json",
+          "cache-control": "no-store",
+        },
       });
     }
 
@@ -427,7 +495,13 @@ export async function serve(input: BuildInput){
     if (request.method === "POST" && url.pathname === "/api/llm") {
       try {
         const body = await request.json();
-        const { action, project: projectName, pipe: pipeName, stepIndex, prompt: userPrompt } = body;
+        const {
+          action,
+          project: projectName,
+          pipe: pipeName,
+          stepIndex,
+          prompt: userPrompt,
+        } = body;
         const project = await resolveProject(projectName);
         if (!project) return new Response("Project not found", { status: 404 });
         // Optimistic rebuild: recompile .md → .pd/ before LLM reads pipe context
@@ -451,7 +525,14 @@ export async function serve(input: BuildInput){
         // Several prompts need a compact view of all steps (name + code).
         // Build it once so each action branch can reference it.
         const stepsOverview = JSON.stringify(
-          steps.map((s: { name: string; code: string; description?: string; config?: any }) => ({
+          steps.map((
+            s: {
+              name: string;
+              code: string;
+              description?: string;
+              config?: Record<string, unknown>;
+            },
+          ) => ({
             name: s.name,
             code: s.code,
             ...(s.description ? { description: s.description } : {}),
@@ -496,7 +577,11 @@ ${stepsOverview}
 Generate a Zod schema that validates the \`input\` object for this Pipedown pipeline. The schema should cover all properties that steps read from and write to \`input\`.
 
 ### Pipeline name: ${pipeData.name || "unnamed"}
-${pipeData.pipeDescription ? `### Pipeline description: ${pipeData.pipeDescription}` : ""}
+${
+            pipeData.pipeDescription
+              ? `### Pipeline description: ${pipeData.pipeDescription}`
+              : ""
+          }
 
 ### Steps:
 ${stepsOverview}
@@ -526,8 +611,16 @@ ${stepsOverview}
 Generate test input objects for this Pipedown pipeline. Each object becomes the initial \`input\` passed to the pipeline and is snapshot-tested with \`pd test\`.
 
 ### Pipeline name: ${pipeData.name || "unnamed"}
-${pipeData.pipeDescription ? `### Pipeline description: ${pipeData.pipeDescription}` : ""}
-${pipeData.schema ? `### Pipeline schema:\n\`\`\`zod\n${pipeData.schema}\n\`\`\`` : ""}
+${
+            pipeData.pipeDescription
+              ? `### Pipeline description: ${pipeData.pipeDescription}`
+              : ""
+          }
+${
+            pipeData.schema
+              ? `### Pipeline schema:\n\`\`\`zod\n${pipeData.schema}\n\`\`\``
+              : ""
+          }
 
 ### Steps:
 ${stepsOverview}
@@ -556,14 +649,20 @@ ${stepsOverview}
           } catch {
             // If parsing fails, skip the sync but still return the raw result
             // so the user can see what the LLM produced.
-            console.error("Could not parse LLM test output as JSON — skipping sync");
+            console.error(
+              "Could not parse LLM test output as JSON — skipping sync",
+            );
           }
         } else if (action === "step-title" && stepIndex !== undefined) {
           const { step } = findTargetStep(steps, "" + stepIndex);
           // Build a full-context prompt so the LLM understands where this step
           // sits within the pipeline. Includes the Pipedown system prompt, pipe
           // metadata, and all preceding steps.
-          const pipeContext = await buildPipeContextHeader(pipeData, steps, stepIndex);
+          const pipeContext = await buildPipeContextHeader(
+            pipeData,
+            steps,
+            stepIndex,
+          );
           const contextPrompt = `${pipeContext}
 
 ## Your Task
@@ -590,7 +689,11 @@ ${step.code}
           // Include full pipeline context so the LLM can write a description
           // that accurately reflects how this step relates to earlier steps
           // and the overall pipeline purpose.
-          const pipeContext = await buildPipeContextHeader(pipeData, steps, stepIndex);
+          const pipeContext = await buildPipeContextHeader(
+            pipeData,
+            steps,
+            stepIndex,
+          );
           const contextPrompt = `${pipeContext}
 
 ## Your Task
@@ -617,8 +720,16 @@ ${step.code}
           // preceding steps, but we enhance it with pipe-level metadata (name,
           // description, schema, config) via buildPipeContextHeader so the LLM
           // understands the broader pipeline purpose.
-          const pipeContext = await buildPipeContextHeader(pipeData, steps, stepIndex);
-          const codePrompt = await buildContextPrompt(steps, stepIndex, userPrompt || "Improve this code");
+          const pipeContext = await buildPipeContextHeader(
+            pipeData,
+            steps,
+            stepIndex,
+          );
+          const codePrompt = await buildContextPrompt(
+            steps,
+            stepIndex,
+            userPrompt || "Improve this code",
+          );
           const contextPrompt = `${pipeContext}\n${codePrompt}`;
           result = await callLLM(contextPrompt);
           // Strip markdown code fences if the LLM wrapped the output.
@@ -637,7 +748,11 @@ ${step.code}
           try {
             console.log(pipeData);
             const markdown = pipeToMarkdown(pipeData);
-            console.log(std.colors.brightGreen(`Syncing LLM result back to ${pipeData.mdPath}`));
+            console.log(
+              std.colors.brightGreen(
+                `Syncing LLM result back to ${pipeData.mdPath}`,
+              ),
+            );
             console.log(markdown);
             await Deno.writeTextFile(pipeData.mdPath, markdown);
             // Rebuild so the .pd/ directory (index.json, index.ts) stays in
@@ -648,7 +763,9 @@ ${step.code}
             // and other open tabs/windows would stay stale until the file
             // watcher's debounced rebuild fires (~200ms later).
             // Matches the pattern used by /api/extract and /api/projects/{name}/files/{path}.
-            try { _controller?.enqueue("data: reload\n\n"); } catch { /* SSE client may have disconnected */ }
+            try {
+              _controller?.enqueue("data: reload\n\n");
+            } catch { /* SSE client may have disconnected */ }
             synced = true;
           } catch (syncErr) {
             // Log but don't fail the request — the LLM result is still valid
@@ -696,11 +813,15 @@ ${step.code}
     if (request.method === "POST" && url.pathname === "/api/extract") {
       try {
         const body = await request.json();
-        const { project: projectName, pipe: pipeName, stepIndices, newName } = body;
+        const { project: projectName, pipe: pipeName, stepIndices, newName } =
+          body;
 
         if (!projectName || !pipeName || !stepIndices || !newName) {
           return new Response(
-            JSON.stringify({ error: "Missing required fields: project, pipe, stepIndices, newName" }),
+            JSON.stringify({
+              error:
+                "Missing required fields: project, pipe, stepIndices, newName",
+            }),
             { status: 400, headers: { "content-type": "application/json" } },
           );
         }
@@ -720,7 +841,9 @@ ${step.code}
           pipeData = JSON.parse(await Deno.readTextFile(indexJsonPath));
         } catch {
           return new Response(
-            JSON.stringify({ error: `Pipe "${pipeName}" not found (run pd build first)` }),
+            JSON.stringify({
+              error: `Pipe "${pipeName}" not found (run pd build first)`,
+            }),
             { status: 404, headers: { "content-type": "application/json" } },
           );
         }
@@ -730,7 +853,9 @@ ${step.code}
         const parentMdPath = pipeData.mdPath;
         if (!parentMdPath) {
           return new Response(
-            JSON.stringify({ error: "Pipe has no mdPath — cannot determine source location" }),
+            JSON.stringify({
+              error: "Pipe has no mdPath — cannot determine source location",
+            }),
             { status: 500, headers: { "content-type": "application/json" } },
           );
         }
@@ -743,7 +868,10 @@ ${step.code}
         // Refuse to overwrite to prevent accidental data loss.
         if (await std.exists(newFilePath)) {
           return new Response(
-            JSON.stringify({ error: `File already exists: ${newFileName}. Choose a different name.` }),
+            JSON.stringify({
+              error:
+                `File already exists: ${newFileName}. Choose a different name.`,
+            }),
             { status: 409, headers: { "content-type": "application/json" } },
           );
         }
@@ -771,14 +899,19 @@ ${step.code}
         notifyTauri({
           type: "llm_complete",
           title: "Extract Complete",
-          message: `Extracted ${stepIndices.length} step(s) from ${pipeName} → ${newFileName}`,
+          message:
+            `Extracted ${stepIndices.length} step(s) from ${pipeName} → ${newFileName}`,
           project: projectName,
           pipe: pipeName,
           success: true,
         });
 
         return new Response(
-          JSON.stringify({ success: true, newPipePath: newFilePath, parentModified: true }),
+          JSON.stringify({
+            success: true,
+            newPipePath: newFilePath,
+            parentModified: true,
+          }),
           { headers: { "content-type": "application/json" } },
         );
       } catch (e) {
@@ -826,8 +959,19 @@ ${step.code}
         });
 
         return spawnAndStream(
-          [Deno.execPath(), "run", "--unstable-kv", "-A", "-c", configPath, "--no-check",
-           traceTsPath, "--input", body.input || "{}", "--json"],
+          [
+            Deno.execPath(),
+            "run",
+            "--unstable-kv",
+            "-A",
+            "-c",
+            configPath,
+            "--no-check",
+            traceTsPath,
+            "--input",
+            body.input || "{}",
+            "--json",
+          ],
           project.path,
           // Notify Tauri + SSE clients when the pipe run finishes.
           // The SSE broadcast tells the frontend which pipe was just executed
@@ -842,7 +986,11 @@ ${step.code}
               pipe: body.pipe,
               success,
             });
-            broadcastSSE({ type: "pipe_executed", project: body.project, pipe: body.pipe });
+            broadcastSSE({
+              type: "pipe_executed",
+              project: body.project,
+              pipe: body.pipe,
+            });
           },
         );
       } catch (e) {
@@ -886,8 +1034,19 @@ ${step.code}
         });
 
         return spawnAndStream(
-          [Deno.execPath(), "run", "--unstable-kv", "-A", "-c", configPath, "--no-check",
-           cliTsPath, "--input", inputJson, "--json"],
+          [
+            Deno.execPath(),
+            "run",
+            "--unstable-kv",
+            "-A",
+            "-c",
+            configPath,
+            "--no-check",
+            cliTsPath,
+            "--input",
+            inputJson,
+            "--json",
+          ],
           project.path,
           // Notify Tauri + SSE clients when the step run finishes.
           // Same auto-focus behavior as full pipe runs — the user wants to
@@ -901,7 +1060,11 @@ ${step.code}
               pipe: body.pipe,
               success,
             });
-            broadcastSSE({ type: "pipe_executed", project: body.project, pipe: body.pipe });
+            broadcastSSE({
+              type: "pipe_executed",
+              project: body.project,
+              pipe: body.pipe,
+            });
           },
         );
       } catch (e) {
@@ -920,13 +1083,14 @@ ${step.code}
           [Deno.execPath(), "test", "--unstable-kv", "-A", "--no-check"],
           project.path,
           // Notify Tauri when tests finish.
-          (success) => notifyTauri({
-            type: "test_complete",
-            title: success ? "Tests Passed" : "Tests Failed",
-            message: body.project,
-            project: body.project,
-            success,
-          }),
+          (success) =>
+            notifyTauri({
+              type: "test_complete",
+              title: success ? "Tests Passed" : "Tests Failed",
+              message: body.project,
+              project: body.project,
+              success,
+            }),
         );
       } catch (e) {
         return new Response("Error: " + (e as Error).message, { status: 500 });
@@ -941,16 +1105,24 @@ ${step.code}
         // Optimistic rebuild: recompile .md → .pd/ before packing
         await buildProject(project.path);
         return spawnAndStream(
-          [Deno.execPath(), "run", "-A", "--no-check", "jsr:@niceguyyo/pipedown", "pack"],
+          [
+            Deno.execPath(),
+            "run",
+            "-A",
+            "--no-check",
+            "jsr:@niceguyyo/pipedown",
+            "pack",
+          ],
           project.path,
           // Notify Tauri when packing finishes.
-          (success) => notifyTauri({
-            type: "pack_complete",
-            title: success ? "Pack Complete" : "Pack Failed",
-            message: body.project,
-            project: body.project,
-            success,
-          }),
+          (success) =>
+            notifyTauri({
+              type: "pack_complete",
+              title: success ? "Pack Complete" : "Pack Failed",
+              message: body.project,
+              project: body.project,
+              success,
+            }),
         );
       } catch (e) {
         return new Response("Error: " + (e as Error).message, { status: 500 });
@@ -964,7 +1136,11 @@ ${step.code}
         // Validate path is within a registered project
         const projects = await readProjectsRegistry();
         const isValid = projects.some((p) => filePath.startsWith(p.path));
-        if (!isValid) return new Response("Path not within a registered project", { status: 403 });
+        if (!isValid) {
+          return new Response("Path not within a registered project", {
+            status: 403,
+          });
+        }
         const cmd = new Deno.Command("code", { args: [filePath] });
         await cmd.output();
         return new Response("OK");
@@ -1029,7 +1205,11 @@ ${step.code}
         // createProject throws "ALREADY_EXISTS" when the directory is taken
         const status = msg === "ALREADY_EXISTS" ? 409 : 500;
         return new Response(
-          JSON.stringify({ error: status === 409 ? "A project with that name already exists" : msg }),
+          JSON.stringify({
+            error: status === 409
+              ? "A project with that name already exists"
+              : msg,
+          }),
           { status, headers: { "content-type": "application/json" } },
         );
       }
@@ -1061,13 +1241,19 @@ ${step.code}
             const absPath = std.join(project.path, p.path);
             try {
               const stat = await Deno.stat(absPath);
-              return { name: p.name, path: p.path, mtime: stat.mtime?.toISOString() || null };
+              return {
+                name: p.name,
+                path: p.path,
+                mtime: stat.mtime?.toISOString() || null,
+              };
             } catch {
               return { name: p.name, path: p.path, mtime: null };
             }
           }));
-          pipes.sort((a: { mtime: string | null }, b: { mtime: string | null }) =>
-            (b.mtime || "").localeCompare(a.mtime || ""));
+          pipes.sort((
+            a: { mtime: string | null },
+            b: { mtime: string | null },
+          ) => (b.mtime || "").localeCompare(a.mtime || ""));
         } else {
           pipes = await scanProjectPipes(project.path);
         }
@@ -1075,7 +1261,9 @@ ${step.code}
           headers: { "content-type": "application/json" },
         });
       } catch {
-        return new Response("Project directory not accessible", { status: 404 });
+        return new Response("Project directory not accessible", {
+          status: 404,
+        });
       }
     }
 
@@ -1155,11 +1343,16 @@ ${step.code}
         // markdown after an LLM action or manual save rewrites the file.
         // Ref: https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Cache-Control#no-store
         return new Response(content, {
-          headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" },
+          headers: {
+            "content-type": "text/plain; charset=utf-8",
+            "cache-control": "no-store",
+          },
         });
       } catch (e) {
         const status = (e as Error).message?.includes("traversal") ? 403 : 404;
-        return new Response((e as Error).message || "File not found", { status });
+        return new Response((e as Error).message || "File not found", {
+          status,
+        });
       }
     }
 
@@ -1187,7 +1380,14 @@ ${step.code}
         const file = decodeURIComponent(segments[segments.length - 1]);
         const home = Deno.env.get("HOME");
         if (home) {
-          const filePath = std.join(home, ".pipedown", "traces", project, pipe, file);
+          const filePath = std.join(
+            home,
+            ".pipedown",
+            "traces",
+            project,
+            pipe,
+            file,
+          );
           try {
             const trace = await readTrace(filePath);
             return new Response(JSON.stringify(trace), {
@@ -1211,7 +1411,10 @@ ${step.code}
     // Frontend static assets (CSS + JS)
     if (url.pathname.startsWith("/frontend/")) {
       const frontendDir = new URL("./frontend/", import.meta.url).pathname;
-      const filePath = std.join(frontendDir, url.pathname.replace("/frontend/", ""));
+      const filePath = std.join(
+        frontendDir,
+        url.pathname.replace("/frontend/", ""),
+      );
       // Prevent path traversal
       if (!filePath.startsWith(frontendDir)) {
         return new Response("Forbidden", { status: 403 });
@@ -1219,8 +1422,15 @@ ${step.code}
       try {
         const response = await std.serveFile(request, filePath);
         const ext = url.pathname.split(".").pop();
-        if (ext === "css") response.headers.set("content-type", "text/css; charset=utf-8");
-        if (ext === "js") response.headers.set("content-type", "text/javascript; charset=utf-8");
+        if (ext === "css") {
+          response.headers.set("content-type", "text/css; charset=utf-8");
+        }
+        if (ext === "js") {
+          response.headers.set(
+            "content-type",
+            "text/javascript; charset=utf-8",
+          );
+        }
         response.headers.set("Access-Control-Allow-Origin", "*");
         // Disable caching in development so file edits are picked up immediately.
         // serveFile sets etag/last-modified by default which causes 304 responses;
@@ -1260,7 +1470,7 @@ ${step.code}
     return new Response(homePage(), {
       headers: { "content-type": "text/html", "cache-control": "no-store" },
     });
-  }
+  };
 
   // ── Start Tauri Command Listener ──
   // If the Tauri desktop app is running, it may send commands to this server
@@ -1328,7 +1538,10 @@ async function listenForTauriCommands(serverPort: number): Promise<void> {
             // This reuses all existing route logic (validation, build, etc.)
             await dispatchTauriCommand(cmd, serverPort);
           } catch (e) {
-            console.error("Failed to parse Tauri command:", (e as Error).message);
+            console.error(
+              "Failed to parse Tauri command:",
+              (e as Error).message,
+            );
           }
         }
       }
@@ -1362,7 +1575,11 @@ async function dispatchTauriCommand(cmd: any, port: number): Promise<void> {
         await fetch(`${baseUrl}/api/run`, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ project: cmd.project, pipe: cmd.pipe, input: cmd.input }),
+          body: JSON.stringify({
+            project: cmd.project,
+            pipe: cmd.pipe,
+            input: cmd.input,
+          }),
         });
         break;
       case "test":
@@ -1383,6 +1600,9 @@ async function dispatchTauriCommand(cmd: any, port: number): Promise<void> {
         console.log(`Unknown Tauri command: ${cmd.command}`);
     }
   } catch (e) {
-    console.error(`Failed to dispatch Tauri command '${cmd.command}':`, (e as Error).message);
+    console.error(
+      `Failed to dispatch Tauri command '${cmd.command}':`,
+      (e as Error).message,
+    );
   }
 }

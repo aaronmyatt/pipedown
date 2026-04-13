@@ -1,7 +1,6 @@
-import type { CliInput } from "../pipedown.d.ts";
+import type { CliInput, PDError } from "../pipedown.d.ts";
 import { pd, std } from "../deps.ts";
 import { PD_DIR } from "./helpers.ts";
-import { pdBuild } from "../pdBuild.ts";
 import { pipeToMarkdown } from "../pipeToMarkdown.ts";
 import { cliHelpTemplate } from "../stringTemplates.ts";
 
@@ -42,16 +41,20 @@ export async function syncCommand(input: CliInput) {
 
     const mdPath = pipeData.mdPath;
     if (!mdPath) {
-      console.error("Error: pipe has no mdPath — cannot determine source file location");
+      console.error(
+        "Error: pipe has no mdPath — cannot determine source file location",
+      );
       return input;
     }
 
     await Deno.writeTextFile(mdPath, markdown);
     console.log(`Synced ${indexJsonPath} → ${mdPath}`);
   } catch (e) {
-    console.error(`Error: ${e.message}`);
+    // Cast unknown catch variable to Error for .message access.
+    console.error(`Error: ${(e as Error).message}`);
     input.errors = input.errors || [];
-    input.errors.push(e);
+    // Construct PDError with required `func` field for the error reporter.
+    input.errors.push({ ...(e as Error), func: "sync" } as PDError);
   }
 
   return input;

@@ -66,8 +66,16 @@ body {
   background-color: var(--page-bg);
   background-image:
     radial-gradient(circle at top left, var(--page-bg-accent), transparent 34%),
-    radial-gradient(circle at top right, var(--page-bg-accent-2), transparent 30%),
-    linear-gradient(180deg, color-mix(in srgb, var(--surface-1) 38%, transparent), transparent 58%);
+    radial-gradient(
+    circle at top right,
+    var(--page-bg-accent-2),
+    transparent 30%
+  ),
+    linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--surface-1) 38%, transparent),
+    transparent 58%
+  );
   color: var(--text-1);
 }
 /* ── Layout grid ──
@@ -226,12 +234,18 @@ body {
   outline: 2px solid var(--green-5);
   outline-offset: -2px;
 }
-.search-input::placeholder { color: var(--text-2); }
+.search-input::placeholder {
+  color: var(--text-2);
+}
 .detail {
   padding: var(--size-4);
   overflow: auto;
   min-width: 0;
-  background: linear-gradient(180deg, color-mix(in srgb, var(--surface-1) 72%, transparent), transparent 45%);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--surface-1) 72%, transparent),
+    transparent 45%
+  );
 }
 .empty-state {
   display: flex;
@@ -242,7 +256,9 @@ body {
   color: var(--text-2);
   gap: var(--size-2);
 }
-.empty-state p { font-size: var(--font-size-2); }
+.empty-state p {
+  font-size: var(--font-size-2);
+}
 /* ── Toolbar Buttons ──
    Standard button style used by step toolbars, modal actions, and other
    interactive controls. The .primary variant uses the pd-desktop brand gradient.
@@ -258,7 +274,9 @@ body {
   font-family: var(--font-sans);
   white-space: nowrap;
 }
-.tb-btn:hover { background: var(--surface-3); }
+.tb-btn:hover {
+  background: var(--surface-3);
+}
 /* Primary action button — green accent with a subtle gradient for depth.
    Matches the pd-desktop brand gradient (green-5 → green-7).
    Ref: Open Props green scale — https://open-props.style/#green */

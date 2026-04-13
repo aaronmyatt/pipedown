@@ -42,10 +42,11 @@ export const denoReplEvalTemplate = (importNames: string[]) =>
     // We import both so users can call pipe.process(input) or pipeProcess(input).
     importNames
       .map((key: string) =>
-        `import { default as ${safeId(key)}, process as ${safeId(key)}Process } from "${key}";`
+        `import { default as ${safeId(key)}, process as ${
+          safeId(key)
+        }Process } from "${key}";`
       )
-      .join("\n")
-  }
+      .join("\n")}
 // ── Pointer library ──
 // JSON Pointer utilities for deep object access/mutation.
 // Now resolved through the import map instead of a hardcoded JSR URL.

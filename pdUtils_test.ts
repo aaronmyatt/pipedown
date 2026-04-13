@@ -1,5 +1,6 @@
+// deno-lint-ignore no-import-prefix no-unversioned-import
 import { assertEquals } from "jsr:@std/assert";
-import { sanitizeString, fileName, fileDir } from "./pdUtils.ts";
+import { fileDir, fileName, sanitizeString } from "./pdUtils.ts";
 
 Deno.test("sanitizeString", async (t) => {
   await t.step("strips non-word characters and joins words", () => {
@@ -7,7 +8,10 @@ Deno.test("sanitizeString", async (t) => {
   });
 
   await t.step("removes special characters", () => {
-    assertEquals(sanitizeString("Step: With (Special) Chars!"), "StepWithSpecialChars");
+    assertEquals(
+      sanitizeString("Step: With (Special) Chars!"),
+      "StepWithSpecialChars",
+    );
   });
 
   await t.step("handles leading/trailing whitespace", () => {

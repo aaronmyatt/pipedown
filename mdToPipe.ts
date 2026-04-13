@@ -1,13 +1,13 @@
 import { md, pd, std } from "./deps.ts";
-import { rangeFinder, Tag as TokenTag, TokenType } from "./rangeFinder.ts";
+import { rangeFinder } from "./rangeFinder.ts";
 import type {
+  Input,
   mdToPipeInput,
+  Pipe,
   PipeConfig,
   Step,
   Steps,
   Token,
-  Input,
-  Pipe,
 } from "./pipedown.d.ts";
 import { sanitizeString } from "./pdUtils.ts";
 import { buildConfigBlock } from "./pipeToMarkdown.ts";
@@ -19,23 +19,27 @@ const headingText = (tokens: Token[], headingIndex: number): string => {
   const token = tokens.at(headingIndex);
   if (token?.children) {
     return token.children
-      .filter(child => child.type === 'text')
-      .map(child => child.content)
-      .join('');
+      .filter((child) => child.type === "text")
+      .map((child) => child.content)
+      .join("");
   }
   // Fallback: markdown-it places heading text in the next inline token
   const next = tokens.at(headingIndex + 1);
-  if (next?.type === 'inline') return next.content || "";
+  if (next?.type === "inline") return next.content || "";
   return "";
 };
 
 // Collect paragraph (inline) text between two token indices.
 // Used for pipe descriptions and step descriptions.
-const collectInlineText = (tokens: Token[], fromIndex: number, toIndex: number): string[] => {
+const collectInlineText = (
+  tokens: Token[],
+  fromIndex: number,
+  toIndex: number,
+): string[] => {
   const parts: string[] = [];
   for (let i = fromIndex; i < toIndex; i++) {
     const t = tokens[i];
-    if (t?.type === 'inline' && t.content) parts.push(t.content);
+    if (t?.type === "inline" && t.content) parts.push(t.content);
   }
   return parts;
 };
@@ -63,7 +67,7 @@ const findPipeName = (input: mdToPipeInput) => {
   const headingRange = input.ranges.headings.find((hRange: number[]) => {
     const index = !hRange.length ? 0 : hRange[0];
     const token = input.tokens.at(index);
-    const level = token?.level || (token?.type === 'heading_open' ? 1 : 0);
+    const level = token?.level || (token?.type === "heading_open" ? 1 : 0);
     return level === 1;
   });
 
@@ -74,7 +78,9 @@ const findPipeName = (input: mdToPipeInput) => {
 };
 
 const findSchema = (input: mdToPipeInput) => {
-  if (!input.ranges.schemaBlocks || input.ranges.schemaBlocks.length === 0) return;
+  if (!input.ranges.schemaBlocks || input.ranges.schemaBlocks.length === 0) {
+    return;
+  }
 
   // Use only the first zod block — one schema per pipe
   const schemaRange = input.ranges.schemaBlocks[0];
@@ -88,7 +94,9 @@ const findSchema = (input: mdToPipeInput) => {
   }
 
   if (input.ranges.schemaBlocks.length > 1) {
-    console.warn("Warning: multiple zod blocks found — only the first is used as the pipe schema.");
+    console.warn(
+      "Warning: multiple zod blocks found — only the first is used as the pipe schema.",
+    );
   }
 };
 
@@ -97,9 +105,9 @@ const findSteps = (input: mdToPipeInput) => {
     (codeBlockRange: number[]): Step => {
       const token = input.tokens.at(codeBlockRange[0]);
       const code = token?.content || "";
-      const language = token?.info?.split(' ')[0] || "ts";
-      const infoFlags = token?.info?.split(' ').slice(1) || [];
-      const isMock = infoFlags.includes('mock');
+      const language = token?.info?.split(" ")[0] || "ts";
+      const infoFlags = token?.info?.split(" ").slice(1) || [];
+      const isMock = infoFlags.includes("mock");
 
       // Capture source line map from token.map for lossless round-trip
       const codeSourceMap = token?.map
@@ -140,7 +148,8 @@ const findSteps = (input: mdToPipeInput) => {
           if (!isNaN(level)) step.headingLevel = level;
         }
 
-        step.name = headingText(input.tokens, headingRange[0]) || "anonymous" + step.range[0];
+        step.name = headingText(input.tokens, headingRange[0]) ||
+          "anonymous" + step.range[0];
         // Preserve the original name at parse time for lossless round-trip
         // reconstruction — allows pipeToMarkdown to detect title mutations
         // and splice in the new heading text while preserving other formatting.
@@ -155,7 +164,11 @@ const findSteps = (input: mdToPipeInput) => {
         }
 
         // Extract description: paragraph text between heading end and code block start
-        const descParts = collectInlineText(input.tokens, headingRange[1] + 1, step.range[0]);
+        const descParts = collectInlineText(
+          input.tokens,
+          headingRange[1] + 1,
+          step.range[0],
+        );
         if (descParts.length > 0) {
           step.description = descParts.join("\n");
           // Preserve original description for lossless round-trip — allows
@@ -184,7 +197,11 @@ const findPipeDescription = (input: mdToPipeInput) => {
   );
   if (firstBlock === Infinity) return;
 
-  const descParts = collectInlineText(input.tokens, firstHeading[1] + 1, firstBlock);
+  const descParts = collectInlineText(
+    input.tokens,
+    firstHeading[1] + 1,
+    firstBlock,
+  );
   if (descParts.length > 0) {
     input.pipe.pipeDescription = descParts.join("\n");
     // Preserve original pipe description for lossless round-trip — allows
@@ -219,7 +236,7 @@ const setupChecks = (input: mdToPipeInput) => {
     return ranges.find(([start, stop]: number[]) => {
       return start < index && stop > index;
     });
-  }
+  };
 
   input.pipe.steps = input.pipe.steps.map((step: Step) => {
     step.inList = !!inRange(input.ranges.lists, step.range[0]);
@@ -232,51 +249,62 @@ const setupChecks = (input: mdToPipeInput) => {
         // Each directive controls conditional execution or response metadata.
         // "method" filters by HTTP method; "type" sets response content-type.
         // Ref: pdPipe/pdUtils.ts funcWrapper() for runtime evaluation
-        const checkRegex = new RegExp('(?<type>check|when|if|flags|or|and|not|route|stop|only|mock|method|type):\\s*(?<pointer>\\S*)');
+        const checkRegex = new RegExp(
+          "(?<type>check|when|if|flags|or|and|not|route|stop|only|mock|method|type):\\s*(?<pointer>\\S*)",
+        );
 
         if (listRange) {
           // Collect list item text content
           const listItems: string[] = [];
-          
+
           for (let i = listRange[0]; i < step.range[0]; i++) {
             const token = input.tokens[i];
-            if (token.type === 'list_item_open') {
-              listItems.push('');
-            } else if (token.type === 'inline' || token.type === 'text') {
+            if (token.type === "list_item_open") {
+              listItems.push("");
+            } else if (token.type === "inline" || token.type === "text") {
               if (listItems.length > 0) {
-                listItems[listItems.length - 1] += token.content || '';
+                listItems[listItems.length - 1] += token.content || "";
               }
             }
           }
-          
+
           listItems
             .map((text: string) => text.trim())
             .map((text: string) => checkRegex.exec(text))
-            .filter(match => match)
-            .map(match => (match?.groups || {type: '', pointer: ''}))
+            .filter((match) => match)
+            .map((match) => (match?.groups || { type: "", pointer: "" }))
             .forEach((check) => {
-              const appendCheck = pd.$p.compile('/config/checks/-')
+              const appendCheck = pd.$p.compile("/config/checks/-");
               const actions: Record<string, () => void> = {
                 "check": () => appendCheck.set(step, check.pointer),
                 "if": () => appendCheck.set(step, check.pointer),
                 "when": () => appendCheck.set(step, check.pointer),
-                "flags": () => appendCheck.set(step, '/flags'+check.pointer),
+                "flags": () => appendCheck.set(step, "/flags" + check.pointer),
                 "or": () => pd.$p.set(step, `/config/or/-`, check.pointer),
                 "and": () => pd.$p.set(step, `/config/and/-`, check.pointer),
                 "not": () => pd.$p.set(step, `/config/not/-`, check.pointer),
-                "route": () => pd.$p.set(step, `/config/routes/-`, check.pointer),
+                "route": () =>
+                  pd.$p.set(step, `/config/routes/-`, check.pointer),
                 "stop": () => pd.$p.set(step, `/config/stop`, stepIndex),
                 "only": () => pd.$p.set(step, `/config/only`, stepIndex),
-                "mock": () => { step.mock = true; },
+                "mock": () => {
+                  step.mock = true;
+                },
                 // "method" — HTTP method guard (e.g., method: POST).
                 // Multiple method directives on one step act as OR.
                 // Ref: pdPipe/pdUtils.ts funcWrapper() for runtime evaluation
-                "method": () => pd.$p.set(step, `/config/methods/-`, check.pointer.toUpperCase()),
+                "method": () =>
+                  pd.$p.set(
+                    step,
+                    `/config/methods/-`,
+                    check.pointer.toUpperCase(),
+                  ),
                 // "type" — response content-type shorthand (e.g., type: html).
                 // Supports shorthand names (json, html, text, etc.) or raw MIME types.
                 // Applied after step execution by funcWrapper.
                 // Ref: pdPipe/pdUtils.ts CONTENT_TYPE_MAP for shorthand resolution
-                "type": () => pd.$p.set(step, `/config/contentType`, check.pointer),
+                "type": () =>
+                  pd.$p.set(step, `/config/contentType`, check.pointer),
               };
 
               actions[check.type]?.();
@@ -285,15 +313,19 @@ const setupChecks = (input: mdToPipeInput) => {
           // Also handle bare `- mock` (no colon)
           listItems
             .map((text: string) => text.trim())
-            .filter((text: string) => text === 'mock')
-            .forEach(() => { step.mock = true; });
+            .filter((text: string) => text === "mock")
+            .forEach(() => {
+              step.mock = true;
+            });
         }
       }
       return step;
     });
-}
+};
 
-export const mdToPipe = async (input: {markdown:string, pipe: Pipe}&Input) => {
+export const mdToPipe = async (
+  input: { markdown: string; pipe: Pipe } & Input,
+) => {
   const funcs = [
     parseMarkdown,
     findRanges,

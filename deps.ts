@@ -38,7 +38,7 @@ export const std = {
   firstNotNullishOf,
 };
 export const md = {
-  MarkdownIt
+  MarkdownIt,
 };
 
 export const pd = {

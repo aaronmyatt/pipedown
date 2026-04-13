@@ -1,0 +1,234 @@
+# ── Pipedown CI ──
+#
+# Consolidated CI pipeline with three jobs:
+#
+#   1. sanity-checks  — lint, format, typecheck, and test pipedown itself
+#   2. pdpipe-compat  — verify the CLI works against the pdPipe test suite
+#   3. testpipes-compat — verify the CLI works against the testPipes test suite
+#
+# The compat jobs depend on sanity-checks via `needs:`, so they only run
+# after pipedown's own quality gates pass. The two compat jobs run in
+# parallel since they are independent of each other.
+#
+# Ref (workflow syntax):
+#   https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions
+# Ref (needs — job dependencies):
+#   https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idneeds
+
+name: CI
+
+# ── Trigger ──
+# Fires on pushes to ANY branch.
+# The "**" glob matches all branch names including those with slashes
+# (e.g. feature/foo).
+# Ref: https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows#push
+on:
+  push:
+    branches:
+      - "**"
+
+jobs:
+  # ══════════════════════════════════════════════════════════════════════
+  # Job 1: Sanity Checks
+  # ══════════════════════════════════════════════════════════════════════
+  # Runs pipedown's own quality gates: formatting, linting, type-checking,
+  # and unit tests. Type-check and tests are the blocking gates; lint and
+  # fmt are advisory-only until their pre-existing issues are resolved.
+  sanity-checks:
+    name: Sanity Checks
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── 1. Checkout pipedown ──
+      # Only one repo needed for this job, so no `path:` is required —
+      # the checkout lands at the workspace root.
+      # Ref: https://github.com/actions/checkout#usage
+      - name: Checkout pipedown
+        uses: actions/checkout@v4
+
+      # ── 2. Install Deno ──
+      # v2.x track — pipedown targets Deno 2.
+      # Ref: https://github.com/denoland/setup-deno
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      # ── 3. Format check ──
+      # `deno fmt --check` exits non-zero if any file would be reformatted.
+      # All files are now formatted — this is a blocking gate.
+      # Ref (deno fmt): https://docs.deno.com/runtime/reference/cli/fmt/
+      - name: deno fmt --check
+        run: deno fmt --check
+
+      # ── 4. Lint (BLOCKING) ──
+      # `deno lint` reports style and correctness issues. All 349 pre-existing
+      # issues have been fixed — this is now a blocking gate.
+      # Ref (deno lint): https://docs.deno.com/runtime/reference/cli/lint/
+      - name: deno lint
+        run: deno lint
+
+      # ── 5. Type-check (BLOCKING) ──
+      # `deno check --all` type-checks all TypeScript files including remote
+      # dependencies. This is the primary type-safety gate — must pass.
+      # Ref (deno check): https://docs.deno.com/runtime/reference/cli/check/
+      - name: deno check
+        run: deno check --all **/*.ts
+
+      # ── 6. Tests (BLOCKING) ──
+      # `--no-check` skips redundant type-checking (already done above).
+      # `-A` grants all permissions needed by the test runner and test fixtures.
+      # Ref (deno test): https://docs.deno.com/runtime/reference/cli/test/
+      - name: deno test
+        run: deno test --no-check -A
+
+  # ══════════════════════════════════════════════════════════════════════
+  # Job 2: pdPipe Compatibility
+  # ══════════════════════════════════════════════════════════════════════
+  # Verify that the pipedown CLI can successfully execute pdPipe's test
+  # pipeline (test/runner.md) using two invocation strategies:
+  #
+  #   A) Direct path — run pipedown's mod.ts entry point via `deno run`
+  #   B) Global install — install pipedown as the `pd` CLI, then invoke `pd run`
+  #
+  # Both repos are checked out as sibling directories so that relative paths
+  # (../pipedown/) work naturally from inside the pdPipe directory.
+  #
+  # `needs: sanity-checks` ensures this job only runs after pipedown's own
+  # tests pass — no point testing compat if the core is broken.
+  # Ref: https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idneeds
+  pdpipe-compat:
+    name: pdPipe Compatibility
+    needs: sanity-checks
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── 1. Checkout pipedown (this repo) into ./pipedown ──
+      # Using `path:` places the checkout in a subdirectory instead of the
+      # workspace root. Both repos become siblings under $GITHUB_WORKSPACE.
+      # Ref: https://github.com/actions/checkout#usage
+      - name: Checkout pipedown
+        uses: actions/checkout@v4
+        with:
+          path: pipedown
+
+      # ── 2. Checkout pdPipe into ./pdPipe ──
+      # The companion runtime library repo. Its test/runner.md pipeline is the
+      # target we'll execute with the pipedown CLI.
+      # Ref: https://github.com/actions/checkout#checkout-multiple-repos
+      - name: Checkout pdPipe
+        uses: actions/checkout@v4
+        with:
+          repository: aaronmyatt/pdPipe
+          path: pdPipe
+
+      # ── 3. Install Deno ──
+      # v2.x track — both repos target Deno 2.
+      # Ref: https://github.com/denoland/setup-deno
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      # ── 4. Approach A: Run tests via direct path ──
+      # Invoke pipedown's CLI entry point directly with `deno run`, bypassing
+      # any global installation. The -A flag grants all permissions (network,
+      # read, write, env, etc.) which the CLI and test runner need.
+      # The relative path ../pipedown/pdCli/mod.ts works because pipedown and
+      # pdPipe are sibling directories under $GITHUB_WORKSPACE.
+      # Ref (deno run): https://docs.deno.com/runtime/reference/cli/run/
+      - name: "Approach A: Run tests via direct path"
+        working-directory: pdPipe
+        run: cd test && deno run -A ../../pipedown/pdCli/mod.ts run runner.md
+
+      # ── 5. Install pipedown globally as `pd` ──
+      # `deno install` with -g (global) and -n (name) creates a shim in
+      # ~/.deno/bin/ that acts like a native CLI command.
+      #   -A  = all permissions
+      #   -r  = reload cache (fresh deps)
+      #   -f  = force overwrite if already installed
+      #   -g  = global install (not project-local)
+      #   -n pd = name the command "pd"
+      # Ref: https://docs.deno.com/runtime/reference/cli/install/
+      - name: Install pd globally
+        working-directory: pipedown
+        run: deno install -Arfg -n pd pdCli/mod.ts
+
+      # ── 6. Approach B: Run tests via globally installed `pd` ──
+      # After global install, `pd` is available on PATH (setup-deno adds
+      # ~/.deno/bin to $PATH automatically). This mirrors the typical end-user
+      # workflow: install pd once, then use it everywhere.
+      - name: "Approach B: Run tests via global pd"
+        working-directory: pdPipe
+        run: cd test && pd run runner.md
+
+  # ══════════════════════════════════════════════════════════════════════
+  # Job 3: testPipes Compatibility
+  # ══════════════════════════════════════════════════════════════════════
+  # Same strategy as pdpipe-compat but against the testPipes repo and its
+  # testAll.md pipeline. Runs in parallel with pdpipe-compat since both
+  # only depend on sanity-checks, not on each other.
+  testpipes-compat:
+    name: testPipes Compatibility
+    needs: sanity-checks
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── 1. Checkout pipedown (this repo) into ./pipedown ──
+      # Using `path:` places the checkout in a subdirectory instead of the
+      # workspace root. Both repos become siblings under $GITHUB_WORKSPACE.
+      # Ref: https://github.com/actions/checkout#usage
+      - name: Checkout pipedown
+        uses: actions/checkout@v4
+        with:
+          path: pipedown
+
+      # ── 2. Checkout testPipes into ./testPipes ──
+      # The companion test-suite repo. Its testAll.md pipeline is the
+      # target we'll execute with the pipedown CLI.
+      # Ref: https://github.com/actions/checkout#checkout-multiple-repos
+      - name: Checkout testPipes
+        uses: actions/checkout@v4
+        with:
+          repository: aaronmyatt/testPipes
+          path: testPipes
+
+      # ── 3. Install Deno ──
+      # v2.x track — both repos target Deno 2.
+      # Ref: https://github.com/denoland/setup-deno
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      # ── 4. Approach A: Run tests via direct path ──
+      # Invoke pipedown's CLI entry point directly with `deno run`, bypassing
+      # any global installation. The -A flag grants all permissions (network,
+      # read, write, env, etc.) which the CLI and test runner need.
+      # The relative path ../pipedown/pdCli/mod.ts works because pipedown and
+      # testPipes are sibling directories under $GITHUB_WORKSPACE.
+      # Ref (deno run): https://docs.deno.com/runtime/reference/cli/run/
+      - name: "Approach A: Run tests via direct path"
+        working-directory: testPipes
+        run: deno run -A ../pipedown/pdCli/mod.ts run testAll.md
+
+      # ── 5. Install pipedown globally as `pd` ──
+      # `deno install` with -g (global) and -n (name) creates a shim in
+      # ~/.deno/bin/ that acts like a native CLI command.
+      #   -A  = all permissions
+      #   -r  = reload cache (fresh deps)
+      #   -f  = force overwrite if already installed
+      #   -g  = global install (not project-local)
+      #   -n pd = name the command "pd"
+      # Ref: https://docs.deno.com/runtime/reference/cli/install/
+      - name: Install pd globally
+        working-directory: pipedown
+        run: deno install -Arfg -n pd pdCli/mod.ts
+
+      # ── 6. Approach B: Run tests via globally installed `pd` ──
+      # After global install, `pd` is available on PATH (setup-deno adds
+      # ~/.deno/bin to $PATH automatically). This mirrors the typical end-user
+      # workflow: install pd once, then use it everywhere.
+      - name: "Approach B: Run tests via global pd"
+        working-directory: testPipes
+        run: pd run testAll.md

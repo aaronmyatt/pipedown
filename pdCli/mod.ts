@@ -28,7 +28,7 @@
  * @module
  */
 
-import type { CliInput, Input, PipeConfig} from "../pipedown.d.ts";
+import type { CliInput, Input, PipeConfig } from "../pipedown.d.ts";
 
 import projectMetadata from "./../deno.json" with { type: "json" };
 
@@ -61,95 +61,108 @@ import { installCommand } from "./installCommand.ts";
 import { extractCommand } from "./extractCommand.ts";
 
 async function pdInit(input: CliInput) {
-    try {
-        await Deno.mkdir(PD_DIR);
-        console.log(
-            std.colors.brightCyan("First time here? Welcome to Pipe ↓!"),
-        );
-        console.log(std.colors.brightGreen("Creating ~/.pd"));
-    } catch (e) {
-        if (!(e instanceof Deno.errors.AlreadyExists)) throw e;
-    }
+  try {
+    await Deno.mkdir(PD_DIR);
+    console.log(
+      std.colors.brightCyan("First time here? Welcome to Pipe ↓!"),
+    );
+    console.log(std.colors.brightGreen("Creating ~/.pd"));
+  } catch (e) {
+    if (!(e instanceof Deno.errors.AlreadyExists)) throw e;
+  }
 
-    // read project config from deno.json "pipedown" property (primary)
-    // or config.json (fallback), if either exists
-    input.globalConfig = input.globalConfig || {};
-    const config = await readPipedownConfig(Deno.cwd());
-    Object.assign(input.globalConfig, config);
+  // read project config from deno.json "pipedown" property (primary)
+  // or config.json (fallback), if either exists
+  input.globalConfig = input.globalConfig || {};
+  const config = await readPipedownConfig(Deno.cwd());
+  Object.assign(input.globalConfig, config);
 }
 
-const DEFAULT_TEMPLATE_FILES = ["cli.ts", "server.ts", "devServer.ts", "worker.ts", "test.ts", "trace.ts"];
+const DEFAULT_TEMPLATE_FILES = [
+  "cli.ts",
+  "server.ts",
+  "devServer.ts",
+  "worker.ts",
+  "test.ts",
+  "trace.ts",
+];
 
 async function scaffoldTemplates(input: CliInput) {
-    const templatesDir = std.join(Deno.cwd(), "templates");
+  const templatesDir = std.join(Deno.cwd(), "templates");
 
-    // Only scaffold if templates/ directory doesn't exist yet
-    if (await std.exists(templatesDir)) return input;
+  // Only scaffold if templates/ directory doesn't exist yet
+  if (await std.exists(templatesDir)) return input;
 
-    await Deno.mkdir(templatesDir, { recursive: true });
-    console.log(std.colors.brightGreen("Scaffolding default templates to templates/"));
+  await Deno.mkdir(templatesDir, { recursive: true });
+  console.log(
+    std.colors.brightGreen("Scaffolding default templates to templates/"),
+  );
 
-    // Copy default template files from pipedown source
-    const sourceTemplateDir = new URL("../templates/", import.meta.url);
-    for (const file of DEFAULT_TEMPLATE_FILES) {
-        const sourceUrl = new URL(file, sourceTemplateDir);
-        const content = await Deno.readTextFile(sourceUrl);
-        await Deno.writeTextFile(std.join(templatesDir, file), content);
-    }
+  // Copy default template files from pipedown source
+  const sourceTemplateDir = new URL("../templates/", import.meta.url);
+  for (const file of DEFAULT_TEMPLATE_FILES) {
+    const sourceUrl = new URL(file, sourceTemplateDir);
+    const content = await Deno.readTextFile(sourceUrl);
+    await Deno.writeTextFile(std.join(templatesDir, file), content);
+  }
 
-    // Update config to include templates (prefers deno.json "pipedown", falls back to config.json)
-    const templatePaths = DEFAULT_TEMPLATE_FILES.map(f => `./templates/${f}`);
-    const config = await readPipedownConfig(Deno.cwd());
+  // Update config to include templates (prefers deno.json "pipedown", falls back to config.json)
+  const templatePaths = DEFAULT_TEMPLATE_FILES.map((f) => `./templates/${f}`);
+  const config = await readPipedownConfig(Deno.cwd());
 
-    const existingTemplates = (config.templates as string[]) || [];
-    const newTemplates = templatePaths.filter(t => !existingTemplates.includes(t));
-    config.templates = [...existingTemplates, ...newTemplates];
+  const existingTemplates = (config.templates as string[]) || [];
+  const newTemplates = templatePaths.filter((t) =>
+    !existingTemplates.includes(t)
+  );
+  config.templates = [...existingTemplates, ...newTemplates];
 
-    await writePipedownConfig(Deno.cwd(), config);
+  await writePipedownConfig(Deno.cwd(), config);
 
-    // Update globalConfig so the build picks up the templates
-    Object.assign(input.globalConfig, config);
+  // Update globalConfig so the build picks up the templates
+  Object.assign(input.globalConfig, config);
 
-    return input;
+  return input;
 }
 
 async function registerProject(input: CliInput) {
-    const project = {
-        name: input.globalConfig.name || std.parsePath(Deno.cwd()).name,
-        path: Deno.cwd(),
-    };
+  const project = {
+    name: input.globalConfig.name || std.parsePath(Deno.cwd()).name,
+    path: Deno.cwd(),
+  };
 
-    const home = Deno.env.get("HOME");
-    if (home) {
-        const pipedownGlobalDir = std.join(home, ".pipedown");
-        try {
-            await Deno.mkdir(pipedownGlobalDir, { recursive: true });
-        } catch (e) {
-            if (!(e instanceof Deno.errors.AlreadyExists)) throw e;
-        }
-
-        const projectsPath = std.join(pipedownGlobalDir, "projects.json");
-        let projects = [];
-        try {
-            const projectsRaw = await Deno.readTextFile(projectsPath)
-            projects = JSON.parse(projectsRaw);
-        } catch (_e) {
-            // probably the first project
-        }
-
-        const exists = projects.find((_project: typeof project) => project.path === _project.path)
-
-        if(exists){
-            // do nothing
-        } else {
-            projects.push(project);
-            await Deno.writeTextFile(
-                projectsPath,
-                JSON.stringify(projects, null, 2),
-                { create: true },
-            );
-        }
+  const home = Deno.env.get("HOME");
+  if (home) {
+    const pipedownGlobalDir = std.join(home, ".pipedown");
+    try {
+      await Deno.mkdir(pipedownGlobalDir, { recursive: true });
+    } catch (e) {
+      if (!(e instanceof Deno.errors.AlreadyExists)) throw e;
     }
+
+    const projectsPath = std.join(pipedownGlobalDir, "projects.json");
+    let projects = [];
+    try {
+      const projectsRaw = await Deno.readTextFile(projectsPath);
+      projects = JSON.parse(projectsRaw);
+    } catch (_e) {
+      // probably the first project
+    }
+
+    const exists = projects.find((_project: typeof project) =>
+      project.path === _project.path
+    );
+
+    if (exists) {
+      // do nothing
+    } else {
+      projects.push(project);
+      await Deno.writeTextFile(
+        projectsPath,
+        JSON.stringify(projects, null, 2),
+        { create: true },
+      );
+    }
+  }
 }
 
 /**
@@ -163,135 +176,133 @@ async function registerProject(input: CliInput) {
  * @returns A wrapped function that passes through unmatched input unchanged.
  */
 export function checkMinFlags(
-    flags: string[],
-    func: (input: CliInput) => Promise<CliInput> | CliInput,
+  flags: string[],
+  func: (input: CliInput) => Promise<CliInput> | CliInput,
 ): (input: CliInput) => Promise<CliInput> | CliInput {
-    return (input: CliInput) => {
-        // ["none"] is a special case that matches when no positional arguments are provided
-        if(input.flags._.length === 0 && flags[0] === "none"){
-            return func(input);
-        }
+  return (input: CliInput) => {
+    // ["none"] is a special case that matches when no positional arguments are provided
+    if (input.flags._.length === 0 && flags[0] === "none") {
+      return func(input);
+    }
 
+    // Check if we have at least the required number of arguments
+    if (input.flags._.length < flags.length) {
+      return input;
+    }
 
-        // Check if we have at least the required number of arguments
-        if (input.flags._.length < flags.length) {
-            return input;
-        }       
-        
-        
-        const flagsMatch = flags.every((flag, index) => {
-            return flag === "*" || flag === input.flags._[index];
-        });
-        
-        if (flagsMatch) return func(input);
+    const flagsMatch = flags.every((flag, index) => {
+      return flag === "*" || flag === input.flags._[index];
+    });
 
-        return input;
-    };
+    if (flagsMatch) return func(input);
+
+    return input;
+  };
 }
 
 const gatherProjectContext = async (input: CliInput) => {
-    input.projectPipes = [];
-    const opts = { exts: [".md"], skip: [/node_modules/, /\.pd/] };
-    for await (const entry of std.walk(".", opts)) {
-        input.projectPipes.push({
-            path: entry.path,
-            entry,
-            ...std.parsePath(entry.path),
-        });
-    }
-    return input;
+  input.projectPipes = [];
+  const opts = { exts: [".md"], skip: [/node_modules/, /\.pd/] };
+  for await (const entry of std.walk(".", opts)) {
+    input.projectPipes.push({
+      path: entry.path,
+      entry,
+      ...std.parsePath(entry.path),
+    });
+  }
+  return input;
 };
 
 const versionCommand = (input: CliInput) => {
-    console.log(version);
-    return input;
+  console.log(version);
+  return input;
 };
 
 const funcs = [
-    pdInit,
-    scaffoldTemplates,
-    registerProject,
-    gatherProjectContext,
-    checkMinFlags(["none"], defaultCommand),
-    checkMinFlags(["help"], helpCommand),
-    checkMinFlags(["list"], listCommand),
-    checkMinFlags(["clean"], cleanCommand),
-    checkMinFlags(["build"], buildCommand),
-    checkMinFlags(["serve", "*", "*"], serveCommand),
-    checkMinFlags(["repl"], replCommand),
-    checkMinFlags(["run", "*"], runCommand),
-    checkMinFlags(["run-with", "*", "*", "*"], runWithCommand),
-    checkMinFlags(["llm", "*", "*", "*"], llmCommand),
-    checkMinFlags(["inspect", "*"], inspectCommand),
-    checkMinFlags(["run-step", "*", "*"], runStepCommand),
-    checkMinFlags(["sync", "*"], syncCommand),
-    checkMinFlags(["watch"], watchCommand),
-    checkMinFlags(["pack"], packCommand),
-    checkMinFlags(["install"], installCommand),
-    checkMinFlags(["extract", "*", "*", "*"], extractCommand),
-    checkMinFlags(["test"], testCommand),
-    checkMinFlags(["test-update"], updateTestCommand),
-    checkMinFlags(["t"], testCommand),
-    checkMinFlags(["tu"], updateTestCommand),
-    checkMinFlags(["version"], versionCommand),
+  pdInit,
+  scaffoldTemplates,
+  registerProject,
+  gatherProjectContext,
+  checkMinFlags(["none"], defaultCommand),
+  checkMinFlags(["help"], helpCommand),
+  checkMinFlags(["list"], listCommand),
+  checkMinFlags(["clean"], cleanCommand),
+  checkMinFlags(["build"], buildCommand),
+  checkMinFlags(["serve", "*", "*"], serveCommand),
+  checkMinFlags(["repl"], replCommand),
+  checkMinFlags(["run", "*"], runCommand),
+  checkMinFlags(["run-with", "*", "*", "*"], runWithCommand),
+  checkMinFlags(["llm", "*", "*", "*"], llmCommand),
+  checkMinFlags(["inspect", "*"], inspectCommand),
+  checkMinFlags(["run-step", "*", "*"], runStepCommand),
+  checkMinFlags(["sync", "*"], syncCommand),
+  checkMinFlags(["watch"], watchCommand),
+  checkMinFlags(["pack"], packCommand),
+  checkMinFlags(["install"], installCommand),
+  checkMinFlags(["extract", "*", "*", "*"], extractCommand),
+  checkMinFlags(["test"], testCommand),
+  checkMinFlags(["test-update"], updateTestCommand),
+  checkMinFlags(["t"], testCommand),
+  checkMinFlags(["tu"], updateTestCommand),
+  checkMinFlags(["version"], versionCommand),
 ];
 
 const debugParamPresent = Deno.env.get("DEBUG") ||
-    Deno.args.includes("--debug") ||
-    Deno.args.includes("-d") || Deno.args.includes("--DEBUG") ||
-    Deno.args.includes("-D");
+  Deno.args.includes("--debug") ||
+  Deno.args.includes("-d") || Deno.args.includes("--DEBUG") ||
+  Deno.args.includes("-D");
 
 // @ts-ignore - this is a Deno specific API
 const flags: Args = std.parseArgs(Deno.args, {
-    "--": true,
-    boolean: [
-        "json",
-        "pretty",
-        "j",
-        "p",
-        "debug",
-        "d",
-        "DEBUG",
-        "D",
-        "version",
-        "v",
-        "help",
-        "h",
-        "trace",
-        "record",
-        "replay",
-        "dry-run",
-        "list",
-        "build",
-        "dev",
-        "no-trace",
-    ],
-    string: [
-        "out",
-        "step",
-        "instruction",
-        "i",
-    ],
+  "--": true,
+  boolean: [
+    "json",
+    "pretty",
+    "j",
+    "p",
+    "debug",
+    "d",
+    "DEBUG",
+    "D",
+    "version",
+    "v",
+    "help",
+    "h",
+    "trace",
+    "record",
+    "replay",
+    "dry-run",
+    "list",
+    "build",
+    "dev",
+    "no-trace",
+  ],
+  string: [
+    "out",
+    "step",
+    "instruction",
+    "i",
+  ],
 });
 if (flags.version || flags.v) {
-    console.log(version);
-    Deno.exit(0);
+  console.log(version);
+  Deno.exit(0);
 }
 
 if (flags.help || flags.h) {
-    console.log(helpText);
-    Deno.exit(0);
+  console.log(helpText);
+  Deno.exit(0);
 }
 
 const output = await process<CliInput>(funcs, {
-    flags,
-    globalConfig: {} as PipeConfig,
-    projectPipes: [],
-    errors: [],
-    output: { errors: [] } as Input,
-    debug: debugParamPresent,
+  flags,
+  globalConfig: {} as PipeConfig,
+  projectPipes: [],
+  errors: [],
+  output: { errors: [] } as Input,
+  debug: debugParamPresent,
 }, {});
 
-if(output.debug){
-    console.log(output);
+if (output.debug) {
+  console.log(output);
 }

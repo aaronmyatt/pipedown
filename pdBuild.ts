@@ -1,11 +1,11 @@
-import {pd, std} from "./deps.ts";
-import {mdToPipe} from "./mdToPipe.ts";
-import {pipeToScript} from "./pipeToScript.ts";
+import { pd, std } from "./deps.ts";
+import { mdToPipe } from "./mdToPipe.ts";
+import { pipeToScript } from "./pipeToScript.ts";
 import * as utils from "./pdUtils.ts";
-import type {Step, WalkOptions, BuildInput, Pipe} from "./pipedown.d.ts";
-import {defaultTemplateFiles} from "./defaultTemplateFiles.ts";
-import {exportPipe} from "./exportPipe.ts";
-import {readPipedownConfig} from "./pdConfig.ts";
+import type { BuildInput, Pipe, Step, WalkOptions } from "./pipedown.d.ts";
+import { defaultTemplateFiles } from "./defaultTemplateFiles.ts";
+import { exportPipe } from "./exportPipe.ts";
+import { readPipedownConfig } from "./pdConfig.ts";
 
 // ── Helpers ──
 
@@ -37,8 +37,8 @@ const _walkOpts: WalkOptions = {
     /^readme\.md\/*$/,
     /^README\.md\/*$/,
     /deno.*/,
-  ]
-}
+  ],
+};
 
 /**
  * Builds walk options for std.walk, merging base defaults with
@@ -53,8 +53,12 @@ function walkOptions(input: BuildInput, override: WalkOptions = {}) {
   // .concat() returns a new array — must reassign to apply gitignore and global skip/exclude patterns
   walkOpts.skip = (walkOpts.skip || [])
     .concat(respectGitIgnore(resolveCwd(input)))
-    .concat(input.globalConfig?.skip || [])
-    .concat(input.globalConfig?.exclude || []);
+    // globalConfig.skip/exclude are typed as (string | RegExp)[] but walkOpts.skip
+    // expects RegExp[]. In practice these values are always RegExp at runtime;
+    // the union type comes from the JSON config schema. Cast to satisfy Array.concat().
+    // Ref: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/concat
+    .concat((input.globalConfig?.skip || []) as RegExp[])
+    .concat((input.globalConfig?.exclude || []) as RegExp[]);
   if (input.match) walkOpts.match = [new RegExp(input.match)];
   return walkOpts;
 }
@@ -104,7 +108,7 @@ async function parseMdFiles(input: BuildInput) {
     // the "executable markdown" will live in a directory with the same name as the file.
     // We will use {pipe.dir}/index.ts for the entry point.
     const fileName = utils.fileName(entry.path);
-    pd.$p.set(input, '/markdown/'+fileName, markdown);
+    pd.$p.set(input, "/markdown/" + fileName, markdown);
 
     // dir is relative (for portability in generated output), absoluteDir
     // is the fully-resolved path for code that needs it.
@@ -135,18 +139,28 @@ async function parseMdFiles(input: BuildInput) {
   return input;
 }
 
-
 // merge parent directory config (deno.json "pipedown" + config.json) into the pipe config
 async function mergeParentDirConfig(input: BuildInput) {
-  if (input.debug) console.log(`Merging parent directory configs for ${input.pipes?.length} pipes...`);
+  if (input.debug) {
+    console.log(
+      `Merging parent directory configs for ${input.pipes?.length} pipes...`,
+    );
+  }
   for (const pipe of (input.pipes || [])) {
     const parts = pipe.mdPath.split("/");
     let config = pipe.config;
 
-    if (input.debug) console.log(`Merging parent directory config for pipe: ${pipe.name}`);
+    if (input.debug) {
+      console.log(`Merging parent directory config for pipe: ${pipe.name}`);
+    }
 
     for (let i = parts.length - 1; i > 0; i--) {
-      const parentDir = '/' + std.join(...parts.slice(0, i));
+      // std.join() expects a rest parameter (...paths: string[]) which requires a
+      // tuple type when spread. Array.slice() returns string[], so we use .apply()
+      // instead to pass the dynamic array without a tuple assertion.
+      // Ref: https://docs.deno.com/api/node/path/~/join
+      const parentDir = "/" +
+        std.join.apply(null, parts.slice(0, i) as [string, ...string[]]);
       try {
         const parentConfig = await readPipedownConfig(parentDir);
         if (Object.keys(parentConfig).length > 0) {
@@ -155,8 +169,10 @@ async function mergeParentDirConfig(input: BuildInput) {
       } catch (_e) {
         // probably no config in this directory
       }
-      const topOfProject = await std.exists(std.join(parentDir, '.pd', 'deno.json'));
-      if(topOfProject) break;
+      const topOfProject = await std.exists(
+        std.join(parentDir, ".pd", "deno.json"),
+      );
+      if (topOfProject) break;
     }
     pipe.config = config;
   }
@@ -318,7 +334,7 @@ export async function assignStepIds(input: BuildInput) {
 async function writePipeDir(input: BuildInput) {
   for (const pipe of (input.pipes || [])) {
     if (input.debug) console.log(`Creating pipe directory: ${pipe.dir}`);
-    await Deno.mkdir(pipe.dir, { recursive: true  });
+    await Deno.mkdir(pipe.dir, { recursive: true });
   }
 }
 
@@ -332,7 +348,8 @@ async function writePipeJson(input: BuildInput) {
 async function writePipeMd(input: BuildInput) {
   for (const pipe of (input.pipes || [])) {
     const path = std.join(pipe.dir, "index.md");
-    input.markdown && pipe.fileName in input.markdown && await Deno.writeTextFile(path, input.markdown[pipe.fileName]);
+    input.markdown && pipe.fileName in input.markdown &&
+      await Deno.writeTextFile(path, input.markdown[pipe.fileName]);
   }
 }
 
@@ -344,7 +361,13 @@ async function transformMdFiles(input: BuildInput) {
       await Deno.writeTextFile(scriptPath, output.script);
     } else {
       input.errors = input.errors || [];
-      input.errors.push(...(output.errors || []));
+      // pipeToScript() returns a union type where only one branch has `errors`.
+      // We assert the shape to access it safely — the `|| []` fallback handles
+      // the branch where `errors` is absent.
+      // Ref: https://www.typescriptlang.org/docs/handbook/2/narrowing.html#using-type-predicates
+      input.errors.push(
+        ...((output as { errors?: typeof input.errors }).errors || []),
+      );
     }
   }
   return input;
@@ -352,8 +375,7 @@ async function transformMdFiles(input: BuildInput) {
 
 const writeDefaultGeneratedTemplates = async (input: BuildInput) => {
   await defaultTemplateFiles(input);
-
-}
+};
 
 const writeUserTemplates = async (input: BuildInput) => {
   for (const pipe of (input.pipes || [])) {
@@ -370,12 +392,12 @@ const writeUserTemplates = async (input: BuildInput) => {
   return input;
 };
 
-const maybeExportPipe = async (input: BuildInput) =>{
+const maybeExportPipe = async (input: BuildInput) => {
   await exportPipe(input);
-}
+};
 
 function report(input: BuildInput) {
-  if(input.debug) {
+  if (input.debug) {
     input.markdownFilesProcesses = input.pipes?.length;
   }
   return input;
@@ -399,8 +421,8 @@ export const pdBuild = async (input: BuildInput) => {
     writeDefaultGeneratedTemplates,
     writeUserTemplates,
     maybeExportPipe,
-    report
+    report,
   ];
-  
+
   return await pd.process(funcs, input, {});
 };

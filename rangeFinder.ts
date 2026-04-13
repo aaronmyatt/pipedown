@@ -7,145 +7,155 @@ const SUPPORTED_LANGUAGES = ["ts", "js", "javascript", "typescript"];
 const META_LANGUAGES = ["json", "yaml", "yml"];
 const SCHEMA_LANGUAGES = ["zod"];
 
-const codeBlocks = $p.compile('/ranges/codeBlocks')
-const headingBlocks = $p.compile('/ranges/headings')
-const metaBlocks = $p.compile('/ranges/metaBlocks')
-const listBlocks = $p.compile('/ranges/lists')
+const _codeBlocks = $p.compile("/ranges/codeBlocks");
+const headingBlocks = $p.compile("/ranges/headings");
+const _metaBlocks = $p.compile("/ranges/metaBlocks");
+const listBlocks = $p.compile("/ranges/lists");
 
-const tokenIndex = $p.compile('/ranges/index')
+const tokenIndex = $p.compile("/ranges/index");
 
 export enum Tag {
-    codeBlock = "CODE_BLOCK",
-    list = "LIST",
-    heading = "HEADING",
-    item = "ITEM",
+  codeBlock = "CODE_BLOCK",
+  list = "LIST",
+  heading = "HEADING",
+  item = "ITEM",
 }
 
 export enum TokenType {
-    start = "START",
-    end = "END",
-    text = "TEXT",
+  start = "START",
+  end = "END",
+  text = "TEXT",
 }
 
 // Helper functions to normalize markdown-it tokens to our expected format
 const normalizeTokenType = (token: Token): string => {
-    if (token.type.endsWith('_open')) return TokenType.start;
-    if (token.type.endsWith('_close')) return TokenType.end;
-    if (token.type === 'inline' || token.content) return TokenType.text;
-    return token.type;
+  if (token.type.endsWith("_open")) return TokenType.start;
+  if (token.type.endsWith("_close")) return TokenType.end;
+  if (token.type === "inline" || token.content) return TokenType.text;
+  return token.type;
 };
 
 const normalizeTokenTag = (token: Token): string => {
-    if (token.type === 'fence' || token.type === 'code_block') return Tag.codeBlock;
-    if (token.type.startsWith('heading')) return Tag.heading;
-    if (token.type.startsWith('bullet_list') || token.type.startsWith('ordered_list')) return Tag.list;
-    if (token.type === 'list_item_open' || token.type === 'list_item_close') return Tag.item;
-    return token.tag || token.type;
+  if (token.type === "fence" || token.type === "code_block") {
+    return Tag.codeBlock;
+  }
+  if (token.type.startsWith("heading")) return Tag.heading;
+  if (
+    token.type.startsWith("bullet_list") ||
+    token.type.startsWith("ordered_list")
+  ) return Tag.list;
+  if (token.type === "list_item_open" || token.type === "list_item_close") {
+    return Tag.item;
+  }
+  return token.tag || token.type;
 };
 
 const getTokenLanguage = (token: Token): string => {
-    if (token.type === 'fence' && token.info) {
-        return token.info.split(' ')[0]; // Get language from info string
-    }
-    return '';
+  if (token.type === "fence" && token.info) {
+    return token.info.split(" ")[0]; // Get language from info string
+  }
+  return "";
 };
 
 // Shared logic for classifying fenced code blocks by language.
 // Each checker provides: which language set to match, where to push the range, and whether 'skip' applies.
 const isFencedBlock = (token: Token): boolean =>
-    normalizeTokenTag(token) === Tag.codeBlock &&
-    (token.type === 'fence' || token.type === 'code_block');
+  normalizeTokenTag(token) === Tag.codeBlock &&
+  (token.type === "fence" || token.type === "code_block");
 
 const isSkipped = (token: Token): boolean =>
-    token.info?.split(' ').slice(1).includes('skip') ?? false;
+  token.info?.split(" ").slice(1).includes("skip") ?? false;
 
 const checkCodeBlock = (input: RangeFinderInput) => {
-    const token = input.ranges.token;
-    if (!isFencedBlock(token)) return;
-    if (!SUPPORTED_LANGUAGES.includes(getTokenLanguage(token).toLowerCase())) return;
-    if (isSkipped(token)) return;
+  const token = input.ranges.token;
+  if (!isFencedBlock(token)) return;
+  if (!SUPPORTED_LANGUAGES.includes(getTokenLanguage(token).toLowerCase())) {
+    return;
+  }
+  if (isSkipped(token)) return;
 
-    const index = tokenIndex.get(input);
-    $p.set(input, '/ranges/codeBlocks/-', [index, index]);
-}
+  const index = tokenIndex.get(input);
+  $p.set(input, "/ranges/codeBlocks/-", [index, index]);
+};
 
 const checkList = (input: RangeFinderInput) => {
-    const token = input.ranges.token;
-    const normalizedTag = normalizeTokenTag(token);
-    const normalizedType = normalizeTokenType(token);
+  const token = input.ranges.token;
+  const normalizedTag = normalizeTokenTag(token);
+  const normalizedType = normalizeTokenType(token);
 
-    if (normalizedTag === Tag.list && normalizedType === TokenType.start) {
-        $p.set(input, '/ranges/lists/-', [tokenIndex.get(input)]);
-    }
+  if (normalizedTag === Tag.list && normalizedType === TokenType.start) {
+    $p.set(input, "/ranges/lists/-", [tokenIndex.get(input)]);
+  }
 
-    if (normalizedTag === Tag.list && normalizedType === TokenType.end) {
-        const previousBlock = listBlocks.get(input).findLast((block: number[]) => {
-            return block.length === 1;
-        });
-        if (previousBlock) {
-            previousBlock.push(tokenIndex.get(input));
-        }
+  if (normalizedTag === Tag.list && normalizedType === TokenType.end) {
+    const previousBlock = listBlocks.get(input).findLast((block: number[]) => {
+      return block.length === 1;
+    });
+    if (previousBlock) {
+      previousBlock.push(tokenIndex.get(input));
     }
-}
+  }
+};
 
 const checkHeading = (input: RangeFinderInput) => {
-    const token = input.ranges.token;
-    const normalizedTag = normalizeTokenTag(token);
-    const normalizedType = normalizeTokenType(token);
+  const token = input.ranges.token;
+  const normalizedTag = normalizeTokenTag(token);
+  const normalizedType = normalizeTokenType(token);
 
-    if (normalizedTag === Tag.heading && normalizedType === TokenType.start) {
-        $p.set(input, '/ranges/headings/-', [tokenIndex.get(input)]);
-    }
+  if (normalizedTag === Tag.heading && normalizedType === TokenType.start) {
+    $p.set(input, "/ranges/headings/-", [tokenIndex.get(input)]);
+  }
 
-    if (normalizedTag === Tag.heading && normalizedType === TokenType.end) {
-        const previousBlock = headingBlocks.get(input).at(-1);
-        if (previousBlock) {
-            previousBlock.push(tokenIndex.get(input));
-        }
+  if (normalizedTag === Tag.heading && normalizedType === TokenType.end) {
+    const previousBlock = headingBlocks.get(input).at(-1);
+    if (previousBlock) {
+      previousBlock.push(tokenIndex.get(input));
     }
-}
+  }
+};
 
 const checkMetaBlock = (input: RangeFinderInput) => {
-    const token = input.ranges.token;
-    if (!isFencedBlock(token)) return;
-    if (!META_LANGUAGES.includes(getTokenLanguage(token).toLowerCase())) return;
-    if (isSkipped(token)) return;
+  const token = input.ranges.token;
+  if (!isFencedBlock(token)) return;
+  if (!META_LANGUAGES.includes(getTokenLanguage(token).toLowerCase())) return;
+  if (isSkipped(token)) return;
 
-    const index = tokenIndex.get(input);
-    $p.set(input, '/ranges/metaBlocks/-', [index, index]);
-}
+  const index = tokenIndex.get(input);
+  $p.set(input, "/ranges/metaBlocks/-", [index, index]);
+};
 
 const checkSchemaBlock = (input: RangeFinderInput) => {
-    const token = input.ranges.token;
-    if (!isFencedBlock(token)) return;
-    if (!SCHEMA_LANGUAGES.includes(getTokenLanguage(token).toLowerCase())) return;
-    // Schema blocks intentionally ignore 'skip' — a schema is always needed if present
+  const token = input.ranges.token;
+  if (!isFencedBlock(token)) return;
+  if (!SCHEMA_LANGUAGES.includes(getTokenLanguage(token).toLowerCase())) return;
+  // Schema blocks intentionally ignore 'skip' — a schema is always needed if present
 
-    const index = tokenIndex.get(input);
-    $p.set(input, '/ranges/schemaBlocks/-', [index, index]);
-}
-
+  const index = tokenIndex.get(input);
+  $p.set(input, "/ranges/schemaBlocks/-", [index, index]);
+};
 
 const funcs = [
-    (input: RangeFinderInput) => {
-        if(input.ranges) return;
-        input.ranges = {
-            token: {} as Token,
-            index: 0,
-            codeBlocks: [],
-            headings: [],
-            metaBlocks: [],
-            lists: [],
-            schemaBlocks: [],
-        }
-    },
-    checkCodeBlock,
-    checkList,
-    checkHeading,
-    checkMetaBlock,
-    checkSchemaBlock,
-]
+  (input: RangeFinderInput) => {
+    if (input.ranges) return;
+    input.ranges = {
+      token: {} as Token,
+      index: 0,
+      codeBlocks: [],
+      headings: [],
+      metaBlocks: [],
+      lists: [],
+      schemaBlocks: [],
+    };
+  },
+  checkCodeBlock,
+  checkList,
+  checkHeading,
+  checkMetaBlock,
+  checkSchemaBlock,
+];
 
-export async function rangeFinder(input: RangeFinderInput): Promise<RangeFinderInput>{
-    return await pd.process(funcs, input, {} as Pipe);
+export async function rangeFinder(
+  input: RangeFinderInput,
+): Promise<RangeFinderInput> {
+  return await pd.process(funcs, input, {} as Pipe);
 }

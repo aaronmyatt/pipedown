@@ -1,11 +1,12 @@
+// deno-lint-ignore no-import-prefix no-unversioned-import
 import { assertEquals, assertThrows } from "jsr:@std/assert";
 import {
-  toKebabCase,
-  toCamelCase,
-  parseStepIndices,
   buildExtractedPipe,
   buildReplacementStep,
+  parseStepIndices,
   performExtraction,
+  toCamelCase,
+  toKebabCase,
 } from "./extractSteps.ts";
 import type { Pipe, Step } from "./pipedown.d.ts";
 
@@ -31,7 +32,11 @@ function makePipe(count: number): Pipe {
     description: "Description for step " + i,
     // Source-mapping fields that should be stripped during extraction
     // Ref: extractSteps.ts line 169-174 — these are parent-specific metadata
-    sourceMap: { headingLine: i * 5, codeStartLine: i * 5 + 2, codeEndLine: i * 5 + 4 },
+    sourceMap: {
+      headingLine: i * 5,
+      codeStartLine: i * 5 + 2,
+      codeEndLine: i * 5 + 4,
+    },
     originalCode: "input.s" + i + " = true;",
     originalName: "Step " + i,
     originalDescription: "Description for step " + i,
@@ -46,7 +51,8 @@ function makePipe(count: number): Pipe {
     absoluteDir: "/test/.pd/ParentPipe",
     fileName: "parent-pipe",
     pipeDescription: "A test parent pipe.",
-    rawSource: "# Parent Pipe\n\nA test parent pipe.\n\n## Step 0\n\n```ts\ninput.s0 = true;\n```\n",
+    rawSource:
+      "# Parent Pipe\n\nA test parent pipe.\n\n## Step 0\n\n```ts\ninput.s0 = true;\n```\n",
   };
 }
 
@@ -332,8 +338,14 @@ Deno.test("buildReplacementStep", async (t) => {
     // The code should import the sub-pipe and call process
     // Ref: extractSteps.ts line 252-254
     const lines = step.code.split("\n");
-    assertEquals(lines[0], 'import { pipe as authModulePipe } from "./auth-module/index.ts";');
-    assertEquals(lines[1], "input.authModule = await authModulePipe.process(input);");
+    assertEquals(
+      lines[0],
+      'import { pipe as authModulePipe } from "./auth-module/index.ts";',
+    );
+    assertEquals(
+      lines[1],
+      "input.authModule = await authModulePipe.process(input);",
+    );
   });
 
   await t.step("uses camelCase for variable names", () => {
@@ -400,7 +412,10 @@ Deno.test("buildReplacementStep", async (t) => {
   await t.step("includes descriptive description", () => {
     const step = buildReplacementStep("Auth Module", []);
 
-    assertEquals(step.description, "Run the extracted Auth Module sub-pipeline.");
+    assertEquals(
+      step.description,
+      "Run the extracted Auth Module sub-pipeline.",
+    );
   });
 });
 
@@ -449,7 +464,10 @@ Deno.test("performExtraction", async (t) => {
     const result = performExtraction(parent, [1], "Middle Step");
 
     // Replacement step should have an import line targeting the sub-pipe
-    assertEquals(result.modifiedParentMarkdown.includes("middle-step/index.ts"), true);
+    assertEquals(
+      result.modifiedParentMarkdown.includes("middle-step/index.ts"),
+      true,
+    );
   });
 
   await t.step("does not mutate the original parent pipe", () => {
@@ -483,7 +501,10 @@ Deno.test("performExtraction", async (t) => {
     const result = performExtraction(parent, [0, 1], "Everything");
 
     // Modified parent should have the replacement step but no original steps
-    assertEquals(result.modifiedParentMarkdown.includes("everything/index.ts"), true);
+    assertEquals(
+      result.modifiedParentMarkdown.includes("everything/index.ts"),
+      true,
+    );
   });
 
   // ── Error cases ──

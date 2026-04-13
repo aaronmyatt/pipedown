@@ -1,5 +1,5 @@
 // Home page state, markdown renderer, data-fetching, and action helpers
-window.PD = {
+globalThis.PD = {
   state: {
     // ── Sidebar visibility ──
     // Toggled by the hamburger button in the topbar.
@@ -17,12 +17,12 @@ window.PD = {
     // preferred expand/collapse state survives page reloads.
     // Ref: Sidebar.js — "Projects" section rendering
     // Ref: https://developer.mozilla.org/en-US/docs/Web/API/Window/localStorage
-    collapsedProjects: (function() {
+    collapsedProjects: (function () {
       try {
-        var saved = localStorage.getItem("pd-collapsed-projects");
+        const saved = localStorage.getItem("pd-collapsed-projects");
         if (saved) return JSON.parse(saved);
-      } catch(e) { /* ignore — localStorage unavailable or corrupted JSON */ }
-      return {};  // first visit — no preferences yet; Sidebar treats absent keys as collapsed
+      } catch (_e) { /* ignore — localStorage unavailable or corrupted JSON */ }
+      return {}; // first visit — no preferences yet; Sidebar treats absent keys as collapsed
     })(),
     selectedPipe: null,
     pipeData: null,
@@ -38,10 +38,10 @@ window.PD = {
     drawerOutput: "",
     drawerOutputType: null, // "json" | "stream" | null
     drawerLabel: "",
-    drawerStatus: "idle",   // "idle" | "running" | "done" | "error"
+    drawerStatus: "idle", // "idle" | "running" | "done" | "error"
     drawerParsedOutput: null, // parsed JSON object from run stdout (for jsonTree)
-    drawerTrace: null,        // { timestamp, input, output, durationMs, stepsTotal } from trace API
-    drawerError: null,        // { status, statusText, message } — structured error info for RunDrawer display
+    drawerTrace: null, // { timestamp, input, output, durationMs, stepsTotal } from trace API
+    drawerError: null, // { status, statusText, message } — structured error info for RunDrawer display
 
     showListDSL: {},
     stepTraces: {},
@@ -58,9 +58,9 @@ window.PD = {
     // raw markdown instead of the rendered view. The user can edit and save
     // changes back to the .md file on disk.
     editMode: false,
-    editBuffer: null,     // raw markdown text being edited (copy of rawMarkdown)
-    editDirty: false,     // true when editBuffer differs from rawMarkdown
-    editSaving: false,    // true while the save POST is in flight
+    editBuffer: null, // raw markdown text being edited (copy of rawMarkdown)
+    editDirty: false, // true when editBuffer differs from rawMarkdown
+    editSaving: false, // true while the save POST is in flight
 
     // ── All pipes (complete list for "Projects" sidebar section) ──
     // Every pipe across all registered projects, loaded from /api/all-pipes.
@@ -78,8 +78,8 @@ window.PD = {
     // ── New Pipe modal ──
     // Controls the "create a new pipe" dialog opened from the sidebar.
     showNewPipeModal: false,
-    newPipeName: "",       // user-entered pipe name
-    newPipeProject: null,  // selected project name for the new file
+    newPipeName: "", // user-entered pipe name
+    newPipeProject: null, // selected project name for the new file
     newPipeCreating: false, // true while the create POST is in flight
 
     // ── Input history & JSON builder ──
@@ -87,19 +87,19 @@ window.PD = {
     // showing unique past inputs from trace history plus a "Custom Input..."
     // option that opens a JSON editor in the drawer.
     // Ref: PipeToolbar.js split button, MarkdownRenderer.js step toolbar injection
-    inputDropdownOpen: false,      // pipe-level Run dropdown visibility
-    inputDropdownStep: null,       // step-level: which step's dropdown is open (index), null = none
-    inputHistory: null,            // array of unique input objects for current pipe (deduped)
-    inputHistoryLoading: false,    // trace fetch in progress
+    inputDropdownOpen: false, // pipe-level Run dropdown visibility
+    inputDropdownStep: null, // step-level: which step's dropdown is open (index), null = none
+    inputHistory: null, // array of unique input objects for current pipe (deduped)
+    inputHistoryLoading: false, // trace fetch in progress
 
     // ── Drawer input editor mode ──
     // When drawerMode is "input", the RunDrawer shows a JSON textarea instead
     // of normal operation output. The user edits JSON, then clicks Run.
     // drawerInputTarget tracks whether the run targets the full pipe (null)
     // or a specific step (step index number).
-    drawerMode: null,              // null (normal output) | "input" (JSON editor)
-    drawerInputBuffer: "{}",       // JSON text being edited in the drawer textarea
-    drawerInputTarget: null,       // null = full pipe run, number = step index for run-to-step
+    drawerMode: null, // null (normal output) | "input" (JSON editor)
+    drawerInputBuffer: "{}", // JSON text being edited in the drawer textarea
+    drawerInputTarget: null, // null = full pipe run, number = step index for run-to-step
 
     // ── Extract mode ──
     // When extractMode is true, step toolbars show checkboxes instead of action
@@ -108,32 +108,32 @@ window.PD = {
     // the parent pipe to replace the extracted steps with a delegation step.
     // Ref: ExtractBar.js — floating action bar at viewport bottom
     // Ref: MarkdownRenderer.js — toolbar rendering changes in extract mode
-    extractMode: false,            // true when step selection UI is active
-    extractSelected: {},           // { [stepIndex]: true } — selected steps
-    extractName: "",               // user-entered name for the new sub-pipe
-    extracting: false              // true while the POST /api/extract is in flight
+    extractMode: false, // true when step selection UI is active
+    extractSelected: {}, // { [stepIndex]: true } — selected steps
+    extractName: "", // user-entered name for the new sub-pipe
+    extracting: false, // true while the POST /api/extract is in flight
   },
   actions: {},
   utils: {},
-  components: {}
+  components: {},
 };
 
-PD.utils.mdRenderer = window.markdownit({
+PD.utils.mdRenderer = globalThis.markdownit({
   html: false,
   linkify: true,
   typographer: true,
-  highlight: function(str, lang) {
+  highlight: function (str, lang) {
     if (lang && hljs.getLanguage(lang)) {
       try {
         return '<pre class="hljs"><code>' +
           hljs.highlight(str, { language: lang, ignoreIllegals: true }).value +
-          '</code></pre>';
-      } catch (_) {}
+          "</code></pre>";
+      } catch (_) { /* hljs language not registered */ }
     }
     return '<pre class="hljs"><code>' +
       PD.utils.mdRenderer.utils.escapeHtml(str) +
-      '</code></pre>';
-  }
+      "</code></pre>";
+  },
 });
 
 // ── parseErrorBody ──
@@ -142,10 +142,10 @@ PD.utils.mdRenderer = window.markdownit({
 // endpoints (/api/run, /api/run-step, /api/test, /api/pack) return plain text
 // prefixed with "Error: ".
 // Ref: buildandserve.ts route handlers — each endpoint's catch block
-PD.utils.parseErrorBody = function(bodyText) {
+PD.utils.parseErrorBody = function (bodyText) {
   // Attempt JSON parse first — handles /api/llm's `{ error: "message" }` format.
   try {
-    var parsed = JSON.parse(bodyText);
+    const parsed = JSON.parse(bodyText);
     if (parsed && typeof parsed.error === "string") {
       return parsed.error;
     }
@@ -157,12 +157,14 @@ PD.utils.parseErrorBody = function(bodyText) {
 };
 
 // --- Data fetching ---
-PD.actions.loadRecentPipes = function() {
+PD.actions.loadRecentPipes = function () {
   PD.state.loading = true;
-  return m.request({ method: "GET", url: "/api/recent-pipes" }).then(function(data) {
-    PD.state.recentPipes = data;
-    PD.state.loading = false;
-  }).catch(function(err) {
+  return m.request({ method: "GET", url: "/api/recent-pipes" }).then(
+    function (data) {
+      PD.state.recentPipes = data;
+      PD.state.loading = false;
+    },
+  ).catch(function (err) {
     PD.state.recentPipes = [];
     PD.state.loading = false;
     // Surface the error in the drawer so the user knows why the pipe list
@@ -174,9 +176,9 @@ PD.actions.loadRecentPipes = function() {
     PD.state.drawerStatus = "error";
     PD.state.drawerOutput = err.message || "Failed to load pipes";
     PD.state.drawerError = {
-      status: (err.code || 0),
+      status: err.code || 0,
       statusText: "Request Failed",
-      message: err.message || "Failed to load pipes"
+      message: err.message || "Failed to load pipes",
     };
   });
 };
@@ -185,12 +187,14 @@ PD.actions.loadRecentPipes = function() {
 // that the New Pipe modal can offer newly created (empty) projects that
 // have no pipes yet and wouldn't appear in recentPipes.
 // Ref: GET /api/projects in buildandserve.ts
-PD.actions.loadAllProjects = function() {
-  m.request({ method: "GET", url: "/api/projects" }).then(function(data) {
+PD.actions.loadAllProjects = function () {
+  m.request({ method: "GET", url: "/api/projects" }).then(function (data) {
     PD.state.allProjects = data;
-  }).catch(function() {
+  }).catch(function () {
     PD.state.allProjects = [];
-  }).then(function() { m.redraw.sync(); });
+  }).then(function () {
+    m.redraw.sync();
+  });
 };
 
 // loadAllPipes — fetches the complete, unfiltered pipe list from /api/all-pipes.
@@ -200,10 +204,10 @@ PD.actions.loadAllProjects = function() {
 // project tree when many pipes exist.
 // Ref: GET /api/all-pipes in buildandserve.ts
 // Ref: homeDashboard.ts → scanAllPipes()
-PD.actions.loadAllPipes = function() {
-  m.request({ method: "GET", url: "/api/all-pipes" }).then(function(data) {
+PD.actions.loadAllPipes = function () {
+  m.request({ method: "GET", url: "/api/all-pipes" }).then(function (data) {
     PD.state.allPipes = data;
-  }).catch(function() {
+  }).catch(function () {
     PD.state.allPipes = [];
   });
 };
@@ -219,25 +223,27 @@ PD.actions.loadAllPipes = function() {
 //
 // @return {boolean} — true if a pipe was restored, false otherwise
 // Ref: shared/hashRouter.js
-PD.actions.restoreFromHash = function() {
-  var segments = pd.hashRouter.getSegments();
+PD.actions.restoreFromHash = function () {
+  const segments = pd.hashRouter.getSegments();
   // Need exactly 2 segments: [projectName, pipePath]
   if (segments.length !== 2) return false;
-  var projectName = segments[0];
-  var pipePath = segments[1];
+  const projectName = segments[0];
+  const pipePath = segments[1];
 
   // Don't re-select if already viewing this pipe — avoids resetting
   // scroll position, drawer state, and edit mode.
-  if (PD.state.selectedPipe &&
-      PD.state.selectedPipe.projectName === projectName &&
-      PD.state.selectedPipe.pipePath === pipePath) {
+  if (
+    PD.state.selectedPipe &&
+    PD.state.selectedPipe.projectName === projectName &&
+    PD.state.selectedPipe.pipePath === pipePath
+  ) {
     return true;
   }
 
   // Search the loaded pipe list for a match. recentPipes contains all
   // pipes grouped by project, so we scan the full array.
-  var match = null;
-  PD.state.recentPipes.forEach(function(group) {
+  let match = null;
+  PD.state.recentPipes.forEach(function (group) {
     // Each group has a projectName and a pipes array
     if (group.projectName === projectName) {
       // Check if the group itself matches (flat list item)
@@ -247,7 +253,7 @@ PD.actions.restoreFromHash = function() {
       }
       // Check nested pipes array if present
       if (group.pipes) {
-        group.pipes.forEach(function(p) {
+        group.pipes.forEach(function (p) {
           if (p.pipePath === pipePath) {
             match = p;
           }
@@ -275,33 +281,35 @@ PD.actions.restoreFromHash = function() {
 // @param {string} projectName — the project group to toggle
 // Ref: Sidebar.js — project-group-header onclick
 // Ref: https://developer.mozilla.org/en-US/docs/Web/API/Storage/setItem
-PD.actions.toggleProjectCollapse = function(projectName) {
-  var current = PD.state.collapsedProjects[projectName];
+PD.actions.toggleProjectCollapse = function (projectName) {
+  const current = PD.state.collapsedProjects[projectName];
   // absent or true → expand (false); false → collapse (true)
   PD.state.collapsedProjects[projectName] = current === false ? true : false;
   // Persist the full map so every project the user has touched is remembered.
   // Uses the same try-catch pattern as the theme manager (shared/theme.js).
   try {
-    localStorage.setItem("pd-collapsed-projects",
-      JSON.stringify(PD.state.collapsedProjects));
-  } catch(e) { /* ignore — localStorage full or unavailable */ }
+    localStorage.setItem(
+      "pd-collapsed-projects",
+      JSON.stringify(PD.state.collapsedProjects),
+    );
+  } catch (_e) { /* ignore — localStorage full or unavailable */ }
 };
 
-PD.utils.renderMarkdownWithAnnotations = function(raw, pipeData) {
+PD.utils.renderMarkdownWithAnnotations = function (raw, pipeData) {
   if (!raw) return null;
-  var tokens = PD.utils.mdRenderer.parse(raw, {});
+  const tokens = PD.utils.mdRenderer.parse(raw, {});
 
   if (pipeData && pipeData.steps) {
-    var stepsByLine = {};
-    pipeData.steps.forEach(function(step, i) {
+    const stepsByLine = {};
+    pipeData.steps.forEach(function (step, i) {
       if (step.sourceMap && step.sourceMap.headingLine !== undefined) {
         stepsByLine[step.sourceMap.headingLine] = i;
       }
     });
 
-    tokens.forEach(function(token) {
+    tokens.forEach(function (token) {
       if (token.type === "heading_open" && token.map) {
-        var line = token.map[0];
+        const line = token.map[0];
 
         // Mark every h2 as a step boundary — in pipedown every h2 demarcates
         // a pipeline step. Steps that are executable get the additional
@@ -323,10 +331,14 @@ PD.utils.renderMarkdownWithAnnotations = function(raw, pipeData) {
     });
   }
 
-  return PD.utils.mdRenderer.renderer.render(tokens, PD.utils.mdRenderer.options, {});
+  return PD.utils.mdRenderer.renderer.render(
+    tokens,
+    PD.utils.mdRenderer.options,
+    {},
+  );
 };
 
-PD.actions.selectPipe = function(pipe) {
+PD.actions.selectPipe = function (pipe) {
   // ── Unsaved changes guard ──
   // If the user is mid-edit with unsaved changes, confirm before switching
   // pipes. This prevents accidental loss of work.
@@ -379,23 +391,34 @@ PD.actions.selectPipe = function(pipe) {
   PD.state.drawerTrace = null;
   PD.state.drawerError = null;
 
-  var mdUrl = "/api/projects/" +
+  const mdUrl = "/api/projects/" +
     encodeURIComponent(pipe.projectName) +
     "/files/" + encodeURIComponent(pipe.pipePath);
 
-  var indexUrl = "/api/projects/" +
+  const indexUrl = "/api/projects/" +
     encodeURIComponent(pipe.projectName) +
     "/pipes/" + encodeURIComponent(pipe.pipeName) + "/index";
 
   Promise.all([
-    m.request({ method: "GET", url: mdUrl, extract: function(xhr) { return xhr.responseText; } }),
-    m.request({ method: "GET", url: indexUrl }).catch(function() { return null; })
-  ]).then(function(results) {
+    m.request({
+      method: "GET",
+      url: mdUrl,
+      extract: function (xhr) {
+        return xhr.responseText;
+      },
+    }),
+    m.request({ method: "GET", url: indexUrl }).catch(function () {
+      return null;
+    }),
+  ]).then(function (results) {
     PD.state.rawMarkdown = results[0];
     PD.state.pipeData = results[1];
-    PD.state.markdownHtml = PD.utils.renderMarkdownWithAnnotations(results[0], results[1]);
+    PD.state.markdownHtml = PD.utils.renderMarkdownWithAnnotations(
+      results[0],
+      results[1],
+    );
     PD.state.markdownLoading = false;
-  }).catch(function(err) {
+  }).catch(function (err) {
     PD.state.markdownHtml = null;
     PD.state.markdownLoading = false;
     // The markdown fetch failed — surface the error in the drawer so the user
@@ -405,11 +428,13 @@ PD.actions.selectPipe = function(pipe) {
     PD.state.drawerStatus = "error";
     PD.state.drawerOutput = err.message || "Failed to load pipe";
     PD.state.drawerError = {
-      status: (err.code || 0),
+      status: err.code || 0,
       statusText: "Request Failed",
-      message: err.message || "Failed to load pipe"
+      message: err.message || "Failed to load pipe",
     };
-  }).then(function() { m.redraw.sync(); });
+  }).then(function () {
+    m.redraw.sync();
+  });
 };
 
 // ── API action helpers ──
@@ -419,7 +444,7 @@ PD.actions.selectPipe = function(pipe) {
 
 // closeDrawer — hides the drawer without clearing output so the user can
 // re-open it later if state is preserved.
-PD.actions.closeDrawer = function() {
+PD.actions.closeDrawer = function () {
   PD.state.drawerOpen = false;
 };
 
@@ -429,20 +454,20 @@ PD.actions.closeDrawer = function() {
 // Uses pipeData.name (the H1 heading) for the pipe name because trace
 // directories are named after the heading, not the filename stem.
 // Ref: buildandserve.ts trace API — GET /api/projects/{project}/pipes/{pipe}/traces
-PD.actions.loadDrawerTrace = function() {
+PD.actions.loadDrawerTrace = function () {
   if (!PD.state.selectedPipe) return;
-  var pipeName = PD.state.pipeData && PD.state.pipeData.name
+  const pipeName = PD.state.pipeData && PD.state.pipeData.name
     ? PD.state.pipeData.name
     : PD.state.selectedPipe.pipeName;
-  var url = "/api/projects/" +
+  const url = "/api/projects/" +
     encodeURIComponent(PD.state.selectedPipe.projectName) +
     "/pipes/" + encodeURIComponent(pipeName) +
     "/traces?limit=1";
-  m.request({ method: "GET", url: url }).then(function(data) {
+  m.request({ method: "GET", url: url }).then(function (data) {
     if (data && data.length > 0) {
       PD.state.drawerTrace = data[0];
     }
-  }).catch(function() {
+  }).catch(function () {
     // Trace fetch is best-effort — if it fails, the drawer still shows
     // the parsed stdout output or raw text.
   });
@@ -450,7 +475,7 @@ PD.actions.loadDrawerTrace = function() {
 
 // startOp — opens the drawer and resets it for a new operation.
 // Ref: Called by postAction before every fetch.
-PD.actions.startOp = function(type, label) {
+PD.actions.startOp = function (_type, label) {
   PD.state.drawerOpen = true;
   PD.state.drawerOutput = "";
   PD.state.drawerOutputType = null;
@@ -465,11 +490,11 @@ PD.actions.startOp = function(type, label) {
 // streamResponse — reads a streaming fetch Response body chunk-by-chunk
 // and appends each decoded text chunk to drawerOutput.
 // Ref: https://developer.mozilla.org/en-US/docs/Web/API/ReadableStreamDefaultReader/read
-PD.actions.streamResponse = function(response, onDone) {
-  var reader = response.body.getReader();
-  var decoder = new TextDecoder();
+PD.actions.streamResponse = function (response, onDone) {
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
   function read() {
-    reader.read().then(function(result) {
+    reader.read().then(function (result) {
       if (result.done) {
         PD.state.drawerStatus = "done";
         if (onDone) onDone(PD.state.drawerOutput);
@@ -479,14 +504,14 @@ PD.actions.streamResponse = function(response, onDone) {
       PD.state.drawerOutput += decoder.decode(result.value);
       m.redraw();
       read();
-    }).catch(function(err) {
+    }).catch(function (err) {
       // Stream read errors (e.g. connection dropped mid-transfer). The drawer
       // may already contain partial output from earlier chunks, so we append
       // rather than replace.
       PD.state.drawerError = {
         status: 0,
         statusText: "Stream Error",
-        message: err.message
+        message: err.message,
       };
       PD.state.drawerStatus = "error";
       PD.state.drawerOutput += "\nError: " + err.message;
@@ -504,32 +529,35 @@ PD.actions.streamResponse = function(response, onDone) {
 // failures. Without the .ok check, a 500 response would flow through the
 // success path, streaming the error text but setting drawerStatus to "done".
 // Ref: https://developer.mozilla.org/en-US/docs/Web/API/Response/ok
-PD.actions.postAction = function(url, body, label, onDone) {
+PD.actions.postAction = function (url, body, label, onDone) {
   PD.actions.startOp(label, label);
   fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body)
-  }).then(function(res) {
+    body: JSON.stringify(body),
+  }).then(function (res) {
     // ── HTTP error detection ──
     // Must come before content-type branching: a 500 with content-type
     // application/json (e.g. /api/llm errors) must be treated as an error,
     // not parsed as success data.
     if (!res.ok) {
-      return res.text().then(function(bodyText) {
-        var msg = PD.utils.parseErrorBody(bodyText);
+      return res.text().then(function (bodyText) {
+        const msg = PD.utils.parseErrorBody(bodyText);
         PD.state.drawerError = {
           status: res.status,
           statusText: res.statusText,
-          message: msg
+          message: msg,
         };
         PD.state.drawerStatus = "error";
         PD.state.drawerOutput = msg;
         m.redraw.sync();
       });
     }
-    if (res.headers.get("content-type") && res.headers.get("content-type").includes("application/json")) {
-      return res.json().then(function(data) {
+    if (
+      res.headers.get("content-type") &&
+      res.headers.get("content-type").includes("application/json")
+    ) {
+      return res.json().then(function (data) {
         PD.state.drawerOutput = JSON.stringify(data, null, 2);
         PD.state.drawerParsedOutput = data;
         PD.state.drawerStatus = "done";
@@ -538,14 +566,14 @@ PD.actions.postAction = function(url, body, label, onDone) {
       });
     }
     PD.actions.streamResponse(res, onDone);
-  }).catch(function(err) {
+  }).catch(function (err) {
     // Network-level failures (DNS, connection refused, CORS, etc.) land here.
     // The fetch API only rejects for network errors, not HTTP status codes.
     // Ref: https://developer.mozilla.org/en-US/docs/Web/API/Window/fetch#exceptions
     PD.state.drawerError = {
       status: 0,
       statusText: "Network Error",
-      message: err.message
+      message: err.message,
     };
     PD.state.drawerStatus = "error";
     PD.state.drawerOutput = "Error: " + err.message;
@@ -564,28 +592,28 @@ PD.actions.postAction = function(url, body, label, onDone) {
 // on disk (e.g. after an LLM action or SSE reload) and the user should stay
 // at the same scroll position.
 // Ref: https://developer.mozilla.org/en-US/docs/Web/API/Element/scrollTop
-PD.actions.refreshPipe = function() {
-  var pipe = PD.state.selectedPipe;
+PD.actions.refreshPipe = function () {
+  const pipe = PD.state.selectedPipe;
   if (!pipe) return;
 
   // Capture scroll position of the .detail container before re-rendering.
   // document.querySelector is safe here — there is exactly one .detail element
   // in the home page layout (rendered by MainContent).
-  var detailEl = document.querySelector(".detail");
-  var savedScroll = detailEl ? detailEl.scrollTop : 0;
+  const detailEl = document.querySelector(".detail");
+  const savedScroll = detailEl ? detailEl.scrollTop : 0;
 
   // Cache-bust: append a timestamp query parameter so the browser never
   // serves a stale cached response. This is a belt-and-suspenders measure
   // alongside the server's Cache-Control: no-store header — some browsers
   // or intermediary proxies may ignore no-store for XHR GET requests.
   // Ref: https://developer.mozilla.org/en-US/docs/Web/API/XMLHttpRequest/Using_XMLHttpRequest#bypassing_the_cache
-  var cacheBust = "?t=" + Date.now();
+  const cacheBust = "?t=" + Date.now();
 
-  var mdUrl = "/api/projects/" +
+  const mdUrl = "/api/projects/" +
     encodeURIComponent(pipe.projectName) +
     "/files/" + encodeURIComponent(pipe.pipePath) + cacheBust;
 
-  var indexUrl = "/api/projects/" +
+  const indexUrl = "/api/projects/" +
     encodeURIComponent(pipe.projectName) +
     "/pipes/" + encodeURIComponent(pipe.pipeName) + "/index" + cacheBust;
 
@@ -593,35 +621,46 @@ PD.actions.refreshPipe = function() {
   // without resetting markdownHtml/pipeData to null first.
   // Ref: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise/all
   Promise.all([
-    m.request({ method: "GET", url: mdUrl, extract: function(xhr) { return xhr.responseText; } }),
-    m.request({ method: "GET", url: indexUrl }).catch(function() { return null; })
-  ]).then(function(results) {
+    m.request({
+      method: "GET",
+      url: mdUrl,
+      extract: function (xhr) {
+        return xhr.responseText;
+      },
+    }),
+    m.request({ method: "GET", url: indexUrl }).catch(function () {
+      return null;
+    }),
+  ]).then(function (results) {
     PD.state.rawMarkdown = results[0];
     PD.state.pipeData = results[1];
-    PD.state.markdownHtml = PD.utils.renderMarkdownWithAnnotations(results[0], results[1]);
+    PD.state.markdownHtml = PD.utils.renderMarkdownWithAnnotations(
+      results[0],
+      results[1],
+    );
     PD.state.markdownLoading = false;
-  }).catch(function() {
+  }).catch(function () {
     // On error, fall through — the existing content stays visible.
-  }).then(function() {
+  }).then(function () {
     m.redraw.sync();
     // Restore scroll position after the synchronous redraw has updated the DOM.
     // The .detail element may have been replaced by Mithril's diff, so re-query it.
-    var el = document.querySelector(".detail");
+    const el = document.querySelector(".detail");
     if (el) el.scrollTop = savedScroll;
   });
 };
 
-PD.actions.llmAction = function(action, extraBody) {
+PD.actions.llmAction = function (action, extraBody) {
   if (!PD.state.selectedPipe) return;
-  var body = Object.assign({
+  const body = Object.assign({
     action: action,
     project: PD.state.selectedPipe.projectName,
-    pipe: PD.state.selectedPipe.pipeName
+    pipe: PD.state.selectedPipe.pipeName,
   }, extraBody || {});
   // After the LLM finishes, refresh the pipe content in place (preserving
   // scroll position) rather than doing a full selectPipe() which resets
   // the view to the top.
-  PD.actions.postAction("/api/llm", body, "LLM: " + action, function() {
+  PD.actions.postAction("/api/llm", body, "LLM: " + action, function () {
     PD.actions.refreshPipe();
   });
 };
@@ -632,27 +671,34 @@ PD.actions.llmAction = function(action, extraBody) {
 // runPipe — executes a full pipe run. Output streams into the drawer in
 // real-time. On completion the output is parsed as JSON for jsonTree rendering,
 // and the most recent trace is fetched for structured input/output data.
-PD.actions.runPipe = function() {
+PD.actions.runPipe = function () {
   if (!PD.state.selectedPipe) return;
-  PD.actions.postAction("/api/run", {
-    project: PD.state.selectedPipe.projectName,
-    pipe: PD.state.selectedPipe.pipeName
-  }, "Running pipe", function(output) {
-    // Try to parse the final output as JSON so the drawer can render it
-    // with pd.jsonTree() instead of raw text.
-    try {
-      var parsed = typeof output === "string" ? JSON.parse(output) : output;
-      PD.state.drawerOutput = JSON.stringify(parsed, null, 2);
-      PD.state.drawerOutputType = "json";
-      PD.state.drawerParsedOutput = parsed;
-    } catch (_) {
-      PD.state.drawerOutput = typeof output === "string" ? output : JSON.stringify(output, null, 2);
-      PD.state.drawerOutputType = "stream";
-    }
-    // Fetch the most recent trace for richer input/output data.
-    PD.actions.loadDrawerTrace();
-    m.redraw();
-  });
+  PD.actions.postAction(
+    "/api/run",
+    {
+      project: PD.state.selectedPipe.projectName,
+      pipe: PD.state.selectedPipe.pipeName,
+    },
+    "Running pipe",
+    function (output) {
+      // Try to parse the final output as JSON so the drawer can render it
+      // with pd.jsonTree() instead of raw text.
+      try {
+        const parsed = typeof output === "string" ? JSON.parse(output) : output;
+        PD.state.drawerOutput = JSON.stringify(parsed, null, 2);
+        PD.state.drawerOutputType = "json";
+        PD.state.drawerParsedOutput = parsed;
+      } catch (_) {
+        PD.state.drawerOutput = typeof output === "string"
+          ? output
+          : JSON.stringify(output, null, 2);
+        PD.state.drawerOutputType = "stream";
+      }
+      // Fetch the most recent trace for richer input/output data.
+      PD.actions.loadDrawerTrace();
+      m.redraw();
+    },
+  );
 };
 
 // runToStep — executes a partial pipe run up to a specific step. The
@@ -666,54 +712,60 @@ PD.actions.runPipe = function() {
 // entire pipe executed.
 // Ref: buildandserve.ts /api/run-step — generates a temp script that
 //      imports only the selected step functions and runs them in a loop.
-PD.actions.runToStep = function(stepIndex) {
+PD.actions.runToStep = function (stepIndex) {
   if (!PD.state.selectedPipe) return;
-  PD.actions.postAction("/api/run-step", {
-    project: PD.state.selectedPipe.projectName,
-    pipe: PD.state.selectedPipe.pipeName,
-    stepIndex: stepIndex
-  }, "Running to step " + stepIndex, function(output) {
-    try {
-      var parsed = typeof output === "string" ? JSON.parse(output) : output;
-      PD.state.drawerParsedOutput = parsed;
-      PD.state.drawerOutputType = "json";
-    } catch (_) { /* non-JSON output — keep raw text */ }
-    // No loadDrawerTrace() — partial runs don't generate traces, so
-    // fetching would return stale data from a prior full run.
-    m.redraw();
-  });
+  PD.actions.postAction(
+    "/api/run-step",
+    {
+      project: PD.state.selectedPipe.projectName,
+      pipe: PD.state.selectedPipe.pipeName,
+      stepIndex: stepIndex,
+    },
+    "Running to step " + stepIndex,
+    function (output) {
+      try {
+        const parsed = typeof output === "string" ? JSON.parse(output) : output;
+        PD.state.drawerParsedOutput = parsed;
+        PD.state.drawerOutputType = "json";
+      } catch (_) { /* non-JSON output — keep raw text */ }
+      // No loadDrawerTrace() — partial runs don't generate traces, so
+      // fetching would return stale data from a prior full run.
+      m.redraw();
+    },
+  );
 };
 
-PD.actions.openEditor = function() {
+PD.actions.openEditor = function () {
   if (!PD.state.selectedPipe) return;
   fetch("/api/open-editor", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      filePath: PD.state.selectedPipe.projectPath + "/" + PD.state.selectedPipe.pipePath
-    })
+      filePath: PD.state.selectedPipe.projectPath + "/" +
+        PD.state.selectedPipe.pipePath,
+    }),
   });
 };
 
-PD.actions.runTests = function() {
+PD.actions.runTests = function () {
   if (!PD.state.selectedPipe) return;
   PD.actions.postAction("/api/test", {
-    project: PD.state.selectedPipe.projectName
+    project: PD.state.selectedPipe.projectName,
   }, "Running tests");
 };
 
-PD.actions.runPack = function() {
+PD.actions.runPack = function () {
   if (!PD.state.selectedPipe) return;
   PD.actions.postAction("/api/pack", {
-    project: PD.state.selectedPipe.projectName
+    project: PD.state.selectedPipe.projectName,
   }, "Running pd pack");
 };
 
-PD.actions.toggleDSL = function(stepIndex) {
+PD.actions.toggleDSL = function (stepIndex) {
   PD.state.showListDSL[stepIndex] = !PD.state.showListDSL[stepIndex];
 };
 
-PD.actions.loadStepTraces = function(stepIndex) {
+PD.actions.loadStepTraces = function (stepIndex) {
   if (PD.state.showStepTraces === stepIndex) {
     PD.state.showStepTraces = null;
     return;
@@ -724,16 +776,16 @@ PD.actions.loadStepTraces = function(stepIndex) {
   // selectedPipe.pipeName (the filename stem, e.g. "testAll") because trace
   // directories are named after the H1 heading.
   // Ref: traceDashboard.ts scanTraces() → parts.slice(1, -1).join("/")
-  var pipeName = PD.state.pipeData && PD.state.pipeData.name
+  const pipeName = PD.state.pipeData && PD.state.pipeData.name
     ? PD.state.pipeData.name
     : PD.state.selectedPipe.pipeName;
-  var url = "/api/projects/" +
+  const url = "/api/projects/" +
     encodeURIComponent(PD.state.selectedPipe.projectName) +
     "/pipes/" + encodeURIComponent(pipeName) +
     "/traces?step=" + stepIndex + "&limit=5";
-  m.request({ method: "GET", url: url }).then(function(data) {
+  m.request({ method: "GET", url: url }).then(function (data) {
     PD.state.stepTraces[stepIndex] = data;
-  }).catch(function() {
+  }).catch(function () {
     PD.state.stepTraces[stepIndex] = [];
   });
 };
@@ -742,21 +794,21 @@ PD.actions.loadStepTraces = function(stepIndex) {
 // Fetches the whole-pipeline input/output from the traces API (no ?step param).
 // Toggles the PipeToolbar I/O panel on repeated clicks.
 // Ref: buildandserve.ts traces endpoint, homeDashboard.ts recentPipeTraces
-PD.actions.loadPipeTraces = function() {
+PD.actions.loadPipeTraces = function () {
   PD.state.showPipeTraces = !PD.state.showPipeTraces;
   if (!PD.state.showPipeTraces) return;
   if (PD.state.pipeTraces) return;
   // Use pipeData.name (H1 heading) to match trace directory naming.
-  var pipeName = PD.state.pipeData && PD.state.pipeData.name
+  const pipeName = PD.state.pipeData && PD.state.pipeData.name
     ? PD.state.pipeData.name
     : PD.state.selectedPipe.pipeName;
-  var url = "/api/projects/" +
+  const url = "/api/projects/" +
     encodeURIComponent(PD.state.selectedPipe.projectName) +
     "/pipes/" + encodeURIComponent(pipeName) +
     "/traces?limit=5";
-  m.request({ method: "GET", url: url }).then(function(data) {
+  m.request({ method: "GET", url: url }).then(function (data) {
     PD.state.pipeTraces = data;
-  }).catch(function() {
+  }).catch(function () {
     PD.state.pipeTraces = [];
   });
 };
@@ -769,7 +821,7 @@ PD.actions.loadPipeTraces = function() {
 
 // enterEditMode — switches to the textarea editor, copying the current raw
 // markdown into an editable buffer.
-PD.actions.enterEditMode = function() {
+PD.actions.enterEditMode = function () {
   PD.state.editMode = true;
   PD.state.editBuffer = PD.state.rawMarkdown || "";
   PD.state.editDirty = false;
@@ -777,7 +829,7 @@ PD.actions.enterEditMode = function() {
 
 // exitEditMode — discards any unsaved changes and returns to the rendered
 // markdown view. Does NOT write anything to disk.
-PD.actions.exitEditMode = function() {
+PD.actions.exitEditMode = function () {
   PD.state.editMode = false;
   PD.state.editBuffer = null;
   PD.state.editDirty = false;
@@ -788,13 +840,13 @@ PD.actions.exitEditMode = function() {
 // the file, rebuilds .pd/, and sends an SSE reload. After a successful save,
 // re-selects the pipe to refresh the rendered view.
 // Ref: POST /api/projects/{name}/files/{path} in buildandserve.ts
-PD.actions.saveEdit = function() {
+PD.actions.saveEdit = function () {
   if (PD.state.editSaving || !PD.state.selectedPipe) return;
   PD.state.editSaving = true;
   m.redraw();
 
-  var pipe = PD.state.selectedPipe;
-  var url = "/api/projects/" +
+  const pipe = PD.state.selectedPipe;
+  const url = "/api/projects/" +
     encodeURIComponent(pipe.projectName) +
     "/files/" + encodeURIComponent(pipe.pipePath);
 
@@ -803,8 +855,8 @@ PD.actions.saveEdit = function() {
   fetch(url, {
     method: "POST",
     headers: { "Content-Type": "text/plain" },
-    body: PD.state.editBuffer
-  }).then(function(res) {
+    body: PD.state.editBuffer,
+  }).then(function (res) {
     if (!res.ok) throw new Error("Save failed: " + res.statusText);
     // Exit edit mode and re-select the pipe to refresh markdown + pipeData.
     PD.state.editMode = false;
@@ -812,7 +864,7 @@ PD.actions.saveEdit = function() {
     PD.state.editDirty = false;
     PD.state.editSaving = false;
     PD.actions.selectPipe(pipe);
-  }).catch(function(err) {
+  }).catch(function (err) {
     PD.state.editSaving = false;
     // Surface the error in the drawer so the user knows why the save failed.
     PD.state.drawerOpen = true;
@@ -828,7 +880,7 @@ PD.actions.saveEdit = function() {
 
 // openNewPipeModal — shows the modal, defaulting the project selector to the
 // currently selected pipe's project or the first available project.
-PD.actions.openNewPipeModal = function() {
+PD.actions.openNewPipeModal = function () {
   PD.state.showNewPipeModal = true;
   PD.state.newPipeName = "";
   PD.state.newPipeCreating = false;
@@ -842,7 +894,7 @@ PD.actions.openNewPipeModal = function() {
   }
 };
 
-PD.actions.closeNewPipeModal = function() {
+PD.actions.closeNewPipeModal = function () {
   PD.state.showNewPipeModal = false;
   PD.state.newPipeName = "";
   PD.state.newPipeProject = null;
@@ -852,26 +904,29 @@ PD.actions.closeNewPipeModal = function() {
 // createNewPipe — sanitises the user-entered name, builds a template markdown
 // string, POSTs it to the write endpoint, reloads the pipe list, and
 // auto-selects the new pipe in edit mode so the user can start writing.
-PD.actions.createNewPipe = function() {
-  if (PD.state.newPipeCreating || !PD.state.newPipeName.trim() || !PD.state.newPipeProject) return;
+PD.actions.createNewPipe = function () {
+  if (
+    PD.state.newPipeCreating || !PD.state.newPipeName.trim() ||
+    !PD.state.newPipeProject
+  ) return;
   PD.state.newPipeCreating = true;
   m.redraw();
 
   // Sanitise the pipe name into a safe filename: lowercase, replace spaces
   // and non-alphanumeric chars with hyphens, collapse consecutive hyphens,
   // and strip leading/trailing hyphens.
-  var displayName = PD.state.newPipeName.trim();
-  var safeName = displayName
+  const displayName = PD.state.newPipeName.trim();
+  let safeName = displayName
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
   if (!safeName) safeName = "new-pipe";
-  var fileName = safeName + ".md";
+  const fileName = safeName + ".md";
 
   // Build the template markdown. The H1 heading uses the user-provided name
   // (preserving their casing), and two placeholder steps give them a starting
   // structure to fill in.
-  var template = "# " + displayName + "\n\n" +
+  const template = "# " + displayName + "\n\n" +
     "Describe what this pipe does.\n\n" +
     "## Step One\n\n" +
     "Describe what this step does.\n\n" +
@@ -880,16 +935,16 @@ PD.actions.createNewPipe = function() {
     "Describe what this step does.\n\n" +
     "```ts\n// Your code here\n```\n";
 
-  var projectName = PD.state.newPipeProject;
-  var url = "/api/projects/" +
+  const projectName = PD.state.newPipeProject;
+  const url = "/api/projects/" +
     encodeURIComponent(projectName) +
     "/files/" + encodeURIComponent(fileName);
 
   fetch(url, {
     method: "POST",
     headers: { "Content-Type": "text/plain" },
-    body: template
-  }).then(function(res) {
+    body: template,
+  }).then(function (res) {
     if (!res.ok) throw new Error("Create failed: " + res.statusText);
     PD.actions.closeNewPipeModal();
     // Reload the pipe list so the new pipe appears in the sidebar.
@@ -901,21 +956,21 @@ PD.actions.createNewPipe = function() {
     // Give the pipe list a moment to update (loadRecentPipes is async),
     // then find and select the newly created pipe.
     // Ref: setTimeout ensures we run after the m.redraw from loadRecentPipes.
-    setTimeout(function() {
-      var match = PD.state.recentPipes.find(function(p) {
+    setTimeout(function () {
+      const match = PD.state.recentPipes.find(function (p) {
         return p.projectName === projectName && p.pipePath === fileName;
       });
       if (match) {
         PD.actions.selectPipe(match);
         // Enter edit mode after a short delay so selectPipe's async fetches
         // have time to populate rawMarkdown.
-        setTimeout(function() {
+        setTimeout(function () {
           PD.actions.enterEditMode();
           m.redraw();
         }, 300);
       }
     }, 500);
-  }).catch(function(err) {
+  }).catch(function (err) {
     PD.state.newPipeCreating = false;
     PD.state.drawerOpen = true;
     PD.state.drawerLabel = "Create pipe error";
@@ -925,15 +980,39 @@ PD.actions.createNewPipe = function() {
   });
 };
 
-PD.utils.buildDSLLines = function(config) {
+PD.utils.buildDSLLines = function (config) {
   if (!config) return [];
-  var lines = [];
-  if (config.checks) config.checks.forEach(function(c) { lines.push(["check", c]); });
-  if (config.or) config.or.forEach(function(c) { lines.push(["or", c]); });
-  if (config.and) config.and.forEach(function(c) { lines.push(["and", c]); });
-  if (config.not) config.not.forEach(function(c) { lines.push(["not", c]); });
-  if (config.routes) config.routes.forEach(function(r) { lines.push(["route", r]); });
-  if (config.flags) config.flags.forEach(function(f) { lines.push(["flag", f]); });
+  const lines = [];
+  if (config.checks) {
+    config.checks.forEach(function (c) {
+      lines.push(["check", c]);
+    });
+  }
+  if (config.or) {
+    config.or.forEach(function (c) {
+      lines.push(["or", c]);
+    });
+  }
+  if (config.and) {
+    config.and.forEach(function (c) {
+      lines.push(["and", c]);
+    });
+  }
+  if (config.not) {
+    config.not.forEach(function (c) {
+      lines.push(["not", c]);
+    });
+  }
+  if (config.routes) {
+    config.routes.forEach(function (r) {
+      lines.push(["route", r]);
+    });
+  }
+  if (config.flags) {
+    config.flags.forEach(function (f) {
+      lines.push(["flag", f]);
+    });
+  }
   if (config.stop !== undefined) lines.push(["stop", "" + config.stop]);
   if (config.only !== undefined) lines.push(["only", "" + config.only]);
   return lines;
@@ -952,19 +1031,19 @@ PD.utils.buildDSLLines = function(config) {
 // /mode) are stripped before comparison so two runs that differ only in runtime
 // flags show as the same user input.
 // Ref: templates/trace.ts — enriches input with /flags and /mode before execution
-PD.utils.deduplicateInputs = function(traces) {
+PD.utils.deduplicateInputs = function (traces) {
   if (!traces || !traces.length) return [];
-  var seen = {};
-  var results = [];
+  const seen = {};
+  const results = [];
 
-  traces.forEach(function(t) {
+  traces.forEach(function (t) {
     if (!t.input || typeof t.input !== "object") return;
 
     // Strip internal pipedown metadata that the user didn't provide.
     // These are injected by the CLI (trace.ts) before execution and
     // aren't meaningful as "user input".
-    var cleaned = {};
-    Object.keys(t.input).forEach(function(k) {
+    const cleaned = {};
+    Object.keys(t.input).forEach(function (k) {
       if (k !== "flags" && k !== "mode") {
         cleaned[k] = t.input[k];
       }
@@ -977,7 +1056,7 @@ PD.utils.deduplicateInputs = function(traces) {
     // Deduplicate by JSON string comparison. JSON.stringify with sorted keys
     // ensures consistent ordering regardless of object property order.
     // Ref: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/JSON/stringify#the_replacer_parameter
-    var key = JSON.stringify(cleaned, Object.keys(cleaned).sort());
+    const key = JSON.stringify(cleaned, Object.keys(cleaned).sort());
     if (!seen[key]) {
       seen[key] = true;
       results.push(cleaned);
@@ -994,9 +1073,9 @@ PD.utils.deduplicateInputs = function(traces) {
 // @param {object} obj — the input object to preview
 // @param {number} [maxLen=60] — maximum character length before truncation
 // @return {string} — e.g. '{ "url": "https://ex...", "count": 5 }'
-PD.utils.inputPreview = function(obj, maxLen) {
+PD.utils.inputPreview = function (obj, maxLen) {
   maxLen = maxLen || 60;
-  var str = JSON.stringify(obj);
+  const str = JSON.stringify(obj);
   if (str.length <= maxLen) return str;
   return str.slice(0, maxLen - 1) + "\u2026";
 };
@@ -1009,14 +1088,14 @@ PD.utils.inputPreview = function(obj, maxLen) {
 // @param {Array} pipes — the (optionally filtered) recentPipes array
 // @return {Array} — [{ projectName: string, pipes: RecentPipe[] }, ...]
 // Ref: Sidebar.js — "Projects" section
-PD.utils.groupPipesByProject = function(pipes) {
-  var groups = {};
-  pipes.forEach(function(p) {
+PD.utils.groupPipesByProject = function (pipes) {
+  const groups = {};
+  pipes.forEach(function (p) {
     if (!groups[p.projectName]) groups[p.projectName] = [];
     groups[p.projectName].push(p);
   });
   // Sort project names alphabetically for stable sidebar ordering.
-  return Object.keys(groups).sort().map(function(name) {
+  return Object.keys(groups).sort().map(function (name) {
     return { projectName: name, pipes: groups[name] };
   });
 };
@@ -1027,7 +1106,7 @@ PD.utils.groupPipesByProject = function(pipes) {
 // for the first time (lazy loading). Results are cached in
 // PD.state.inputHistory until the pipe changes.
 // Ref: buildandserve.ts — GET /api/projects/{project}/pipes/{pipe}/traces
-PD.actions.loadInputHistory = function() {
+PD.actions.loadInputHistory = function () {
   if (PD.state.inputHistoryLoading || PD.state.inputHistory) return;
   if (!PD.state.selectedPipe) return;
 
@@ -1035,20 +1114,20 @@ PD.actions.loadInputHistory = function() {
 
   // Use pipeData.name (H1 heading) to match trace directory naming,
   // same convention as loadPipeTraces and loadDrawerTrace.
-  var pipeName = PD.state.pipeData && PD.state.pipeData.name
+  const pipeName = PD.state.pipeData && PD.state.pipeData.name
     ? PD.state.pipeData.name
     : PD.state.selectedPipe.pipeName;
 
   // Fetch more traces (20) to increase the chance of finding diverse inputs.
-  var url = "/api/projects/" +
+  const url = "/api/projects/" +
     encodeURIComponent(PD.state.selectedPipe.projectName) +
     "/pipes/" + encodeURIComponent(pipeName) +
     "/traces?limit=20";
 
-  m.request({ method: "GET", url: url }).then(function(data) {
+  m.request({ method: "GET", url: url }).then(function (data) {
     PD.state.inputHistory = PD.utils.deduplicateInputs(data);
     PD.state.inputHistoryLoading = false;
-  }).catch(function() {
+  }).catch(function () {
     PD.state.inputHistory = [];
     PD.state.inputHistoryLoading = false;
   });
@@ -1062,33 +1141,40 @@ PD.actions.loadInputHistory = function() {
 // to the trace.ts subprocess.
 // Ref: buildandserve.ts /api/run — accepts { project, pipe, input? }
 // @param {object} inputObj — the JSON object to use as pipeline input
-PD.actions.runPipeWithInput = function(inputObj) {
+PD.actions.runPipeWithInput = function (inputObj) {
   if (!PD.state.selectedPipe) return;
 
   // Transition drawer from input editor mode to normal output mode.
   PD.state.drawerMode = null;
 
-  PD.actions.postAction("/api/run", {
-    project: PD.state.selectedPipe.projectName,
-    pipe: PD.state.selectedPipe.pipeName,
-    input: JSON.stringify(inputObj)
-  }, "Running pipe", function(output) {
-    // Same completion handler as runPipe — parse JSON and load trace.
-    try {
-      var parsed = typeof output === "string" ? JSON.parse(output) : output;
-      PD.state.drawerOutput = JSON.stringify(parsed, null, 2);
-      PD.state.drawerOutputType = "json";
-      PD.state.drawerParsedOutput = parsed;
-    } catch (_) {
-      PD.state.drawerOutput = typeof output === "string" ? output : JSON.stringify(output, null, 2);
-      PD.state.drawerOutputType = "stream";
-    }
-    PD.actions.loadDrawerTrace();
-    // Invalidate cached input history so next dropdown open fetches fresh data
-    // that includes the trace from this run.
-    PD.state.inputHistory = null;
-    m.redraw();
-  });
+  PD.actions.postAction(
+    "/api/run",
+    {
+      project: PD.state.selectedPipe.projectName,
+      pipe: PD.state.selectedPipe.pipeName,
+      input: JSON.stringify(inputObj),
+    },
+    "Running pipe",
+    function (output) {
+      // Same completion handler as runPipe — parse JSON and load trace.
+      try {
+        const parsed = typeof output === "string" ? JSON.parse(output) : output;
+        PD.state.drawerOutput = JSON.stringify(parsed, null, 2);
+        PD.state.drawerOutputType = "json";
+        PD.state.drawerParsedOutput = parsed;
+      } catch (_) {
+        PD.state.drawerOutput = typeof output === "string"
+          ? output
+          : JSON.stringify(output, null, 2);
+        PD.state.drawerOutputType = "stream";
+      }
+      PD.actions.loadDrawerTrace();
+      // Invalidate cached input history so next dropdown open fetches fresh data
+      // that includes the trace from this run.
+      PD.state.inputHistory = null;
+      m.redraw();
+    },
+  );
 };
 
 // ── runToStepWithInput ──
@@ -1097,28 +1183,33 @@ PD.actions.runPipeWithInput = function(inputObj) {
 // Ref: buildandserve.ts /api/run-step — accepts { project, pipe, stepIndex, input? }
 // @param {number} stepIndex — the step to run up to
 // @param {object} inputObj — the JSON object to use as pipeline input
-PD.actions.runToStepWithInput = function(stepIndex, inputObj) {
+PD.actions.runToStepWithInput = function (stepIndex, inputObj) {
   if (!PD.state.selectedPipe) return;
 
   // Transition drawer from input editor mode to normal output mode.
   PD.state.drawerMode = null;
 
-  PD.actions.postAction("/api/run-step", {
-    project: PD.state.selectedPipe.projectName,
-    pipe: PD.state.selectedPipe.pipeName,
-    stepIndex: stepIndex,
-    input: JSON.stringify(inputObj)
-  }, "Running to step " + stepIndex, function(output) {
-    // Same completion handler as runToStep.
-    try {
-      var parsed = typeof output === "string" ? JSON.parse(output) : output;
-      PD.state.drawerParsedOutput = parsed;
-      PD.state.drawerOutputType = "json";
-    } catch (_) { /* non-JSON output — keep raw text */ }
-    // Invalidate cached input history.
-    PD.state.inputHistory = null;
-    m.redraw();
-  });
+  PD.actions.postAction(
+    "/api/run-step",
+    {
+      project: PD.state.selectedPipe.projectName,
+      pipe: PD.state.selectedPipe.pipeName,
+      stepIndex: stepIndex,
+      input: JSON.stringify(inputObj),
+    },
+    "Running to step " + stepIndex,
+    function (output) {
+      // Same completion handler as runToStep.
+      try {
+        const parsed = typeof output === "string" ? JSON.parse(output) : output;
+        PD.state.drawerParsedOutput = parsed;
+        PD.state.drawerOutputType = "json";
+      } catch (_) { /* non-JSON output — keep raw text */ }
+      // Invalidate cached input history.
+      PD.state.inputHistory = null;
+      m.redraw();
+    },
+  );
 };
 
 // ── openInputEditor ──
@@ -1126,17 +1217,23 @@ PD.actions.runToStepWithInput = function(stepIndex, inputObj) {
 // can define or edit custom input before executing. Pre-fills with the
 // first item from input history (if available) or empty object.
 // @param {number|null} target — null for full pipe, step index for run-to-step
-PD.actions.openInputEditor = function(target) {
+PD.actions.openInputEditor = function (target) {
   PD.state.drawerMode = "input";
   PD.state.drawerInputTarget = target;
   PD.state.drawerOpen = true;
-  PD.state.drawerLabel = target != null ? "Custom Input (step " + target + ")" : "Custom Input";
+  PD.state.drawerLabel = target != null
+    ? "Custom Input (step " + target + ")"
+    : "Custom Input";
   PD.state.drawerStatus = "idle";
   PD.state.drawerError = null;
 
   // Pre-fill with the most recent non-empty input from history, or "{}".
   if (PD.state.inputHistory && PD.state.inputHistory.length > 0) {
-    PD.state.drawerInputBuffer = JSON.stringify(PD.state.inputHistory[0], null, 2);
+    PD.state.drawerInputBuffer = JSON.stringify(
+      PD.state.inputHistory[0],
+      null,
+      2,
+    );
   } else {
     PD.state.drawerInputBuffer = "{\n  \n}";
   }
@@ -1147,8 +1244,8 @@ PD.actions.openInputEditor = function(target) {
 // Called when the user clicks "Run" in the drawer's input editor mode.
 // Parses the JSON buffer and dispatches to the appropriate run action
 // based on drawerInputTarget.
-PD.actions.executeFromDrawer = function() {
-  var json;
+PD.actions.executeFromDrawer = function () {
+  let json;
   try {
     json = JSON.parse(PD.state.drawerInputBuffer);
   } catch (e) {
@@ -1156,13 +1253,13 @@ PD.actions.executeFromDrawer = function() {
     PD.state.drawerError = {
       status: 0,
       statusText: "Invalid JSON",
-      message: e.message
+      message: e.message,
     };
     m.redraw();
     return;
   }
 
-  var target = PD.state.drawerInputTarget;
+  const target = PD.state.drawerInputTarget;
   if (target != null) {
     PD.actions.runToStepWithInput(target, json);
   } else {
@@ -1173,7 +1270,7 @@ PD.actions.executeFromDrawer = function() {
 // ── closeInputDropdowns ──
 // Utility to close all input-related dropdowns. Called by Layout's
 // click-outside handler and by dropdown item onclick handlers.
-PD.actions.closeInputDropdowns = function() {
+PD.actions.closeInputDropdowns = function () {
   PD.state.inputDropdownOpen = false;
   PD.state.inputDropdownStep = null;
 };
@@ -1184,23 +1281,23 @@ PD.actions.closeInputDropdowns = function() {
 // Returns an array of vnodes to render inside a .dropdown-menu container.
 // @param {number|null} target — null for full pipe, step index for run-to-step
 // @return {Array} — Mithril vnodes for dropdown items
-PD.utils.renderInputDropdownItems = function(target) {
-  var items = [];
+PD.utils.renderInputDropdownItems = function (target) {
+  const items = [];
 
   // ── "Custom Input..." option — always shown at top ──
   // Opens the JSON editor in the RunDrawer for freeform input editing.
   items.push(
     m("button.dropdown-item.input-custom-item", {
-      onclick: function(e) {
+      onclick: function (e) {
         e.stopPropagation();
         PD.actions.closeInputDropdowns();
         PD.actions.loadInputHistory();
         PD.actions.openInputEditor(target);
-      }
+      },
     }, [
       m("span", { style: "margin-inline-end: var(--size-1);" }, "\u270E"),
-      "Custom Input\u2026"
-    ])
+      "Custom Input\u2026",
+    ]),
   );
 
   // ── Divider ──
@@ -1209,16 +1306,16 @@ PD.utils.renderInputDropdownItems = function(target) {
   // ── Loading state ──
   if (PD.state.inputHistoryLoading) {
     items.push(m("div.dropdown-item.input-loading", {
-      style: "color: var(--text-2); font-style: italic; cursor: default;"
+      style: "color: var(--text-2); font-style: italic; cursor: default;",
     }, "Loading history\u2026"));
     return items;
   }
 
   // ── History items ──
-  var history = PD.state.inputHistory;
+  const history = PD.state.inputHistory;
   if (!history || history.length === 0) {
     items.push(m("div.dropdown-item.input-empty", {
-      style: "color: var(--text-2); font-style: italic; cursor: default;"
+      style: "color: var(--text-2); font-style: italic; cursor: default;",
     }, "No input history"));
     return items;
   }
@@ -1230,11 +1327,11 @@ PD.utils.renderInputDropdownItems = function(target) {
   // also be unkeyed. This is safe because the dropdown is destroyed and
   // recreated on every open rather than being patched incrementally.
   // Ref: https://mithril.js.org/keys.html#key-restrictions
-  history.forEach(function(inputObj, i) {
+  history.forEach(function (inputObj, _i) {
     items.push(
       m("button.dropdown-item.input-history-item", {
         title: JSON.stringify(inputObj, null, 2),
-        onclick: function(e) {
+        onclick: function (e) {
           e.stopPropagation();
           PD.actions.closeInputDropdowns();
           if (target != null) {
@@ -1242,8 +1339,8 @@ PD.utils.renderInputDropdownItems = function(target) {
           } else {
             PD.actions.runPipeWithInput(inputObj);
           }
-        }
-      }, m("code.input-preview", PD.utils.inputPreview(inputObj)))
+        },
+      }, m("code.input-preview", PD.utils.inputPreview(inputObj))),
     );
   });
 
@@ -1266,7 +1363,7 @@ PD.utils.renderInputDropdownItems = function(target) {
  *
  * @param {number} stepIndex - The step index that was clicked (pre-selected)
  */
-PD.actions.enterExtractMode = function(stepIndex) {
+PD.actions.enterExtractMode = function (stepIndex) {
   PD.state.extractMode = true;
   PD.state.extractSelected = {};
   PD.state.extractSelected[stepIndex] = true;
@@ -1282,7 +1379,7 @@ PD.actions.enterExtractMode = function(stepIndex) {
  *
  * Called when the user clicks Cancel, or after a successful extraction.
  */
-PD.actions.exitExtractMode = function() {
+PD.actions.exitExtractMode = function () {
   PD.state.extractMode = false;
   PD.state.extractSelected = {};
   PD.state.extractName = "";
@@ -1299,7 +1396,7 @@ PD.actions.exitExtractMode = function() {
  *
  * @param {number} stepIndex - The step index to toggle
  */
-PD.actions.toggleExtractStep = function(stepIndex) {
+PD.actions.toggleExtractStep = function (stepIndex) {
   if (PD.state.extractSelected[stepIndex]) {
     delete PD.state.extractSelected[stepIndex];
   } else {
@@ -1315,11 +1412,15 @@ PD.actions.toggleExtractStep = function(stepIndex) {
  * On success, exits extract mode, refreshes the pipe view, and reloads
  * the recent pipes list (the new pipe should appear in the sidebar).
  */
-PD.actions.performExtract = function() {
-  var selected = Object.keys(PD.state.extractSelected)
-    .filter(function(k) { return PD.state.extractSelected[k]; })
+PD.actions.performExtract = function () {
+  const selected = Object.keys(PD.state.extractSelected)
+    .filter(function (k) {
+      return PD.state.extractSelected[k];
+    })
     .map(Number)
-    .sort(function(a, b) { return a - b; });
+    .sort(function (a, b) {
+      return a - b;
+    });
 
   if (selected.length === 0) return;
   if (!PD.state.extractName.trim()) return;
@@ -1328,16 +1429,16 @@ PD.actions.performExtract = function() {
   PD.state.extracting = true;
   m.redraw();
 
-  var body = {
+  const body = {
     project: PD.state.selectedPipe.projectName,
     pipe: PD.state.selectedPipe.pipeName,
     stepIndices: selected,
-    newName: PD.state.extractName.trim()
+    newName: PD.state.extractName.trim(),
   };
 
   // Use postAction to route output through the drawer panel.
   // On success (onDone callback), exit extract mode and refresh everything.
-  PD.actions.postAction("/api/extract", body, "Extract steps", function() {
+  PD.actions.postAction("/api/extract", body, "Extract steps", function () {
     PD.actions.exitExtractMode();
     PD.actions.refreshPipe();
     PD.actions.loadRecentPipes();

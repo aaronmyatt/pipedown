@@ -15,13 +15,12 @@
 // Ref: Mithril lifecycle hooks — https://mithril.js.org/lifecycle-methods.html
 
 PD.components.RunDrawer = {
-
   // ── oncreate ──
   // Register a global keydown listener so the user can press Escape to
   // close the drawer. We store the handler on the vnode's state object
   // so onremove can deregister the exact same function reference.
-  oncreate: function(vnode) {
-    vnode.state._onKeyDown = function(e) {
+  oncreate: function (vnode) {
+    vnode.state._onKeyDown = function (e) {
       if (e.key === "Escape" && PD.state.drawerOpen) {
         PD.actions.closeDrawer();
         // Also clear input mode so reopening doesn't show stale editor state.
@@ -38,7 +37,7 @@ PD.components.RunDrawer = {
 
   // ── onremove ──
   // Clean up the global keydown listener to prevent memory leaks.
-  onremove: function(vnode) {
+  onremove: function (vnode) {
     document.removeEventListener("keydown", vnode.state._onKeyDown);
   },
 
@@ -48,8 +47,10 @@ PD.components.RunDrawer = {
   // Once the operation finishes ("done" or "error") we stop scrolling so
   // the user can freely scroll up through the output.
   // Skip auto-scroll in input editor mode — the user is typing, not watching.
-  onupdate: function(vnode) {
-    if (PD.state.drawerStatus === "running" && PD.state.drawerMode !== "input") {
+  onupdate: function (vnode) {
+    if (
+      PD.state.drawerStatus === "running" && PD.state.drawerMode !== "input"
+    ) {
       const body = vnode.dom.querySelector(".run-drawer-body");
       if (body) {
         body.scrollTop = body.scrollHeight;
@@ -57,11 +58,11 @@ PD.components.RunDrawer = {
     }
   },
 
-  view: function() {
+  view: function () {
     // Always render the wrapper div so CSS transitions work. The `.open`
     // class controls visibility via transform.
-    var isOpen = PD.state.drawerOpen;
-    var isInputMode = PD.state.drawerMode === "input";
+    const isOpen = PD.state.drawerOpen;
+    const isInputMode = PD.state.drawerMode === "input";
 
     // ── Input editor mode ──
     // When the user opened "Custom Input...", render the JSON editor view
@@ -76,27 +77,29 @@ PD.components.RunDrawer = {
         // Only rendered when the drawer is open so it doesn't block
         // interaction with the rest of the page when hidden.
         // Ref: styles.css .drawer-backdrop
-        isOpen ? m(".drawer-backdrop", {
-          onclick: function() {
-            PD.actions.closeDrawer();
-            PD.state.drawerMode = null;
-          }
-        }) : null,
+        isOpen
+          ? m(".drawer-backdrop", {
+            onclick: function () {
+              PD.actions.closeDrawer();
+              PD.state.drawerMode = null;
+            },
+          })
+          : null,
         m(".run-drawer", { class: isOpen ? "open" : "" }, [
           m("div.run-drawer-header", [
             m("span.run-drawer-label", PD.state.drawerLabel || "Custom Input"),
             m("button.run-drawer-close", {
-              onclick: function() {
+              onclick: function () {
                 PD.actions.closeDrawer();
                 PD.state.drawerMode = null;
               },
-              title: "Close drawer (Esc)"
-            }, "\u00D7")
+              title: "Close drawer (Esc)",
+            }, "\u00D7"),
           ]),
-          m(".run-drawer-body", { style: "display: flex; flex-direction: column;" },
-            PD.utils.drawerInputEditorContent()
-          )
-        ])
+          m(".run-drawer-body", {
+            style: "display: flex; flex-direction: column;",
+          }, PD.utils.drawerInputEditorContent()),
+        ]),
       ]);
     }
 
@@ -104,18 +107,20 @@ PD.components.RunDrawer = {
     // Build the status indicator string that appears next to the label.
     // When an error occurs and we have structured error info, include the
     // HTTP status code for quick identification (e.g. "(error 500)").
-    var statusText = "";
-    var isError = PD.state.drawerStatus === "error";
+    let statusText = "";
+    const isError = PD.state.drawerStatus === "error";
     if (PD.state.drawerStatus === "running") statusText = " ...";
-    if (PD.state.drawerStatus === "done")    statusText = " (done)";
+    if (PD.state.drawerStatus === "done") statusText = " (done)";
     if (isError) {
-      var errStatus = PD.state.drawerError && PD.state.drawerError.status;
+      const errStatus = PD.state.drawerError && PD.state.drawerError.status;
       statusText = errStatus ? " (error " + errStatus + ")" : " (error)";
     }
 
     // Build the CSS class string. The header gets a red-tinted background
     // when in error state via the run-drawer-header--error modifier class.
-    var headerClass = isError ? "run-drawer-header run-drawer-header--error" : "run-drawer-header";
+    const headerClass = isError
+      ? "run-drawer-header run-drawer-header--error"
+      : "run-drawer-header";
 
     // Use a static selector (".run-drawer") and a dynamic `class` attr for
     // the "open" toggle. In Mithril v2 the `class` attr is merged with
@@ -131,24 +136,30 @@ PD.components.RunDrawer = {
       // Clicking outside the drawer (on this overlay) closes it.
       // Only rendered when open to avoid blocking clicks in the main UI.
       // Ref: styles.css .drawer-backdrop
-      isOpen ? m(".drawer-backdrop", {
-        onclick: function() { PD.actions.closeDrawer(); }
-      }) : null,
+      isOpen
+        ? m(".drawer-backdrop", {
+          onclick: function () {
+            PD.actions.closeDrawer();
+          },
+        })
+        : null,
       m(".run-drawer", { class: isOpen ? "open" : "" }, [
         m("div", { class: headerClass }, [
           m("span.run-drawer-label", [
             PD.state.drawerLabel,
-            statusText
+            statusText,
           ]),
           m("button.run-drawer-close", {
-            onclick: function() { PD.actions.closeDrawer(); },
-            title: "Close drawer (Esc)"
-          }, "\u00D7")
+            onclick: function () {
+              PD.actions.closeDrawer();
+            },
+            title: "Close drawer (Esc)",
+          }, "\u00D7"),
         ]),
-        m(".run-drawer-body", PD.utils.drawerBodyContent())
-      ])
+        m(".run-drawer-body", PD.utils.drawerBodyContent()),
+      ]),
     ]);
-  }
+  },
 };
 
 // ── drawerInputEditorContent ──
@@ -163,10 +174,10 @@ PD.components.RunDrawer = {
 // The textarea uses Tab to insert spaces (like the markdown editor) and
 // Cmd/Ctrl+Enter as a shortcut to execute.
 // Ref: https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent/key
-PD.utils.drawerInputEditorContent = function() {
+PD.utils.drawerInputEditorContent = function () {
   // Validate the current buffer in real-time so the user sees parse errors
   // before clicking Run.
-  var validationResult = null;
+  let validationResult = null;
   try {
     JSON.parse(PD.state.drawerInputBuffer);
     validationResult = { valid: true };
@@ -176,45 +187,54 @@ PD.utils.drawerInputEditorContent = function() {
 
   // Check if the drawer has a non-input error to display (e.g. from a failed
   // parse attempt via executeFromDrawer).
-  var parseError = PD.state.drawerError && PD.state.drawerError.statusText === "Invalid JSON"
-    ? PD.state.drawerError.message
-    : null;
+  const parseError =
+    PD.state.drawerError && PD.state.drawerError.statusText === "Invalid JSON"
+      ? PD.state.drawerError.message
+      : null;
 
-  var sections = [];
+  const sections = [];
 
   // ── Instruction ──
-  sections.push(m("div", {
-    style: "font-family: var(--font-sans); font-size: var(--font-size-0); color: var(--text-2); margin-block-end: var(--size-2);"
-  }, "Enter JSON to use as pipeline input. Select a past input below or edit freely."));
+  sections.push(m(
+    "div",
+    {
+      style:
+        "font-family: var(--font-sans); font-size: var(--font-size-0); color: var(--text-2); margin-block-end: var(--size-2);",
+    },
+    "Enter JSON to use as pipeline input. Select a past input below or edit freely.",
+  ));
 
   // ── Textarea ──
   // The textarea is the primary input surface. It supports Tab for indent
   // and Cmd/Ctrl+Enter to run.
   sections.push(m("textarea.input-editor-textarea", {
     value: PD.state.drawerInputBuffer,
-    oninput: function(e) {
+    oninput: function (e) {
       PD.state.drawerInputBuffer = e.target.value;
       // Clear any previous parse error when the user types.
-      if (PD.state.drawerError && PD.state.drawerError.statusText === "Invalid JSON") {
+      if (
+        PD.state.drawerError &&
+        PD.state.drawerError.statusText === "Invalid JSON"
+      ) {
         PD.state.drawerError = null;
       }
     },
-    onkeydown: function(e) {
+    onkeydown: function (e) {
       // Tab inserts two spaces instead of moving focus — same behaviour
       // as the markdown editor for consistency.
       // Ref: https://developer.mozilla.org/en-US/docs/Web/API/HTMLTextAreaElement/selectionStart
       if (e.key === "Tab") {
         e.preventDefault();
-        var ta = e.target;
-        var start = ta.selectionStart;
-        var end = ta.selectionEnd;
+        const ta = e.target;
+        const start = ta.selectionStart;
+        const end = ta.selectionEnd;
         PD.state.drawerInputBuffer =
           PD.state.drawerInputBuffer.substring(0, start) +
           "  " +
           PD.state.drawerInputBuffer.substring(end);
         // Mithril will update the textarea value on next redraw, but we need
         // to restore cursor position after that redraw.
-        requestAnimationFrame(function() {
+        requestAnimationFrame(function () {
           ta.selectionStart = ta.selectionEnd = start + 2;
         });
       }
@@ -225,62 +245,84 @@ PD.utils.drawerInputEditorContent = function() {
       }
     },
     placeholder: '{\n  "key": "value"\n}',
-    spellcheck: false
+    spellcheck: false,
   }));
 
   // ── Validation status ──
   if (parseError) {
-    sections.push(m("div.input-editor-status.input-editor-status--error", parseError));
+    sections.push(
+      m("div.input-editor-status.input-editor-status--error", parseError),
+    );
   } else if (!validationResult.valid) {
-    sections.push(m("div.input-editor-status.input-editor-status--error", validationResult.message));
+    sections.push(
+      m(
+        "div.input-editor-status.input-editor-status--error",
+        validationResult.message,
+      ),
+    );
   } else {
-    sections.push(m("div.input-editor-status.input-editor-status--valid", "\u2713 Valid JSON"));
+    sections.push(
+      m(
+        "div.input-editor-status.input-editor-status--valid",
+        "\u2713 Valid JSON",
+      ),
+    );
   }
 
   // ── Action bar ──
   sections.push(m("div.input-editor-actions", [
     m("button.tb-btn", {
-      onclick: function() {
+      onclick: function () {
         PD.actions.closeDrawer();
         PD.state.drawerMode = null;
-      }
+      },
     }, "Cancel"),
-    m("button.tb-btn.primary", {
-      onclick: PD.actions.executeFromDrawer,
-      disabled: !validationResult.valid,
-      title: validationResult.valid ? "Run with this input (Cmd+Enter)" : "Fix JSON errors first"
-    }, PD.state.drawerInputTarget != null
-      ? "Run to step " + PD.state.drawerInputTarget
-      : "Run Pipe"
-    )
+    m(
+      "button.tb-btn.primary",
+      {
+        onclick: PD.actions.executeFromDrawer,
+        disabled: !validationResult.valid,
+        title: validationResult.valid
+          ? "Run with this input (Cmd+Enter)"
+          : "Fix JSON errors first",
+      },
+      PD.state.drawerInputTarget != null
+        ? "Run to step " + PD.state.drawerInputTarget
+        : "Run Pipe",
+    ),
   ]));
 
   // ── Past inputs quick-pick ──
   // Show clickable history items below the editor so the user can load
   // a past input into the textarea with one click.
-  var history = PD.state.inputHistory;
+  const history = PD.state.inputHistory;
   if (history && history.length > 0) {
     sections.push(m("div", {
-      style: "margin-block-start: var(--size-3); border-block-start: var(--border-size-1) solid var(--surface-3); padding-block-start: var(--size-2);"
+      style:
+        "margin-block-start: var(--size-3); border-block-start: var(--border-size-1) solid var(--surface-3); padding-block-start: var(--size-2);",
     }, [
       m("div", {
-        style: "font-family: var(--font-sans); font-size: var(--font-size-0); color: var(--text-2); margin-block-end: var(--size-1); font-weight: var(--font-weight-5);"
+        style:
+          "font-family: var(--font-sans); font-size: var(--font-size-0); color: var(--text-2); margin-block-end: var(--size-1); font-weight: var(--font-weight-5);",
       }, "Past inputs"),
-      history.map(function(inputObj, i) {
+      history.map(function (inputObj, _i) {
         return m("button.dropdown-item.input-history-item", {
           title: "Click to load into editor",
-          onclick: function() {
+          onclick: function () {
             // Load the selected past input into the textarea for editing
             // rather than executing immediately — the user opened the editor
             // because they want to review/modify before running.
             PD.state.drawerInputBuffer = JSON.stringify(inputObj, null, 2);
             // Clear any stale parse errors.
-            if (PD.state.drawerError && PD.state.drawerError.statusText === "Invalid JSON") {
+            if (
+              PD.state.drawerError &&
+              PD.state.drawerError.statusText === "Invalid JSON"
+            ) {
               PD.state.drawerError = null;
             }
-          }
+          },
         }, m("code.input-preview", PD.utils.inputPreview(inputObj)));
-      })
+      }),
     ]));
   }
 
@@ -299,7 +341,7 @@ PD.utils.drawerInputEditorContent = function() {
 // Mithril vnodes. Each tree instance gets a unique rootPath so expand/collapse
 // state is isolated.
 // Ref: pdCli/frontend/shared/jsonTree.js
-PD.utils.drawerBodyContent = function() {
+PD.utils.drawerBodyContent = function () {
   // While running, show live streaming text. ANSI escape codes (bold, colour)
   // are converted to styled HTML via pd.ansiToHtml() so Deno error output
   // renders with proper formatting instead of raw escape sequences.
@@ -313,7 +355,7 @@ PD.utils.drawerBodyContent = function() {
   // tree diverge from what Mithril's diff algorithm expects.
   // Ref: https://mithril.js.org/trust.html#avoid-trusting-html
   if (PD.state.drawerStatus === "running") {
-    var runningText = PD.state.drawerOutput;
+    const runningText = PD.state.drawerOutput;
     if (!runningText) return m("div", "Running...");
     return m("div", m.trust(pd.ansiToHtml(runningText)));
   }
@@ -323,40 +365,45 @@ PD.utils.drawerBodyContent = function() {
   // render a structured error panel with status code, message, and optional
   // raw output for partial stream errors.
   if (PD.state.drawerStatus === "error" && PD.state.drawerError) {
-    var err = PD.state.drawerError;
-    var sections = [];
+    const err = PD.state.drawerError;
+    const sections = [];
 
     // Title row: warning indicator + "Request Failed" + optional HTTP badge.
-    var titleChildren = [
+    const titleChildren = [
       m("span.drawer-error-icon", "\u26A0"),
-      m("span", " Request Failed")
+      m("span", " Request Failed"),
     ];
     // Show the HTTP status code as an inline badge when available.
     // A status of 0 indicates a network-level failure (DNS, CORS, etc.)
     // rather than an HTTP response, so we show "Network" instead.
     if (err.status) {
       titleChildren.push(
-        m("span.drawer-error-status", err.status + " " + err.statusText)
+        m("span.drawer-error-status", err.status + " " + err.statusText),
       );
     } else {
       titleChildren.push(
-        m("span.drawer-error-status", err.statusText || "Network Error")
+        m("span.drawer-error-status", err.statusText || "Network Error"),
       );
     }
     sections.push(m("div.drawer-error-title", titleChildren));
 
     // Error message body — ANSI codes stripped / styled for readability.
     // Wrapped in a nested div so m.trust() has a stable parent for diffing.
-    sections.push(m("div.drawer-error-message", m("div", m.trust(pd.ansiToHtml(err.message)))));
+    sections.push(
+      m(
+        "div.drawer-error-message",
+        m("div", m.trust(pd.ansiToHtml(err.message))),
+      ),
+    );
 
     // If the drawer accumulated partial output before the error (e.g. a
     // stream that broke mid-transfer), show it in a collapsible section
     // so the user can inspect what arrived before the failure.
-    var rawOutput = PD.state.drawerOutput;
+    const rawOutput = PD.state.drawerOutput;
     if (rawOutput && rawOutput !== err.message) {
       sections.push(m("details.drawer-error-details", [
         m("summary", "Raw output"),
-        m("pre", m("span", m.trust(pd.ansiToHtml(rawOutput))))
+        m("pre", m("span", m.trust(pd.ansiToHtml(rawOutput)))),
       ]));
     }
 
@@ -367,33 +414,40 @@ PD.utils.drawerBodyContent = function() {
   // After a run completes, loadDrawerTrace fetches the most recent trace
   // which contains the pipeline's structured input and output objects,
   // plus duration and step count metadata.
-  var trace = PD.state.drawerTrace;
+  const trace = PD.state.drawerTrace;
   if (trace) {
-    var sections = [];
+    const sections = [];
 
     // Metadata line: duration and step count.
-    var meta = [];
+    const meta = [];
     if (trace.durationMs != null) meta.push(trace.durationMs.toFixed(1) + "ms");
     if (trace.stepsTotal != null) meta.push(trace.stepsTotal + " steps");
     if (meta.length > 0) {
       sections.push(m("div", {
-        style: "color: var(--text-2); font-size: var(--font-size-0); margin-block-end: var(--size-3);"
+        style:
+          "color: var(--text-2); font-size: var(--font-size-0); margin-block-end: var(--size-3);",
       }, meta.join(" · ")));
     }
 
     // Output tree — the pipeline's final state after all steps ran.
     if (trace.output != null && typeof trace.output === "object") {
       sections.push(m("div", { style: "margin-block-end: var(--size-3);" }, [
-        m("strong", { style: "font-size: var(--font-size-0); display: block; margin-block-end: var(--size-1);" }, "Output"),
-        pd.jsonTree(trace.output, "drawer-trace-output")
+        m("strong", {
+          style:
+            "font-size: var(--font-size-0); display: block; margin-block-end: var(--size-1);",
+        }, "Output"),
+        pd.jsonTree(trace.output, "drawer-trace-output"),
       ]));
     }
 
     // Input tree — the pipeline's initial state before any steps ran.
     if (trace.input != null && typeof trace.input === "object") {
       sections.push(m("div", { style: "margin-block-end: var(--size-3);" }, [
-        m("strong", { style: "font-size: var(--font-size-0); display: block; margin-block-end: var(--size-1);" }, "Input"),
-        pd.jsonTree(trace.input, "drawer-trace-input")
+        m("strong", {
+          style:
+            "font-size: var(--font-size-0); display: block; margin-block-end: var(--size-1);",
+        }, "Input"),
+        pd.jsonTree(trace.input, "drawer-trace-input"),
       ]));
     }
 
@@ -403,7 +457,7 @@ PD.utils.drawerBodyContent = function() {
   // ── Parsed stdout output ──
   // If the run output was valid JSON but no trace is available yet,
   // render the parsed object as a jsonTree.
-  var parsed = PD.state.drawerParsedOutput;
+  const parsed = PD.state.drawerParsedOutput;
   if (parsed != null && typeof parsed === "object") {
     return pd.jsonTree(parsed, "drawer-output");
   }
@@ -413,7 +467,7 @@ PD.utils.drawerBodyContent = function() {
   // ANSI escape codes are converted to styled HTML so Deno compiler errors
   // (bold red "error:" prefix, underline markers, etc.) render legibly.
   // Wrapped in a div for stable vdom diffing (same reason as the running state).
-  var rawText = PD.state.drawerOutput;
+  const rawText = PD.state.drawerOutput;
   if (!rawText) return m("div");
   return m("div", m.trust(pd.ansiToHtml(rawText)));
 };

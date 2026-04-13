@@ -2,9 +2,8 @@ import type { CliInput } from "../pipedown.d.ts";
 import { pd, std } from "../deps.ts";
 import { readManifest } from "../packageManifest.ts";
 import { cliHelpTemplate } from "../stringTemplates.ts";
-import { pdBuild } from "../pdBuild.ts";
 
-const PIPEDOWN_DIR = ".pipedown";
+const _PIPEDOWN_DIR = ".pipedown";
 const PACKAGES_DIR = ".pipedown/packages";
 const INSTALLED_JSON = ".pipedown/installed.json";
 
@@ -87,7 +86,9 @@ export async function installCommand(input: CliInput) {
   const archivePath = input.flags._[1] as string;
   if (!archivePath) {
     console.error(
-      std.colors.red("Error: missing archive path. Usage: pd install <archive.tar.gz>"),
+      std.colors.red(
+        "Error: missing archive path. Usage: pd install <archive.tar.gz>",
+      ),
     );
     console.log(helpText);
     return input;
@@ -102,11 +103,15 @@ export async function installCommand(input: CliInput) {
   try {
     await Deno.stat(absArchivePath);
   } catch {
-    console.error(std.colors.red(`Error: archive not found: ${absArchivePath}`));
+    console.error(
+      std.colors.red(`Error: archive not found: ${absArchivePath}`),
+    );
     return input;
   }
 
-  console.log(std.colors.brightCyan(`Installing from ${std.basename(absArchivePath)}...`));
+  console.log(
+    std.colors.brightCyan(`Installing from ${std.basename(absArchivePath)}...`),
+  );
 
   // 1. Extract to a temp directory first, to read the manifest
   const tmpDir = await Deno.makeTempDir({ prefix: "pd-install-" });
@@ -131,7 +136,9 @@ export async function installCommand(input: CliInput) {
     try {
       manifest = await readManifest(tmpDir);
     } catch (e) {
-      console.error(std.colors.red(`Error: ${e.message}`));
+      // Cast `e` from unknown to Error — Deno/TS strict mode types catch vars as unknown.
+      // Ref: https://www.typescriptlang.org/tsconfig#useUnknownInCatchVariables
+      console.error(std.colors.red(`Error: ${(e as Error).message}`));
       return input;
     }
 
@@ -195,7 +202,13 @@ export async function installCommand(input: CliInput) {
     console.log(`  Package dir: ${std.relative(projectDir, packageDir)}`);
     console.log(`  Entry pipe: ${manifest.entry}`);
     console.log(
-      `\n  Run with: ${std.colors.brightCyan(`pd run ${std.relative(projectDir, std.join(packageDir, manifest.entry))}`)}`,
+      `\n  Run with: ${
+        std.colors.brightCyan(
+          `pd run ${
+            std.relative(projectDir, std.join(packageDir, manifest.entry))
+          }`,
+        )
+      }`,
     );
   } finally {
     // Clean up temp dir if it still exists (move might have consumed it)

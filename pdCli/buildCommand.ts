@@ -2,7 +2,7 @@ import { pd } from "../deps.ts";
 import { pdBuild } from "../pdBuild.ts";
 import { defaultTemplateFiles } from "../defaultTemplateFiles.ts";
 import { cliHelpTemplate } from "../stringTemplates.ts";
-import type { CliInput, BuildInput } from "../pipedown.d.ts";
+import type { BuildInput, CliInput } from "../pipedown.d.ts";
 
 const helpText = cliHelpTemplate({
   title: "Build",

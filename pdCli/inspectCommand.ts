@@ -1,4 +1,4 @@
-import type { CliInput } from "../pipedown.d.ts";
+import type { CliInput, PDError } from "../pipedown.d.ts";
 import { pd, std } from "../deps.ts";
 import { PD_DIR } from "./helpers.ts";
 import { pdBuild } from "../pdBuild.ts";
@@ -33,7 +33,8 @@ export async function inspectCommand(input: CliInput) {
 
   await pdBuild(input);
 
-  const pipeName = fileName.replace(/\.md$/, "").replace(/[\W_]+/g, " ").trim().replace(/\s+/g, "");
+  const pipeName = fileName.replace(/\.md$/, "").replace(/[\W_]+/g, " ").trim()
+    .replace(/\s+/g, "");
   const indexJsonPath = std.join(PD_DIR, pipeName, "index.json");
 
   try {
@@ -41,8 +42,14 @@ export async function inspectCommand(input: CliInput) {
 
     if (stepArg !== undefined) {
       const stepIndex = parseInt(stepArg);
-      if (isNaN(stepIndex) || stepIndex < 0 || stepIndex >= pipeData.steps.length) {
-        console.error(`Error: step index ${stepArg} is out of range (0-${pipeData.steps.length - 1})`);
+      if (
+        isNaN(stepIndex) || stepIndex < 0 || stepIndex >= pipeData.steps.length
+      ) {
+        console.error(
+          `Error: step index ${stepArg} is out of range (0-${
+            pipeData.steps.length - 1
+          })`,
+        );
         return input;
       }
 
@@ -75,7 +82,16 @@ export async function inspectCommand(input: CliInput) {
         cleanName: pipeData.cleanName,
         config: pipeData.config,
         steps: pipeData.steps.map(
-          (s: { name: string; funcName: string; code: string; inList: boolean; config?: unknown }, i: number) => ({
+          (
+            s: {
+              name: string;
+              funcName: string;
+              code: string;
+              inList: boolean;
+              config?: unknown;
+            },
+            i: number,
+          ) => ({
             index: i,
             name: s.name,
             funcName: s.funcName,
@@ -89,9 +105,15 @@ export async function inspectCommand(input: CliInput) {
       console.log(JSON.stringify(output, null, 2));
     }
   } catch (e) {
-    console.error(`Error: could not read pipe data for "${pipeName}": ${e.message}`);
+    // Cast `e` from unknown to Error for .message access (TS strict catch handling).
+    console.error(
+      `Error: could not read pipe data for "${pipeName}": ${
+        (e as Error).message
+      }`,
+    );
     input.errors = input.errors || [];
-    input.errors.push(e);
+    // Spread Error props and add `func` to satisfy PDError shape.
+    input.errors.push({ ...(e as Error), func: "inspect" } as PDError);
   }
 
   return input;

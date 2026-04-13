@@ -1,4 +1,4 @@
-import {pd, std} from "./deps.ts";
+import { pd, std } from "./deps.ts";
 import * as templates from "./stringTemplates.ts";
 import type { BuildInput } from "./pipedown.d.ts";
 import { PD_DIR } from "./pdCli/helpers.ts";
@@ -38,7 +38,10 @@ async function writeDenoImportMap(input: BuildInput) {
   // Resolve installed packages under @pkg/ prefix
   try {
     const raw = await Deno.readTextFile(".pipedown/installed.json");
-    const installed: Record<string, { entry: string; packageDir: string; exports?: Record<string, string> }> = JSON.parse(raw);
+    const installed: Record<
+      string,
+      { entry: string; packageDir: string; exports?: Record<string, string> }
+    > = JSON.parse(raw);
 
     for (const [pkgName, pkg] of Object.entries(installed)) {
       const pkgPdDir = std.join(pkg.packageDir, ".pd");
@@ -62,9 +65,9 @@ async function writeDenoImportMap(input: BuildInput) {
       }
 
       // @pkg/{pkgName} shorthand for the entry pipe
-      const entryPipe = pipes.find(p => p.name === entryStem)
-        || pipes.find(p => p.name.toLowerCase() === entryStem.toLowerCase())
-        || (pipes.length === 1 ? pipes[0] : null);
+      const entryPipe = pipes.find((p) => p.name === entryStem) ||
+        pipes.find((p) => p.name.toLowerCase() === entryStem.toLowerCase()) ||
+        (pipes.length === 1 ? pipes[0] : null);
       if (entryPipe) {
         input.importMap.imports[`@pkg/${pkgName}`] = entryPipe.path;
       }
@@ -75,12 +78,15 @@ async function writeDenoImportMap(input: BuildInput) {
 
   await Deno.writeTextFile(
     std.join(PD_DIR, "deno.json"),
-    JSON.stringify({
-      ...input.importMap,
-
-      // extend .pd deno.json config with "nodeModulesDir": "auto"
-      // nodeModulesDir: "auto"
-    }, null, 2),
+    JSON.stringify(
+      {
+        ...input.importMap,
+        // extend .pd deno.json config with "nodeModulesDir": "auto"
+        // nodeModulesDir: "auto"
+      },
+      null,
+      2,
+    ),
   );
   return input;
 }
@@ -100,10 +106,10 @@ async function writeReplEvalFile(input: BuildInput) {
   );
 }
 
-export async function defaultTemplateFiles(input: BuildInput){
+export async function defaultTemplateFiles(input: BuildInput) {
   const funcs = [
     writeDenoImportMap,
     writeReplEvalFile,
-  ]
-  return await pd.process(funcs, input, {})
+  ];
+  return await pd.process(funcs, input, {});
 }

@@ -2,8 +2,11 @@ import {
   assertEquals,
   assertExists,
   assertStringIncludes,
+  // deno-lint-ignore no-import-prefix no-unversioned-import
 } from "jsr:@std/assert";
+// deno-lint-ignore no-import-prefix
 import { exists } from "jsr:@std/fs@1.0.5";
+// deno-lint-ignore no-import-prefix
 import { join } from "jsr:@std/path@1.0.7";
 import { mdToPipe } from "./mdToPipe.ts";
 import { pipeToScript } from "./pipeToScript.ts";
@@ -17,24 +20,26 @@ Deno.test("integration: markdown to executable script", async (t) => {
     pipe: Pipe;
     script: Awaited<ReturnType<typeof pipeToScript>>;
   }> {
-    const parseResult = await mdToPipe({
-      markdown,
-      pipe: {
-        name: "",
-        cleanName: "",
-        steps: [],
-        dir: "",
-        absoluteDir: "",
-        fileName: "",
-        mdPath: "",
-        config: {
-          inputs: [],
-          build: [],
-          skip: [],
-          exclude: [],
+    const parseResult = await mdToPipe(
+      {
+        markdown,
+        pipe: {
+          name: "",
+          cleanName: "",
+          steps: [],
+          dir: "",
+          absoluteDir: "",
+          fileName: "",
+          mdPath: "",
+          config: {
+            inputs: [],
+            build: [],
+            skip: [],
+            exclude: [],
+          },
         },
-      },
-    } as { markdown: string; pipe: Pipe } & Input);
+      } as { markdown: string; pipe: Pipe } & Input,
+    );
 
     const scriptResult = await pipeToScript({ pipe: parseResult.pipe });
     return { pipe: parseResult.pipe as Pipe, script: scriptResult };
@@ -173,8 +178,10 @@ input.result = capitalize(input.validated);
     assertStringIncludes(script.script!, 'from "npm:lodash"');
   });
 
-  await t.step("duplicate imports are deduplicated in generated output", async () => {
-    const { script } = await fullPipeline(`# Duplicate Import Test
+  await t.step(
+    "duplicate imports are deduplicated in generated output",
+    async () => {
+      const { script } = await fullPipeline(`# Duplicate Import Test
 
 ## First
 
@@ -190,13 +197,18 @@ import { shared } from "npm:shared";
 input.second = shared();
 \`\`\`
 `);
-    assertEquals(script.success, true);
-    const importCount = script.script!.match(/import \{ shared \} from "npm:shared";/g)?.length ?? 0;
-    assertEquals(importCount, 1);
-  });
+      assertEquals(script.success, true);
+      const importCount =
+        script.script!.match(/import \{ shared \} from "npm:shared";/g)
+          ?.length ?? 0;
+      assertEquals(importCount, 1);
+    },
+  );
 
-  await t.step("skip blocks are excluded from steps and generated script", async () => {
-    const { pipe, script } = await fullPipeline(`# Skip Test
+  await t.step(
+    "skip blocks are excluded from steps and generated script",
+    async () => {
+      const { pipe, script } = await fullPipeline(`# Skip Test
 
 \`\`\`js skip
 import { pipe } from "./skipTest.js";
@@ -208,15 +220,26 @@ import { pipe } from "./skipTest.js";
 input.result = "done";
 \`\`\`
 `);
-    assertEquals(pipe.steps.length, 1);
-    assertEquals(pipe.steps[0].funcName, "RealStep");
-    assertEquals(script.success, true);
-    assertEquals(script.script!.includes("skipTest.js"), false, "Skip block import should not appear in generated script");
-    assertEquals(script.script!.includes("import { pipe }"), false, "Skip block import should not leak");
-  });
+      assertEquals(pipe.steps.length, 1);
+      assertEquals(pipe.steps[0].funcName, "RealStep");
+      assertEquals(script.success, true);
+      assertEquals(
+        script.script!.includes("skipTest.js"),
+        false,
+        "Skip block import should not appear in generated script",
+      );
+      assertEquals(
+        script.script!.includes("import { pipe }"),
+        false,
+        "Skip block import should not leak",
+      );
+    },
+  );
 
-  await t.step("skip blocks with imports do not contaminate other steps", async () => {
-    const { pipe, script } = await fullPipeline(`# Multi Skip
+  await t.step(
+    "skip blocks with imports do not contaminate other steps",
+    async () => {
+      const { pipe, script } = await fullPipeline(`# Multi Skip
 
 \`\`\`js skip
 import { foo } from "./foo.js";
@@ -235,11 +258,16 @@ input.a = bar();
 input.b = true;
 \`\`\`
 `);
-    assertEquals(pipe.steps.length, 2);
-    assertEquals(script.success, true);
-    assertStringIncludes(script.script!, 'from "npm:bar"');
-    assertEquals(script.script!.includes("foo.js"), false, "Skip block import should not appear");
-  });
+      assertEquals(pipe.steps.length, 2);
+      assertEquals(script.success, true);
+      assertStringIncludes(script.script!, 'from "npm:bar"');
+      assertEquals(
+        script.script!.includes("foo.js"),
+        false,
+        "Skip block import should not appear",
+      );
+    },
+  );
 
   await t.step("pipe JSON structure matches expected format", async () => {
     const { pipe } = await fullPipeline(`# JSON Structure
@@ -288,7 +316,9 @@ Deno.test("integration: pdBuild generates expected files", async (t) => {
 
   const pdDirExists = await exists(pdDir);
   if (!pdDirExists) {
-    console.log("Skipping pdBuild file tests - .pd directory not found. Run `pd build` in testPipes/ first.");
+    console.log(
+      "Skipping pdBuild file tests - .pd directory not found. Run `pd build` in testPipes/ first.",
+    );
     return;
   }
 

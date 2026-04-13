@@ -18,8 +18,8 @@
 PD.components.ExtractBar = {
   // ── Lifecycle: register Escape handler and auto-focus the name input ──
   // Ref: https://mithril.js.org/lifecycle-methods.html#oncreate
-  oncreate: function(vnode) {
-    vnode.state._keyHandler = function(e) {
+  oncreate: function (vnode) {
+    vnode.state._keyHandler = function (e) {
       if (e.key === "Escape" && PD.state.extractMode) {
         e.preventDefault();
         PD.actions.exitExtractMode();
@@ -32,9 +32,9 @@ PD.components.ExtractBar = {
   // The bar appears/disappears based on extractMode, so we re-focus
   // the input each time it becomes visible.
   // Ref: https://mithril.js.org/lifecycle-methods.html#onupdate
-  onupdate: function(vnode) {
+  onupdate: function (vnode) {
     if (PD.state.extractMode) {
-      var input = vnode.dom.querySelector(".extract-name-input");
+      const input = vnode.dom.querySelector(".extract-name-input");
       // Only focus if no other element inside the bar has focus already
       // (prevents stealing focus from Cancel button etc.)
       if (input && !vnode.dom.contains(document.activeElement)) {
@@ -44,30 +44,34 @@ PD.components.ExtractBar = {
   },
 
   // ── Lifecycle: clean up keyboard handler ──
-  onremove: function(vnode) {
+  onremove: function (vnode) {
     if (vnode.state._keyHandler) {
       document.removeEventListener("keydown", vnode.state._keyHandler);
     }
   },
 
-  view: function() {
+  view: function () {
     // Only render when extract mode is active. Returning null removes the
     // bar from the DOM entirely.
     if (!PD.state.extractMode) return null;
 
     // Count selected steps for the label
-    var selectedCount = Object.keys(PD.state.extractSelected)
-      .filter(function(k) { return PD.state.extractSelected[k]; })
+    const selectedCount = Object.keys(PD.state.extractSelected)
+      .filter(function (k) {
+        return PD.state.extractSelected[k];
+      })
       .length;
 
-    var canExtract = selectedCount > 0 &&
+    const canExtract = selectedCount > 0 &&
       PD.state.extractName.trim().length > 0 &&
       !PD.state.extracting;
 
     return m(".extract-bar", [
       // ── Selected count label ──
-      m("span.extract-count",
-        selectedCount + " step" + (selectedCount !== 1 ? "s" : "") + " selected"
+      m(
+        "span.extract-count",
+        selectedCount + " step" + (selectedCount !== 1 ? "s" : "") +
+          " selected",
       ),
 
       // ── Name input ──
@@ -77,30 +81,30 @@ PD.components.ExtractBar = {
         type: "text",
         placeholder: "New pipe name...",
         value: PD.state.extractName,
-        oncreate: function(vnode) {
+        oncreate: function (vnode) {
           vnode.dom.focus();
         },
-        oninput: function(e) {
+        oninput: function (e) {
           PD.state.extractName = e.target.value;
         },
-        onkeydown: function(e) {
+        onkeydown: function (e) {
           if (e.key === "Enter" && canExtract) {
             e.preventDefault();
             PD.actions.performExtract();
           }
-        }
+        },
       }),
 
       // ── Extract button ──
       m("button.tb-btn.primary", {
         onclick: PD.actions.performExtract,
-        disabled: !canExtract
+        disabled: !canExtract,
       }, PD.state.extracting ? "Extracting..." : "Extract"),
 
       // ── Cancel button ──
       m("button.tb-btn", {
-        onclick: PD.actions.exitExtractMode
-      }, "Cancel")
+        onclick: PD.actions.exitExtractMode,
+      }, "Cancel"),
     ]);
-  }
+  },
 };

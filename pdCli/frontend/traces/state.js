@@ -14,7 +14,7 @@ globalThis.PD = {
     // `true` or absent = collapsed. Persisted to localStorage so the user's
     // preferred expand/collapse state survives page reloads.
     // Ref: https://developer.mozilla.org/en-US/docs/Web/API/Window/localStorage
-    expanded: (function() {
+    expanded: (function () {
       const saved = localStorage.getItem("pd-traces-expanded");
       if (saved) return JSON.parse(saved);
     })(),
@@ -25,7 +25,7 @@ globalThis.PD = {
     // Tracks which trace steps are expanded in the detail view.
     // Restored from localStorage so the user's drill-down survives reloads.
     // Ref: https://developer.mozilla.org/en-US/docs/Web/API/Window/localStorage
-    expandedSteps: (function() {
+    expandedSteps: (function () {
       const saved = localStorage.getItem("pd-traces-expandedSteps");
       if (saved) return JSON.parse(saved);
     })(),
@@ -33,15 +33,17 @@ globalThis.PD = {
     // ── Active detail tab ──
     // Which tab (steps/input/output/raw) is active in the trace detail pane.
     // Persisted so navigating away and back keeps the user's preferred view.
-    detailTab: (function() {
+    detailTab: (function () {
       const saved = localStorage.getItem("pd-traces-detailTab");
-      if (saved && ["steps","input","output","raw"].indexOf(saved) !== -1) return saved;
+      if (saved && ["steps", "input", "output", "raw"].indexOf(saved) !== -1) {
+        return saved;
+      }
       return "steps";
-    })()
+    })(),
   },
   actions: {},
   utils: {},
-  components: {}
+  components: {},
 };
 
 // ── formatTimestamp ──
@@ -50,23 +52,25 @@ globalThis.PD = {
 // filenames. We parse them as numbers first, then fall back to ISO parsing
 // for any legacy entries that haven't been migrated yet.
 // Ref: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/toLocaleString
-PD.utils.formatTimestamp = function(ts) {
+PD.utils.formatTimestamp = function (ts) {
   try {
     // ── Try epoch-millis first (new format) ──
-    var epoch = Number(ts);
+    const epoch = Number(ts);
     if (!Number.isNaN(epoch) && epoch > 0) {
       return new Date(epoch).toLocaleString();
     }
     // ── Fall back to ISO string parsing (legacy) ──
-    var d = new Date(ts);
+    const d = new Date(ts);
     if (!Number.isNaN(d.getTime())) return d.toLocaleString();
     return ts;
-  } catch(_) { return ts; }
+  } catch (_) {
+    return ts;
+  }
 };
 
-PD.utils.groupTraces = function(traces) {
+PD.utils.groupTraces = function (traces) {
   const grouped = {};
-  traces.forEach(function(t) {
+  traces.forEach(function (t) {
     if (!grouped[t.project]) grouped[t.project] = {};
     if (!grouped[t.project][t.pipe]) grouped[t.project][t.pipe] = [];
     grouped[t.project][t.pipe].push(t);
@@ -74,18 +78,18 @@ PD.utils.groupTraces = function(traces) {
   return grouped;
 };
 
-PD.actions.loadTraces = function() {
+PD.actions.loadTraces = function () {
   PD.state.loading = true;
-  m.request({ method: "GET", url: "/api/traces" }).then(function(data) {
+  m.request({ method: "GET", url: "/api/traces" }).then(function (data) {
     PD.state.traces = data;
     PD.state.loading = false;
-  }).catch(function() {
+  }).catch(function () {
     PD.state.traces = [];
     PD.state.loading = false;
-  })
+  });
 };
 
-PD.actions.selectTrace = function(entry) {
+PD.actions.selectTrace = function (entry) {
   PD.state.selected = entry;
   PD.state.traceData = null;
   PD.state.traceLoading = true;
@@ -106,12 +110,12 @@ PD.actions.selectTrace = function(entry) {
     params: {
       project: entry.project,
       pipe: entry.pipe,
-      timestamp: entry.timestamp + ".json"
-    }
-  }).then(function(data) {
+      timestamp: entry.timestamp + ".json",
+    },
+  }).then(function (data) {
     PD.state.traceData = data;
     PD.state.traceLoading = false;
-  }).catch(function() {
+  }).catch(function () {
     PD.state.traceData = null;
     PD.state.traceLoading = false;
   });
@@ -129,13 +133,12 @@ PD.actions.selectTrace = function(entry) {
 // @param {string} key — project name or "project/pipe" path to toggle
 // Ref: Sidebar.js — group header onclick
 // Ref: https://developer.mozilla.org/en-US/docs/Web/API/Storage/setItem
-PD.actions.toggleExpand = function(key) {
+PD.actions.toggleExpand = function (key) {
   const current = PD.state.expanded[key];
   // absent or true → expand (false); false → collapse (true)
   PD.state.expanded[key] = current === false;
   // Persist the full map so every group the user has touched is remembered.
-  localStorage.setItem("pd-traces-expanded",
-    JSON.stringify(PD.state.expanded));
+  localStorage.setItem("pd-traces-expanded", JSON.stringify(PD.state.expanded));
 };
 
 // ── restoreFromHash ──
@@ -147,23 +150,26 @@ PD.actions.toggleExpand = function(key) {
 //
 // @return {boolean} — true if a trace was restored
 // Ref: shared/hashRouter.js
-PD.actions.restoreFromHash = function() {
-  var segments = pd.hashRouter.getSegments();
+PD.actions.restoreFromHash = function () {
+  const segments = pd.hashRouter.getSegments();
   // Need exactly 3 segments: [project, pipe, timestamp]
   if (segments.length !== 3) return false;
 
-  var project = segments[0];
-  var pipe = segments[1];
-  var timestamp = segments[2];
+  const project = segments[0];
+  const pipe = segments[1];
+  const timestamp = segments[2];
 
   // Don't re-select if already viewing this trace
-  if (PD.utils.isSelected({ project: project, pipe: pipe, timestamp: timestamp })) {
+  if (
+    PD.utils.isSelected({ project: project, pipe: pipe, timestamp: timestamp })
+  ) {
     return true;
   }
 
   // Search the loaded traces for a match
-  var match = PD.state.traces.find(function(t) {
-    return t.project === project && t.pipe === pipe && t.timestamp === timestamp;
+  const match = PD.state.traces.find(function (t) {
+    return t.project === project && t.pipe === pipe &&
+      t.timestamp === timestamp;
   });
 
   if (match) {
@@ -176,22 +182,24 @@ PD.actions.restoreFromHash = function() {
     if (PD.state.expanded[project] !== false) {
       PD.state.expanded[project] = false;
     }
-    var pipeKey = project + "/" + pipe;
+    const pipeKey = project + "/" + pipe;
     if (PD.state.expanded[pipeKey] !== false) {
       PD.state.expanded[pipeKey] = false;
     }
     // Persist expansion state to localStorage
     try {
-      localStorage.setItem("pd-traces-expanded",
-        JSON.stringify(PD.state.expanded));
-    } catch(e) { /* ignore */ }
+      localStorage.setItem(
+        "pd-traces-expanded",
+        JSON.stringify(PD.state.expanded),
+      );
+    } catch (_e) { /* ignore */ }
 
     return true;
   }
   return false;
 };
 
-PD.utils.isSelected = function(entry) {
+PD.utils.isSelected = function (entry) {
   return PD.state.selected &&
     PD.state.selected.project === entry.project &&
     PD.state.selected.pipe === entry.pipe &&

@@ -1,5 +1,7 @@
+// deno-lint-ignore no-import-prefix no-unversioned-import
 import { assertEquals } from "jsr:@std/assert";
 import { rangeFinder } from "./rangeFinder.ts";
+// deno-lint-ignore no-import-prefix
 import MarkdownIt from "npm:markdown-it@14.1.0";
 import type { RangeFinderInput, Token } from "./pipedown.d.ts";
 
@@ -127,31 +129,42 @@ Deno.test("rangeFinder", async (t) => {
   });
 
   await t.step("detects zod schema blocks", async () => {
-    const result = await findAllRanges('```zod\nexport const schema = z.object({});\n```');
+    const result = await findAllRanges(
+      "```zod\nexport const schema = z.object({});\n```",
+    );
     assertEquals(result.ranges.schemaBlocks.length, 1);
     assertEquals(result.ranges.codeBlocks.length, 0);
     assertEquals(result.ranges.metaBlocks.length, 0);
   });
 
   await t.step("excludes code blocks with skip attribute", async () => {
-    const result = await findAllRanges("```js skip\nimport { pipe } from './foo.js';\n```");
+    const result = await findAllRanges(
+      "```js skip\nimport { pipe } from './foo.js';\n```",
+    );
     assertEquals(result.ranges.codeBlocks.length, 0);
   });
 
   await t.step("excludes ts code blocks with skip attribute", async () => {
-    const result = await findAllRanges("```ts skip\nconsole.log('skipped');\n```");
+    const result = await findAllRanges(
+      "```ts skip\nconsole.log('skipped');\n```",
+    );
     assertEquals(result.ranges.codeBlocks.length, 0);
   });
 
-  await t.step("skip attribute does not affect non-skip code blocks", async () => {
-    const result = await findAllRanges(
-      "```js skip\nskipped\n```\n\n```js\nkept\n```",
-    );
-    assertEquals(result.ranges.codeBlocks.length, 1);
-  });
+  await t.step(
+    "skip attribute does not affect non-skip code blocks",
+    async () => {
+      const result = await findAllRanges(
+        "```js skip\nskipped\n```\n\n```js\nkept\n```",
+      );
+      assertEquals(result.ranges.codeBlocks.length, 1);
+    },
+  );
 
   await t.step("skip attribute does not affect meta blocks", async () => {
-    const result = await findAllRanges('```json\n{"key": "value"}\n```\n\n```ts skip\nskipped\n```');
+    const result = await findAllRanges(
+      '```json\n{"key": "value"}\n```\n\n```ts skip\nskipped\n```',
+    );
     assertEquals(result.ranges.metaBlocks.length, 1);
     assertEquals(result.ranges.codeBlocks.length, 0);
   });

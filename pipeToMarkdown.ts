@@ -1,4 +1,4 @@
-import type { Pipe, Step, PipeConfig } from "./pipedown.d.ts";
+import type { Pipe, PipeConfig, Step } from "./pipedown.d.ts";
 
 /**
  * Converts a Pipe object back to markdown source.
@@ -30,7 +30,8 @@ function canReconstructLosslessly(pipe: Pipe): boolean {
   if (pipe.steps.length === 0) return true; // header-only pipe
   // Need at least code block line ranges for all steps
   return pipe.steps.every(
-    (s) => s.sourceMap?.codeStartLine != null && s.sourceMap?.codeEndLine != null,
+    (s) =>
+      s.sourceMap?.codeStartLine != null && s.sourceMap?.codeEndLine != null,
   );
 }
 
@@ -49,7 +50,8 @@ function isDSLDirective(line: string): boolean {
   // Matches all pipedown list-item directives, including "method" and "type"
   // for HTTP method filtering and response content-type shorthand.
   // Ref: mdToPipe.ts setupChecks() regex for the authoritative directive list
-  return /^\s*-\s*(?:check|when|if|flags|or|and|not|route|stop|only|mock|method|type)[:\s]/.test(line);
+  return /^\s*-\s*(?:check|when|if|flags|or|and|not|route|stop|only|mock|method|type)[:\s]/
+    .test(line);
 }
 
 /**
@@ -113,9 +115,9 @@ function replaceStructuralBlocks(
     // Detect a fenced code block opening: ```zod, ```json, ```ts, etc.
     const fenceMatch = line.match(/^(\s*)(```+)(\w*)/);
     if (fenceMatch) {
-      const indent = fenceMatch[1];
+      const _indent = fenceMatch[1];
       const fence = fenceMatch[2]; // the ``` characters
-      const lang = fenceMatch[3];  // language tag (zod, json, ts, ...)
+      const lang = fenceMatch[3]; // language tag (zod, json, ts, ...)
 
       // Find the matching close fence
       let closeIdx = i + 1;
@@ -199,10 +201,12 @@ function losslessReconstruct(pipe: Pipe): string {
   const stepBoundaries: Array<{ start: number; end: number }> = [];
   for (let i = 0; i < pipe.steps.length; i++) {
     const step = pipe.steps[i];
-    const start = step.sourceMap?.headingLine ?? step.sourceMap?.codeStartLine ?? 0;
+    const start = step.sourceMap?.headingLine ??
+      step.sourceMap?.codeStartLine ?? 0;
     const nextStep = pipe.steps[i + 1];
     const end = nextStep
-      ? (nextStep.sourceMap?.headingLine ?? nextStep.sourceMap?.codeStartLine ?? sourceLines.length)
+      ? (nextStep.sourceMap?.headingLine ?? nextStep.sourceMap?.codeStartLine ??
+        sourceLines.length)
       : sourceLines.length;
     stepBoundaries.push({ start, end });
   }
@@ -216,23 +220,21 @@ function losslessReconstruct(pipe: Pipe): string {
   if (headerEnd > 0) {
     // Detect which header-level fields have changed since parse time.
     // Each follows the same "original vs current" pattern used for steps.
-    const pipeDescChanged =
-      pipe.originalPipeDescription !== undefined
-        ? pipe.pipeDescription !== pipe.originalPipeDescription
-        : pipe.pipeDescription !== undefined && pipe.pipeDescription !== pipe.originalPipeDescription;
+    const pipeDescChanged = pipe.originalPipeDescription !== undefined
+      ? pipe.pipeDescription !== pipe.originalPipeDescription
+      : pipe.pipeDescription !== undefined &&
+        pipe.pipeDescription !== pipe.originalPipeDescription;
 
-    const schemaChanged =
-      pipe.originalSchema !== undefined
-        ? pipe.schema !== pipe.originalSchema
-        // Schema was absent at parse time but has now been set (first-time generation)
-        : pipe.schema !== undefined && pipe.schema !== "";
+    const schemaChanged = pipe.originalSchema !== undefined
+      ? pipe.schema !== pipe.originalSchema
+      // Schema was absent at parse time but has now been set (first-time generation)
+      : pipe.schema !== undefined && pipe.schema !== "";
 
     const currentConfigBlock = buildConfigBlock(pipe.config);
-    const configChanged =
-      pipe.originalConfig !== undefined
-        ? currentConfigBlock !== pipe.originalConfig
-        // Config was absent at parse time but now has meaningful content
-        : currentConfigBlock !== undefined;
+    const configChanged = pipe.originalConfig !== undefined
+      ? currentConfigBlock !== pipe.originalConfig
+      // Config was absent at parse time but now has meaningful content
+      : currentConfigBlock !== undefined;
 
     const headerChanged = pipeDescChanged || schemaChanged || configChanged;
 
@@ -242,7 +244,10 @@ function losslessReconstruct(pipe: Pipe): string {
       // regions independently.
       let h1Line = -1;
       for (let i = 0; i < headerEnd; i++) {
-        if (/^#\s/.test(sourceLines[i])) { h1Line = i; break; }
+        if (/^#\s/.test(sourceLines[i])) {
+          h1Line = i;
+          break;
+        }
       }
 
       if (h1Line >= 0) {
@@ -250,7 +255,11 @@ function losslessReconstruct(pipe: Pipe): string {
         output.push(...sourceLines.slice(0, h1Line + 1));
 
         // Find where the description region ends (first ``` block or headerEnd)
-        const descEnd = findHeaderDescriptionEnd(sourceLines, h1Line, headerEnd);
+        const descEnd = findHeaderDescriptionEnd(
+          sourceLines,
+          h1Line,
+          headerEnd,
+        );
 
         // ── Description region (H1+1 to first structural block) ──
         if (pipeDescChanged) {
@@ -270,9 +279,14 @@ function losslessReconstruct(pipe: Pipe): string {
           // Walk the structural region, replacing changed blocks and
           // preserving everything else verbatim.
           replaceStructuralBlocks(
-            sourceLines, descEnd, headerEnd, output,
-            pipe.schema, schemaChanged,
-            currentConfigBlock, configChanged,
+            sourceLines,
+            descEnd,
+            headerEnd,
+            output,
+            pipe.schema,
+            schemaChanged,
+            currentConfigBlock,
+            configChanged,
           );
         } else if (descEnd < headerEnd) {
           // Structural blocks unchanged — emit verbatim
@@ -302,17 +316,17 @@ function losslessReconstruct(pipe: Pipe): string {
     const codeEnd = step.sourceMap!.codeEndLine!;
 
     // Detect which fields have changed since parse time
-    const nameChanged =
-      step.originalName !== undefined && step.name !== step.originalName;
-    const descChanged =
-      step.originalDescription !== undefined
-        ? step.description !== step.originalDescription
-        // When originalDescription is undefined but description is now set,
-        // a new description has been added (e.g., LLM generated one where
-        // none existed before)
-        : step.description !== undefined && step.description !== step.originalDescription;
-    const codeChanged =
-      step.originalCode !== undefined && step.code !== step.originalCode;
+    const nameChanged = step.originalName !== undefined &&
+      step.name !== step.originalName;
+    const descChanged = step.originalDescription !== undefined
+      ? step.description !== step.originalDescription
+      // When originalDescription is undefined but description is now set,
+      // a new description has been added (e.g., LLM generated one where
+      // none existed before)
+      : step.description !== undefined &&
+        step.description !== step.originalDescription;
+    const codeChanged = step.originalCode !== undefined &&
+      step.code !== step.originalCode;
 
     // Fast path: nothing changed — copy entire section verbatim
     if (!nameChanged && !descChanged && !codeChanged) {
@@ -372,7 +386,12 @@ function losslessReconstruct(pipe: Pipe): string {
       output.push(sourceLines[codeStart]);
 
       // Detect indentation from the original content lines (for list-indented blocks)
-      const codeIndent = detectCodeIndent(sourceLines, codeStart, codeEnd, step.originalCode!);
+      const codeIndent = detectCodeIndent(
+        sourceLines,
+        codeStart,
+        codeEnd,
+        step.originalCode!,
+      );
 
       // Emit new code with proper indentation
       const newCodeLines = step.code.trimEnd().split("\n");
@@ -544,7 +563,10 @@ function buildDirectives(config: Step["config"]): string[] {
 
   // HTTP method guard — emit one directive per allowed method.
   // Ref: pdPipe/pdUtils.ts funcWrapper() for runtime evaluation
-  for (const method of (config as Record<string, unknown>).methods as string[] || []) {
+  for (
+    const method of (config as Record<string, unknown>).methods as string[] ||
+      []
+  ) {
     directives.push(`method: ${method}`);
   }
 
@@ -574,9 +596,21 @@ export function buildConfigBlock(config?: PipeConfig): string | undefined {
 
   // Include custom config keys (not internal ones)
   const internalKeys = new Set([
-    "inputs", "build", "templates", "skip", "exclude",
-    "checks", "or", "and", "not", "routes", "flags",
-    "only", "stop", "name", "inGlobal",
+    "inputs",
+    "build",
+    "templates",
+    "skip",
+    "exclude",
+    "checks",
+    "or",
+    "and",
+    "not",
+    "routes",
+    "flags",
+    "only",
+    "stop",
+    "name",
+    "inGlobal",
   ]);
   for (const [key, value] of Object.entries(config)) {
     if (!internalKeys.has(key) && value !== undefined) {

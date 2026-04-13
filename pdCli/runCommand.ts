@@ -30,7 +30,6 @@ const helpText = cliHelpTemplate({
   ],
 });
 
-
 export async function runCommand(input: CliInput) {
   if (pd.$p.get(input, "/flags/help") || pd.$p.get(input, "/flags/h")) {
     console.log(helpText);
@@ -55,7 +54,7 @@ export async function runCommand(input: CliInput) {
       success: true,
     });
 
-    await pdRun({scriptName, testInput, entryPoint});
+    await pdRun({ scriptName, testInput, entryPoint });
 
     // Notify pd-desktop that the pipe run finished. The dashboard server
     // path handles this via the spawnAndStream onComplete callback, but

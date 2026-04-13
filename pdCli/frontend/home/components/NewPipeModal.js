@@ -13,8 +13,8 @@
 PD.components.NewPipeModal = {
   // ── Lifecycle: register Escape handler and focus the name input ──
   // Ref: https://mithril.js.org/lifecycle-methods.html#oncreate
-  oncreate: function(vnode) {
-    vnode.state._keyHandler = function(e) {
+  oncreate: function (vnode) {
+    vnode.state._keyHandler = function (e) {
       if (e.key === "Escape") {
         e.preventDefault();
         PD.actions.closeNewPipeModal();
@@ -25,13 +25,13 @@ PD.components.NewPipeModal = {
   },
 
   // ── Lifecycle: clean up ──
-  onremove: function(vnode) {
+  onremove: function (vnode) {
     if (vnode.state._keyHandler) {
       document.removeEventListener("keydown", vnode.state._keyHandler);
     }
   },
 
-  view: function() {
+  view: function () {
     // Only render when the modal is open. Returning null removes the
     // component from the DOM entirely (and triggers onremove/oncreate
     // on the next open).
@@ -45,18 +45,22 @@ PD.components.NewPipeModal = {
     // Ref: PD.actions.loadAllProjects in state.js
     const seen = {};
     // Primary source: allProjects (from GET /api/projects)
-    PD.state.allProjects.forEach(function(p) { seen[p.name] = true; });
+    PD.state.allProjects.forEach(function (p) {
+      seen[p.name] = true;
+    });
     // Fallback: recentPipes — covers edge cases where allProjects hasn't loaded
-    PD.state.recentPipes.forEach(function(p) { seen[p.projectName] = true; });
+    PD.state.recentPipes.forEach(function (p) {
+      seen[p.projectName] = true;
+    });
     const projectNames = Object.keys(seen).sort();
 
     return m(".modal-overlay", {
       // Clicking the backdrop (outside the modal box) closes the modal.
-      onclick: function(e) {
+      onclick: function (e) {
         if (e.target === e.currentTarget) {
           PD.actions.closeNewPipeModal();
         }
-      }
+      },
     }, [
       m(".modal-box", [
         m("h2", "New Pipe"),
@@ -67,19 +71,19 @@ PD.components.NewPipeModal = {
           type: "text",
           placeholder: "e.g. Fetch RSS Digest",
           value: PD.state.newPipeName,
-          oncreate: function(vnode) {
+          oncreate: function (vnode) {
             vnode.dom.focus();
           },
-          oninput: function(e) {
+          oninput: function (e) {
             PD.state.newPipeName = e.target.value;
           },
           // Enter submits the form — standard modal UX.
-          onkeydown: function(e) {
+          onkeydown: function (e) {
             if (e.key === "Enter") {
               e.preventDefault();
               PD.actions.createNewPipe();
             }
-          }
+          },
         }),
 
         // ── Project selector ──
@@ -88,29 +92,33 @@ PD.components.NewPipeModal = {
         // project is preselected and no dropdown is needed.
         projectNames.length > 1
           ? [
-              m("label.modal-label", "Project"),
-              m("select.modal-input", {
+            m("label.modal-label", "Project"),
+            m(
+              "select.modal-input",
+              {
                 value: PD.state.newPipeProject || "",
-                onchange: function(e) {
+                onchange: function (e) {
                   PD.state.newPipeProject = e.target.value;
-                }
-              }, projectNames.map(function(name) {
+                },
+              },
+              projectNames.map(function (name) {
                 return m("option", { value: name }, name);
-              }))
-            ]
+              }),
+            ),
+          ]
           : null,
 
         // ── Action buttons ──
         m(".modal-actions", [
           m("button.tb-btn", {
-            onclick: PD.actions.closeNewPipeModal
+            onclick: PD.actions.closeNewPipeModal,
           }, "Cancel"),
           m("button.tb-btn.primary", {
             onclick: PD.actions.createNewPipe,
-            disabled: PD.state.newPipeCreating || !PD.state.newPipeName.trim()
-          }, PD.state.newPipeCreating ? "Creating..." : "Create")
-        ])
-      ])
+            disabled: PD.state.newPipeCreating || !PD.state.newPipeName.trim(),
+          }, PD.state.newPipeCreating ? "Creating..." : "Create"),
+        ]),
+      ]),
     ]);
-  }
+  },
 };

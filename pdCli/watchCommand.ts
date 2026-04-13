@@ -35,7 +35,8 @@ export async function watchCommand(input: CliInput) {
   // Initial build
   await pdBuild(input);
 
-  const pathRegex = /\.pd|deno|dist|\.git|\.vscode|\.github|\.cache|\.history|\.log|\.lock|\.swp/;
+  const pathRegex =
+    /\.pd|deno|dist|\.git|\.vscode|\.github|\.cache|\.history|\.log|\.lock|\.swp/;
   const lazyProcess = std.debounce(async (filePath: string) => {
     console.log(std.colors.brightGreen(`\nFile changed: ${filePath}`));
 
@@ -43,7 +44,10 @@ export async function watchCommand(input: CliInput) {
     try {
       await pdBuild(Object.assign({}, input, { match: filePath }));
     } catch (e) {
-      console.error(std.colors.brightRed(`Build error: ${e.message}`));
+      // Cast `e` from unknown to Error — TS strict catch handling.
+      console.error(
+        std.colors.brightRed(`Build error: ${(e as Error).message}`),
+      );
       return;
     }
 
@@ -73,14 +77,20 @@ export async function watchCommand(input: CliInput) {
 
           if (body.stubCount > 0) {
             console.log(std.colors.brightYellow(
-              `\n${body.stubCount} incomplete step(s) found in ${body.pipeName}:`
+              `\n${body.stubCount} incomplete step(s) found in ${body.pipeName}:`,
             ));
             for (const stub of body.stubs || []) {
-              console.log(std.colors.brightYellow(`  - [line ${stub.lineNumber}] ${stub.heading}`));
+              console.log(
+                std.colors.brightYellow(
+                  `  - [line ${stub.lineNumber}] ${stub.heading}`,
+                ),
+              );
               console.log(std.colors.white(`    "${stub.description}"`));
             }
             console.log(std.colors.brightCyan(
-              `\nRun: pd run ${assistPath} --input '${JSON.stringify({ file: filePath })}' -- --json`
+              `\nRun: pd run ${assistPath} --input '${
+                JSON.stringify({ file: filePath })
+              }' -- --json`,
             ));
           } else {
             console.log(std.colors.brightGreen("All steps are complete."));
@@ -90,16 +100,25 @@ export async function watchCommand(input: CliInput) {
           if (output.trim()) console.log(output);
         }
       } catch (e) {
-        console.error(std.colors.brightRed(`Assist error: ${e.message}`));
+        // Cast `e` from unknown to Error — TS strict catch handling.
+        console.error(
+          std.colors.brightRed(`Assist error: ${(e as Error).message}`),
+        );
       }
     } else {
       // No assist pipe — just report the change
-      console.log(std.colors.brightCyan(`Rebuilt. Use --assist to enable stub detection.`));
+      console.log(
+        std.colors.brightCyan(
+          `Rebuilt. Use --assist to enable stub detection.`,
+        ),
+      );
     }
   }, 300);
 
   for await (const event of Deno.watchFs(Deno.cwd(), { recursive: true })) {
-    const notInProtectedDir = event.paths.every((path) => !path.match(pathRegex));
+    const notInProtectedDir = event.paths.every((path) =>
+      !path.match(pathRegex)
+    );
     const hasValidExtension = event.paths.every((path) => path.endsWith(".md"));
 
     if (

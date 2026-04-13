@@ -42,7 +42,8 @@ export async function packCommand(input: CliInput) {
   try {
     manifest = await readManifest(projectDir);
   } catch (e) {
-    console.error(std.colors.red(`Error: ${e.message}`));
+    // Cast `e` from unknown to Error — Deno/TS strict catch handling.
+    console.error(std.colors.red(`Error: ${(e as Error).message}`));
     return input;
   }
 
@@ -94,7 +95,8 @@ export async function packCommand(input: CliInput) {
   try {
     files = await resolvePackageFiles(projectDir, manifest);
   } catch (e) {
-    console.error(std.colors.red(`Error: ${e.message}`));
+    // Cast `e` from unknown to Error — TS strict catch handling.
+    console.error(std.colors.red(`Error: ${(e as Error).message}`));
     return input;
   }
 
@@ -152,8 +154,11 @@ export async function packCommand(input: CliInput) {
     await Deno.mkdir(outDir, { recursive: true });
   } catch (e) {
     if (!(e instanceof Deno.errors.AlreadyExists)) {
+      // Cast `e` from unknown to Error — TS strict catch handling.
       console.error(
-        std.colors.red(`Error creating output directory: ${e.message}`),
+        std.colors.red(
+          `Error creating output directory: ${(e as Error).message}`,
+        ),
       );
       return input;
     }

@@ -19,7 +19,8 @@ interface PipeInfo {
   mtime: string | null;
 }
 
-const SKIP_PATTERN = /node_modules|\.pd|\.git|\.vscode|\.github|\.cache|deno\.lock/;
+const SKIP_PATTERN =
+  /node_modules|\.pd|\.git|\.vscode|\.github|\.cache|deno\.lock/;
 
 // ── Global Config ──
 // The global config lives at ~/.pipedown/config.json and stores user-wide
@@ -60,7 +61,9 @@ export async function readGlobalConfig(): Promise<GlobalConfig> {
  * @returns The merged config that was written to disk
  * Ref: https://docs.deno.com/api/deno/~/Deno.writeTextFile
  */
-export async function writeGlobalConfig(patch: Partial<GlobalConfig>): Promise<GlobalConfig> {
+export async function writeGlobalConfig(
+  patch: Partial<GlobalConfig>,
+): Promise<GlobalConfig> {
   const home = Deno.env.get("HOME");
   if (!home) throw new Error("HOME not set");
   const pipedownDir = std.join(home, ".pipedown");
@@ -103,7 +106,9 @@ export async function readProjectsRegistry(): Promise<ProjectEntry[]> {
  * or from the projects.json registry as a fallback.
  * Returns null if no authoritative source is available.
  */
-async function getKnownPipeNames(projectPath: string): Promise<Set<string> | null> {
+async function getKnownPipeNames(
+  projectPath: string,
+): Promise<Set<string> | null> {
   // Primary: check .pd directory for built pipes (each has an index.json)
   const pdDir = std.join(projectPath, ".pd");
   try {
@@ -120,23 +125,27 @@ async function getKnownPipeNames(projectPath: string): Promise<Set<string> | nul
 
   // Fallback: check projects.json for a pipes array
   const registry = await readProjectsRegistry();
-  const project = registry.find(p => p.path === projectPath);
+  const project = registry.find((p) => p.path === projectPath);
   if (project?.pipes && project.pipes.length > 0) {
-    return new Set(project.pipes.map(p => p.name));
+    return new Set(project.pipes.map((p) => p.name));
   }
 
   return null;
 }
 
-export async function scanProjectPipes(projectPath: string): Promise<PipeInfo[]> {
+export async function scanProjectPipes(
+  projectPath: string,
+): Promise<PipeInfo[]> {
   const knownPipes = await getKnownPipeNames(projectPath);
 
   const pipes: PipeInfo[] = [];
   try {
-    for await (const entry of std.walk(projectPath, {
-      exts: [".md"],
-      skip: [SKIP_PATTERN, /README\.md$/i],
-    })) {
+    for await (
+      const entry of std.walk(projectPath, {
+        exts: [".md"],
+        skip: [SKIP_PATTERN, /README\.md$/i],
+      })
+    ) {
       const rel = std.relative(projectPath, entry.path);
       const parsed = std.parsePath(rel);
       const name = parsed.dir ? std.join(parsed.dir, parsed.name) : parsed.name;
@@ -145,7 +154,9 @@ export async function scanProjectPipes(projectPath: string): Promise<PipeInfo[]>
       // Ref: pdBuild.ts pipe name normalisation
       if (knownPipes && !knownPipes.has(name)) {
         const normalised = name.replace(/-/g, "").toLowerCase();
-        const match = [...knownPipes].some(k => k.replace(/-/g, "").toLowerCase() === normalised);
+        const match = [...knownPipes].some((k) =>
+          k.replace(/-/g, "").toLowerCase() === normalised
+        );
         if (!match) continue;
       }
       let mtime: string | null = null;
@@ -161,7 +172,9 @@ export async function scanProjectPipes(projectPath: string): Promise<PipeInfo[]>
   return pipes;
 }
 
-export async function enrichProjects(projects: ProjectEntry[]): Promise<EnrichedProject[]> {
+export async function enrichProjects(
+  projects: ProjectEntry[],
+): Promise<EnrichedProject[]> {
   const enriched: EnrichedProject[] = [];
 
   for (const project of projects) {
@@ -199,7 +212,10 @@ export async function enrichProjects(projects: ProjectEntry[]): Promise<Enriched
   return enriched;
 }
 
-export async function readPipeMarkdown(projectPath: string, pipePath: string): Promise<string> {
+export async function readPipeMarkdown(
+  projectPath: string,
+  pipePath: string,
+): Promise<string> {
   const absPath = std.join(projectPath, pipePath);
   const rel = std.relative(projectPath, absPath);
   if (rel.startsWith("..")) {
@@ -240,7 +256,9 @@ function sanitiseProjectName(name: string): string {
  * @throws If the project directory already exists (409 Conflict from caller)
  * Ref: https://docs.deno.com/api/deno/~/Deno.mkdir
  */
-export async function createProject(displayName: string): Promise<ProjectEntry> {
+export async function createProject(
+  displayName: string,
+): Promise<ProjectEntry> {
   const home = Deno.env.get("HOME");
   if (!home) throw new Error("HOME not set");
 
@@ -287,7 +305,7 @@ export async function createProject(displayName: string): Promise<ProjectEntry> 
   const entry: ProjectEntry = { name: displayName, path: projectPath };
   // Guard against duplicate paths (shouldn't happen after the stat check,
   // but defensive coding against concurrent requests)
-  if (!projects.some(p => p.path === projectPath)) {
+  if (!projects.some((p) => p.path === projectPath)) {
     projects.push(entry);
     await Deno.writeTextFile(projectsPath, JSON.stringify(projects, null, 2));
   }

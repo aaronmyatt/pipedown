@@ -10,7 +10,9 @@
   flex-direction: column;
   gap: var(--size-1);
 }
-.pipe-card:hover { background: var(--surface-3); }
+.pipe-card:hover {
+  background: var(--surface-3);
+}
 /* Active card gets a green left accent so the selection reads at a glance */
 .pipe-card.active {
   background: var(--surface-4);
@@ -36,7 +38,6 @@
   background: var(--green-2);
   color: var(--green-9);
 }
-
 
 /* ── Sidebar section dividers ──
    Visual separation between "Recent" and "Projects" sections in the
@@ -189,7 +190,10 @@
 /* .tb-btn styles moved to shared/base.css */
 
 /* Dropdown */
-.dropdown-wrapper { position: relative; display: inline-block; }
+.dropdown-wrapper {
+  position: relative;
+  display: inline-block;
+}
 .dropdown-menu {
   position: absolute;
   top: 100%;
@@ -214,7 +218,9 @@
   cursor: pointer;
   text-align: left;
 }
-.dropdown-item:hover { background: var(--surface-3); }
+.dropdown-item:hover {
+  background: var(--surface-3);
+}
 
 /* ── Split button group ──
    Pairs a primary action button with a narrow dropdown toggle (▾) that
@@ -238,7 +244,8 @@
   padding-inline: var(--size-1);
   min-width: 0;
   /* Subtle left divider between the main button and toggle */
-  border-inline-start: var(--border-size-1) solid color-mix(in srgb, var(--green-6) 40%, transparent);
+  border-inline-start: var(--border-size-1) solid
+    color-mix(in srgb, var(--green-6) 40%, transparent);
 }
 
 /* ── Input dropdown menu ──
@@ -337,10 +344,16 @@
   font-size: var(--font-size-0);
   color: var(--text-2);
 }
-.dsl-block .dsl-line { margin: var(--size-1) 0; }
+.dsl-block .dsl-line {
+  margin: var(--size-1) 0;
+}
 /* DSL directive keys use a darker green to contrast with values (--green-7) */
-.dsl-key { color: var(--green-4); }
-.dsl-val { color: var(--green-7); }
+.dsl-key {
+  color: var(--green-4);
+}
+.dsl-val {
+  color: var(--green-7);
+}
 
 /* ── Right-hand sliding drawer ──
    Unified output surface for all operations (run, run-step, LLM, tests, pack).
@@ -410,7 +423,9 @@
   padding: 0 var(--size-1);
   line-height: 1;
 }
-.run-drawer-close:hover { color: var(--text-1); }
+.run-drawer-close:hover {
+  color: var(--text-1);
+}
 
 /* Scrollable output body */
 .run-drawer-body {

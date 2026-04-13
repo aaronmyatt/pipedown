@@ -1,6 +1,6 @@
 import { std } from "../deps.ts";
 import { readProjectsRegistry, scanProjectPipes } from "./projectsDashboard.ts";
-import { scanTraces, readTrace } from "./traceDashboard.ts";
+import { readTrace, scanTraces } from "./traceDashboard.ts";
 
 export interface RecentPipe {
   projectName: string;
@@ -29,7 +29,10 @@ export async function scanRecentPipes(): Promise<RecentPipe[]> {
     }
   }
 
-  console.log("Latest trace timestamps by project/pipe:", Object.fromEntries(latestTraceByPipe.entries()));
+  console.log(
+    "Latest trace timestamps by project/pipe:",
+    Object.fromEntries(latestTraceByPipe.entries()),
+  );
 
   for (const project of projects) {
     try {
@@ -49,10 +52,12 @@ export async function scanRecentPipes(): Promise<RecentPipe[]> {
       // while pipe mtimes are ISO strings from Deno.stat().mtime.toISOString().
       // Convert both to epoch-millis numbers for a correct comparison.
       // Ref: traceDashboard.ts → scanTraces(), projectsDashboard.ts → scanProjectPipes()
-      const rawTraceTs = latestTraceByPipe.get(`${project.name}/${pipe.name}`) ?? "";
+      const rawTraceTs =
+        latestTraceByPipe.get(`${project.name}/${pipe.name}`) ?? "";
       // console.log(`${project.name}/${pipe.name}`, rawTraceTs, pipe.mtime);
       const rawMtime = pipe.mtime ?? "";
-      const traceEpoch = Number(rawTraceTs) || new Date(rawTraceTs).getTime() || 0;
+      const traceEpoch = Number(rawTraceTs) || new Date(rawTraceTs).getTime() ||
+        0;
       const mtimeEpoch = rawMtime ? new Date(rawMtime).getTime() || 0 : 0;
       const lastActivity = traceEpoch > mtimeEpoch
         ? traceEpoch
@@ -63,7 +68,7 @@ export async function scanRecentPipes(): Promise<RecentPipe[]> {
         projectPath: project.path,
         pipeName: pipe.name,
         pipePath: pipe.path,
-        mtime: lastActivity ? new Date(lastActivity) : null
+        mtime: lastActivity ? new Date(lastActivity) : null,
       });
     }
   }
@@ -73,7 +78,7 @@ export async function scanRecentPipes(): Promise<RecentPipe[]> {
   // console.log("All scanned pipes with activity timestamps:", allPipes
   //   .toSorted((a, b) => (b.mtime?.getTime() || 0) - (a.mtime?.getTime() || 0))
   //   .slice(0, 10));
-  
+
   return allPipes
     .toSorted((a, b) => (b.mtime?.getTime() || 0) - (a.mtime?.getTime() || 0))
     .slice(0, 50);
@@ -105,18 +110,29 @@ export async function scanAllPipes(): Promise<RecentPipe[]> {
         projectPath: project.path,
         pipeName: pipe.name,
         pipePath: pipe.path,
-        mtime: pipe.mtime,
+        // scanProjectPipes() returns mtime as string|null (ISO timestamp from
+        // Deno.stat), but RecentPipe expects Date|null. Convert here.
+        // Ref: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/Date
+        mtime: pipe.mtime ? new Date(pipe.mtime) : null,
       });
     }
   }
 
   // Sort by file modification time descending so the sidebar shows the most
   // recently touched pipes first within each project group.
-  allPipes.sort((a, b) => (b.mtime || "").localeCompare(a.mtime || ""));
+  // Use numeric epoch comparison instead of localeCompare — mtime is now a Date
+  // object, so getTime() gives a reliable millisecond-precision sort key.
+  // Ref: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/getTime
+  allPipes.sort((a, b) =>
+    (b.mtime?.getTime() || 0) - (a.mtime?.getTime() || 0)
+  );
   return allPipes;
 }
 
-export async function readPipeIndex(projectPath: string, pipeName: string): Promise<unknown> {
+export async function readPipeIndex(
+  projectPath: string,
+  pipeName: string,
+): Promise<unknown> {
   const indexPath = std.join(projectPath, ".pd", pipeName, "index.json");
   try {
     const raw = await Deno.readTextFile(indexPath);
@@ -141,7 +157,13 @@ export async function recentStepTraces(
   for (const entry of matching) {
     try {
       const trace = (await readTrace(entry.filePath)) as {
-        steps?: { index: number; before: unknown; after: unknown; delta: unknown; durationMs: number }[];
+        steps?: {
+          index: number;
+          before: unknown;
+          after: unknown;
+          delta: unknown;
+          durationMs: number;
+        }[];
       };
       if (trace.steps) {
         const step = trace.steps.find((s) => s.index === stepIndex);

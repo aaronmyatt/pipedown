@@ -19,7 +19,9 @@
 // Safe to run multiple times — already-migrated files (numeric names) are skipped.
 // Ref: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/getTime
 
-import { walk, exists } from "https://deno.land/std@0.224.0/fs/mod.ts";
+// deno-lint-ignore no-import-prefix
+import { exists, walk } from "https://deno.land/std@0.224.0/fs/mod.ts";
+// deno-lint-ignore no-import-prefix
 import { join } from "https://deno.land/std@0.224.0/path/mod.ts";
 
 // ── Regex to reverse the old filename mangling ──
@@ -126,7 +128,9 @@ async function main() {
     }
   }
 
-  console.log(`\nMigration complete: ${migrated} migrated, ${skipped} skipped, ${errors} errors`);
+  console.log(
+    `\nMigration complete: ${migrated} migrated, ${skipped} skipped, ${errors} errors`,
+  );
 }
 
 main();

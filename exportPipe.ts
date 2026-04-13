@@ -1,6 +1,8 @@
+// deno-lint-ignore no-import-prefix
 import type { BuildOptions } from "npm:esbuild@0.25.4";
 import type { BuildInput } from "./pipedown.d.ts";
 import { pd, std } from "./deps.ts";
+// deno-lint-ignore no-import-prefix
 import { denoPlugins } from "jsr:@luca/esbuild-deno-loader@0.11.1";
 
 const configPath = std.join(Deno.cwd(), ".pd", "deno.json");
@@ -33,9 +35,15 @@ function extractConfig(input: ExportPipeInput) {
 }
 
 async function esBuilder(input: ExportPipeInput) {
+  // deno-lint-ignore no-import-prefix
   const esbuild = await import("npm:esbuild@0.27.4");
   for (const build of input.builds) {
-    await esbuild.build(build)
+    // Cast to `any` to bypass BuildOptions type mismatch between esbuild@0.25.4
+    // (used by the denoPlugins dependency) and esbuild@0.27.4 (imported here).
+    // The APIs are compatible at runtime; only the d.ts signatures diverge.
+    // Ref: https://esbuild.github.io/api/#build
+    // deno-lint-ignore no-explicit-any
+    await esbuild.build(build as any)
       .catch((e) => {
         input.warning = input.warning || [];
         input.warning.push(e);

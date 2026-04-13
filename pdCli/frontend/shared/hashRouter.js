@@ -15,7 +15,7 @@
 // Ref: https://developer.mozilla.org/en-US/docs/Web/API/URL/hash
 // Ref: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/encodeURIComponent
 
-(function() {
+(function () {
   // ── Namespace ──
   // All hash-routing helpers live under `window.pd.hashRouter` so they
   // don't pollute the global scope. The `window.pd` namespace is shared
@@ -34,17 +34,17 @@
     //
     // @return {string[]} — decoded segments (empty array if no hash)
     // Ref: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/decodeURIComponent
-    getSegments: function() {
-      const hash = window.location.hash;
+    getSegments: function () {
+      const hash = globalThis.location.hash;
       // No hash or just "#" or "#/" — nothing selected
       if (!hash || hash === "#" || hash === "#/") return [];
       // Strip leading "#/" then split on "/"
       const raw = hash.slice(2); // remove "#/"
       if (!raw) return [];
-      return raw.split("/").map(function(s) {
+      return raw.split("/").map(function (s) {
         try {
           return decodeURIComponent(s);
-        } catch (e) {
+        } catch (_e) {
           // Malformed URI component — return raw string as fallback
           return s;
         }
@@ -59,14 +59,18 @@
     //
     // @param {string[]} segments — values to encode into the hash
     // Ref: https://developer.mozilla.org/en-US/docs/Web/API/History/replaceState
-    setSegments: function(segments) {
+    setSegments: function (segments) {
       if (!segments || segments.length === 0) {
         // Clear the hash entirely — replaceState with just the pathname
         // removes the trailing "#" from the URL bar.
-        history.replaceState(null, "", globalThis.location.pathname + globalThis.location.search);
+        history.replaceState(
+          null,
+          "",
+          globalThis.location.pathname + globalThis.location.search,
+        );
         return;
       }
-      const encoded = segments.map(function(s) {
+      const encoded = segments.map(function (s) {
         return encodeURIComponent(s);
       });
       history.replaceState(null, "", "#/" + encoded.join("/"));
@@ -74,7 +78,7 @@
 
     // ── clear ──
     // Removes the hash from the URL. Convenience wrapper around setSegments([]).
-    clear: function() {
+    clear: function () {
       this.setSegments([]);
     },
 
@@ -86,11 +90,11 @@
     // @param {Function} callback — called with no arguments on hash change
     // @return {Function} — call this to remove the listener
     // Ref: https://developer.mozilla.org/en-US/docs/Web/API/Window/hashchange_event
-    onHashChange: function(callback) {
+    onHashChange: function (callback) {
       globalThis.addEventListener("hashchange", callback);
-      return function() {
+      return function () {
         globalThis.removeEventListener("hashchange", callback);
       };
-    }
+    },
   };
 })();

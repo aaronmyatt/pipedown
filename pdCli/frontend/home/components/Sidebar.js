@@ -13,12 +13,14 @@
 // @return {object} — Mithril vnode for the pipe card
 // Ref: state.js PD.actions.selectPipe
 function renderPipeCard(pipe) {
-  var isActive = PD.state.selectedPipe &&
+  const isActive = PD.state.selectedPipe &&
     PD.state.selectedPipe.projectName === pipe.projectName &&
     PD.state.selectedPipe.pipePath === pipe.pipePath;
   return m("div.pipe-card" + (isActive ? ".active" : ""), {
     key: pipe.projectName + "/" + pipe.pipePath,
-    onclick: function() { PD.actions.selectPipe(pipe); }
+    onclick: function () {
+      PD.actions.selectPipe(pipe);
+    },
   }, [
     m("div.pipe-card-name", pipe.pipeName),
     m("div.pipe-card-meta", [
@@ -26,8 +28,8 @@ function renderPipeCard(pipe) {
       // heading already provides that context, but kept here for "Recent"
       // where pipes from different projects are interleaved.
       m("span.badge.badge-project", pipe.projectName),
-      pipe.mtime ? m("span.badge", pd.relativeTime(pipe.mtime)) : null
-    ])
+      pipe.mtime ? m("span.badge", pd.relativeTime(pipe.mtime)) : null,
+    ]),
   ]);
 }
 
@@ -35,7 +37,7 @@ PD.components.Sidebar = {
   // ── oncreate ──
   // Triggers the initial data fetch when the sidebar first mounts.
   // Ref: https://mithril.js.org/lifecycle-methods.html#oncreate
-  oncreate: function() {
+  oncreate: function () {
     PD.actions.loadRecentPipes();
     // Load the complete pipe list so the "Projects" sidebar section can
     // group ALL pipes by project — not just the 10 most recent.
@@ -45,19 +47,22 @@ PD.components.Sidebar = {
     // newly created empty projects that have no pipes yet.
     PD.actions.loadAllProjects();
   },
-  view: function() {
+  view: function () {
     if (PD.state.loading) {
-      return m("div.sidebar", m("p", { style: "color: var(--text-2)" }, "Loading pipes..."));
+      return m(
+        "div.sidebar",
+        m("p", { style: "color: var(--text-2)" }, "Loading pipes..."),
+      );
     }
 
     // ── Search filtering ──
     // Applies the same client-side filter as before. Both sections
     // derive their content from this filtered array.
     // Ref: PD.state.searchQuery bound by SearchBar.js
-    var pipes = PD.state.recentPipes;
+    let pipes = PD.state.recentPipes;
     if (PD.state.searchQuery) {
-      var q = PD.state.searchQuery.toLowerCase();
-      pipes = pipes.filter(function(p) {
+      const q = PD.state.searchQuery.toLowerCase();
+      pipes = pipes.filter(function (p) {
         return p.pipeName.toLowerCase().includes(q) ||
           p.projectName.toLowerCase().includes(q) ||
           p.pipePath.toLowerCase().includes(q);
@@ -72,9 +77,18 @@ PD.components.Sidebar = {
         m(PD.components.SearchBar),
         // Show the new-pipe button even in the empty state — it's the primary
         // action when no pipes exist yet.
-        m("button.new-pipe-btn", { onclick: PD.actions.openNewPipeModal }, "+ New Pipe"),
-        m("p", { style: "color: var(--text-2); font-size: var(--font-size-1)" },
-          PD.state.searchQuery ? "No matching pipes." : "No pipes found. Register a project first.")
+        m(
+          "button.new-pipe-btn",
+          { onclick: PD.actions.openNewPipeModal },
+          "+ New Pipe",
+        ),
+        m(
+          "p",
+          { style: "color: var(--text-2); font-size: var(--font-size-1)" },
+          PD.state.searchQuery
+            ? "No matching pipes."
+            : "No pipes found. Register a project first.",
+        ),
       ]);
     }
 
@@ -84,20 +98,20 @@ PD.components.Sidebar = {
     // projectName so every pipe appears under its project heading — not
     // just the 10 most recently active ones.
     // Ref: state.js PD.actions.loadAllPipes, PD.utils.groupPipesByProject
-    var recentPipes = pipes.slice(0, 10);
+    const recentPipes = pipes.slice(0, 10);
 
     // Apply the same search filter to allPipes so the "Projects" section
     // respects the search query consistently with the "Recent" section.
-    var allPipes = PD.state.allPipes || [];
+    let allPipes = PD.state.allPipes || [];
     if (PD.state.searchQuery) {
-      var q2 = PD.state.searchQuery.toLowerCase();
-      allPipes = allPipes.filter(function(p) {
+      const q2 = PD.state.searchQuery.toLowerCase();
+      allPipes = allPipes.filter(function (p) {
         return p.pipeName.toLowerCase().includes(q2) ||
           p.projectName.toLowerCase().includes(q2) ||
           p.pipePath.toLowerCase().includes(q2);
       });
     }
-    var projectGroups = PD.utils.groupPipesByProject(allPipes);
+    const projectGroups = PD.utils.groupPipesByProject(allPipes);
 
     return m("div.sidebar", [
       m(PD.components.SearchBar),
@@ -105,14 +119,18 @@ PD.components.Sidebar = {
       // Creates a new pipe markdown file via a modal dialog. Placed between
       // the search bar and the pipe list so it's always visible.
       // Ref: PD.actions.openNewPipeModal in state.js
-      m("button.new-pipe-btn", { onclick: PD.actions.openNewPipeModal }, "+ New Pipe"),
+      m(
+        "button.new-pipe-btn",
+        { onclick: PD.actions.openNewPipeModal },
+        "+ New Pipe",
+      ),
 
       // ── "Recent" section ──
       // Shows the 10 most recently modified pipes (after search filtering).
       // Mirrors VS Code's "Recently Opened" pattern — quick access to active work.
       m("div.sidebar-section", [
         m("h3.sidebar-section-header", "Recent"),
-        recentPipes.map(renderPipeCard)
+        recentPipes.map(renderPipeCard),
       ]),
 
       // ── "Projects" section ──
@@ -122,36 +140,41 @@ PD.components.Sidebar = {
       // Ref: state.js PD.state.collapsedProjects, PD.actions.toggleProjectCollapse
       m("div.sidebar-section", [
         m("h3.sidebar-section-header", "Projects"),
-        projectGroups.map(function(group) {
+        projectGroups.map(function (group) {
           // A project is collapsed unless the user has explicitly expanded it.
           // Absent key or `true` → collapsed; explicit `false` → expanded.
           // This makes "collapsed" the default for new/unseen projects.
-          var isCollapsed = PD.state.collapsedProjects[group.projectName] !== false;
+          const isCollapsed =
+            PD.state.collapsedProjects[group.projectName] !== false;
           return m("div.project-group", { key: group.projectName }, [
             // ── Project heading ──
             // Clickable row that toggles the pipe list visibility.
             // Shows a rotation caret, the project name, and a pipe count.
             m("button.project-group-header", {
-              onclick: function(e) {
+              onclick: function (e) {
                 e.stopPropagation();
                 PD.actions.toggleProjectCollapse(group.projectName);
-              }
+              },
             }, [
               // Unicode right-pointing triangle (U+25B8) — rotated via CSS
               // when the group is expanded.
               // Ref: styles.css .project-group-caret--expanded
-              m("span.project-group-caret" + (isCollapsed ? "" : ".project-group-caret--expanded"), "\u25B8"),
+              m(
+                "span.project-group-caret" +
+                  (isCollapsed ? "" : ".project-group-caret--expanded"),
+                "\u25B8",
+              ),
               m("span", group.projectName),
-              m("span.project-group-count", group.pipes.length)
+              m("span.project-group-count", group.pipes.length),
             ]),
             // ── Pipe list ──
             // Only rendered when the group is not collapsed.
-            !isCollapsed ? m("div.project-group-pipes",
-              group.pipes.map(renderPipeCard)
-            ) : null
+            !isCollapsed
+              ? m("div.project-group-pipes", group.pipes.map(renderPipeCard))
+              : null,
           ]);
-        })
-      ])
+        }),
+      ]),
     ]);
-  }
+  },
 };

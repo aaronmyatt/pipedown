@@ -17,8 +17,13 @@
   text-decoration: none;
   cursor: pointer;
 }
-.breadcrumb a:hover { text-decoration: underline; }
-.breadcrumb .sep { margin: 0 var(--size-1); color: var(--text-2); }
+.breadcrumb a:hover {
+  text-decoration: underline;
+}
+.breadcrumb .sep {
+  margin: 0 var(--size-1);
+  color: var(--text-2);
+}
 .project-card {
   padding: var(--size-2) var(--size-2);
   border-radius: var(--radius-2);
@@ -28,17 +33,28 @@
   align-items: center;
   gap: var(--size-2);
 }
-.project-card:hover { background: var(--surface-3); }
-.project-card.active { background: var(--surface-4); }
-.project-card.stale { opacity: 0.5; }
+.project-card:hover {
+  background: var(--surface-3);
+}
+.project-card.active {
+  background: var(--surface-4);
+}
+.project-card.stale {
+  opacity: 0.5;
+}
 .project-card .caret {
   font-size: var(--font-size-2);
   color: var(--text-2);
   flex-shrink: 0;
   transition: transform 0.15s;
 }
-.project-card.active .caret { transform: rotate(90deg); }
-.project-info { flex: 1; min-width: 0; }
+.project-card.active .caret {
+  transform: rotate(90deg);
+}
+.project-info {
+  flex: 1;
+  min-width: 0;
+}
 .project-name {
   font-weight: var(--font-weight-6);
   font-size: var(--font-size-1);
@@ -57,7 +73,11 @@
   background: var(--green-2);
   color: var(--green-9);
 }
-.pipe-list { list-style: none; padding: 0; margin: 0; }
+.pipe-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
 .pipe-item {
   display: flex;
   align-items: center;
@@ -67,8 +87,12 @@
   cursor: pointer;
   border-block-end: var(--border-size-1) solid var(--surface-2);
 }
-.pipe-item:hover { background: var(--surface-2); }
-.pipe-item.active { background: var(--surface-3); }
+.pipe-item:hover {
+  background: var(--surface-2);
+}
+.pipe-item.active {
+  background: var(--surface-3);
+}
 .pipe-item-name {
   font-family: var(--font-mono);
   font-size: var(--font-size-1);
@@ -93,7 +117,10 @@
   margin-block-end: var(--size-3);
   flex-wrap: wrap;
 }
-.project-heading h2 { margin: 0; font-size: var(--font-size-4); }
+.project-heading h2 {
+  margin: 0;
+  font-size: var(--font-size-4);
+}
 .project-heading .path {
   font-size: var(--font-size-0);
   color: var(--text-2);

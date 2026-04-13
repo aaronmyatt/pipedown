@@ -4,7 +4,13 @@
     {
       "name": "pd-dashboard",
       "runtimeExecutable": "/Users/aaronmyatt/.deno/bin/deno",
-      "runtimeArgs": ["run", "--no-check", "--unstable-kv", "-A", "pdCli/mod.ts"],
+      "runtimeArgs": [
+        "run",
+        "--no-check",
+        "--unstable-kv",
+        "-A",
+        "pdCli/mod.ts"
+      ],
       "port": 8888
     }
   ]

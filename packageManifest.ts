@@ -44,7 +44,7 @@ const SEMVER_PATTERN = /^\d+\.\d+\.\d+(-[a-zA-Z0-9.]+)?(\+[a-zA-Z0-9.]+)?$/;
  */
 export function validateManifest(
   data: Record<string, unknown>,
-  projectDir?: string,
+  _projectDir?: string,
 ): ManifestValidationResult {
   const errors: string[] = [];
 
@@ -75,14 +75,20 @@ export function validateManifest(
 
   // Optional: exports (if present, must be a record of string → string)
   if (data.exports !== undefined) {
-    if (typeof data.exports !== "object" || data.exports === null || Array.isArray(data.exports)) {
+    if (
+      typeof data.exports !== "object" || data.exports === null ||
+      Array.isArray(data.exports)
+    ) {
       errors.push("'exports' must be an object mapping names to file paths");
     }
   }
 
   // Optional: keywords (if present, must be array of strings)
   if (data.keywords !== undefined) {
-    if (!Array.isArray(data.keywords) || !data.keywords.every((k: unknown) => typeof k === "string")) {
+    if (
+      !Array.isArray(data.keywords) ||
+      !data.keywords.every((k: unknown) => typeof k === "string")
+    ) {
       errors.push("'keywords' must be an array of strings");
     }
   }

@@ -8,16 +8,19 @@ Always start the `pd` dashboard server when working on UI/dashboard changes:
 ~/.deno/bin/deno run --no-check --unstable-kv -A test_serve.ts
 ```
 
-This uses the launch config at `.claude/launch.json` (server name: `pd-dashboard`, port 8888).
+This uses the launch config at `.claude/launch.json` (server name:
+`pd-dashboard`, port 8888).
 
 The dashboard has three pages:
+
 - `/` — Services (local built pipes)
 - `/projects` — System-wide project explorer
 - `/traces` — Execution traces
 
 ## Frontend Architecture
 
-Dashboard frontend code lives in `pipedown/pdCli/frontend/` and is organized by page with shared utilities:
+Dashboard frontend code lives in `pipedown/pdCli/frontend/` and is organized by
+page with shared utilities:
 
 ```
 pdCli/frontend/
@@ -38,8 +41,10 @@ pdCli/frontend/
 
 ### Global namespace convention
 
-- **`window.pd`** — shared utilities only (`pd.jsonTree`, `pd.jtOpen`, `pd.relativeTime`)
-- **`window.PD`** — per-page namespace; `state.js` initialises it, components extend it:
+- **`window.pd`** — shared utilities only (`pd.jsonTree`, `pd.jtOpen`,
+  `pd.relativeTime`)
+- **`window.PD`** — per-page namespace; `state.js` initialises it, components
+  extend it:
   - `PD.state` — reactive state object
   - `PD.actions` — data-fetching and mutation functions
   - `PD.utils` — pure helpers (formatters, renderers)
@@ -62,9 +67,14 @@ pdCli/frontend/
 
 ### Mithril gotchas
 
-- `m.mount(el, Component)` does **not** call lifecycle hooks on the root component. Always wrap: `m.mount(el, { view: () => m(PD.components.Layout) })`.
-- Trigger initial data fetching from `oncreate` on a component that is _not_ the `m.mount` root.
+- `m.mount(el, Component)` does **not** call lifecycle hooks on the root
+  component. Always wrap:
+  `m.mount(el, { view: () => m(PD.components.Layout) })`.
+- Trigger initial data fetching from `oncreate` on a component that is _not_ the
+  `m.mount` root.
 
 ## Testing UI changes
 
-Do **not** start the dev server, use preview tools, or attempt to verify UI changes yourself. The user will test and verify independently. Focus on writing correct code and explaining what changed.
+Do **not** start the dev server, use preview tools, or attempt to verify UI
+changes yourself. The user will test and verify independently. Focus on writing
+correct code and explaining what changed.

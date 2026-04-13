@@ -1,6 +1,7 @@
 # Release
 
-Publish a new version of pipedown (@pd/pdcli) to JSR. Validates the project, bumps the version, runs tests, and publishes.
+Publish a new version of pipedown (@pd/pdcli) to JSR. Validates the project,
+bumps the version, runs tests, and publishes.
 
 ```json
 {
@@ -52,7 +53,10 @@ if (bump === "major") {
 }
 
 input.newVersion = v.major + "." + v.minor + "." + v.patch;
-console.log("Bump: " + input.currentVersion + " -> " + input.newVersion + " (" + bump + ")");
+console.log(
+  "Bump: " + input.currentVersion + " -> " + input.newVersion + " (" + bump +
+    ")",
+);
 ```
 
 ## Run Tests
@@ -71,7 +75,7 @@ const testFiles = [
   "mdToPipe_test.ts",
   "pipeToScript_test.ts",
   "pdBuild_test.ts",
-].map(f => join(projectDir, f));
+].map((f) => join(projectDir, f));
 
 const testCmd = new Deno.Command(Deno.execPath(), {
   args: ["test", "-A", "--no-check", ...testFiles],
@@ -93,7 +97,9 @@ if (testResult.code !== 0) {
 // Extract pass/fail summary from last line
 const summaryMatch = testOutput.match(/(\d+) passed.*?(\d+) failed/);
 if (summaryMatch) {
-  console.log("Tests: " + summaryMatch[1] + " passed, " + summaryMatch[2] + " failed");
+  console.log(
+    "Tests: " + summaryMatch[1] + " passed, " + summaryMatch[2] + " failed",
+  );
 } else {
   console.log("Tests passed");
 }
@@ -109,7 +115,7 @@ Write the new version to deno.json.
   input.denoJson.version = input.newVersion;
   await Deno.writeTextFile(
     input.denoJsonPath,
-    JSON.stringify(input.denoJson, null, 2) + "\n"
+    JSON.stringify(input.denoJson, null, 2) + "\n",
   );
   console.log("Updated " + input.denoJsonPath + " to v" + input.newVersion);
   ```
@@ -133,7 +139,9 @@ if (gitOutput.length > 0) {
   console.log("Uncommitted changes:");
   console.log(gitOutput);
   input.dirty = true;
-  console.log("Warning: working tree is dirty. Use --allow-dirty for deno publish or commit first.");
+  console.log(
+    "Warning: working tree is dirty. Use --allow-dirty for deno publish or commit first.",
+  );
 } else {
   input.dirty = false;
   console.log("Working tree clean");
@@ -146,7 +154,9 @@ Run deno publish to push the new version to JSR.
 
 - not: /error
 - ```ts
-  console.log("Publishing " + input.packageName + "@" + input.newVersion + " to JSR...");
+  console.log(
+    "Publishing " + input.packageName + "@" + input.newVersion + " to JSR...",
+  );
 
   const publishArgs = ["publish", "--no-check"];
   if (input.dryRun) {
@@ -174,7 +184,7 @@ Run deno publish to push the new version to JSR.
       input.denoJson.version = input.currentVersion;
       await Deno.writeTextFile(
         input.denoJsonPath,
-        JSON.stringify(input.denoJson, null, 2) + "\n"
+        JSON.stringify(input.denoJson, null, 2) + "\n",
       );
       console.error("Reverted deno.json to v" + input.currentVersion);
     }
@@ -236,7 +246,10 @@ Print a summary of what happened.
 console.log("");
 console.log("=== Release Summary ===");
 console.log("Package: " + input.packageName);
-console.log("Version: " + input.currentVersion + " -> " + (input.dryRun ? input.newVersion + " (dry run)" : input.newVersion));
+console.log(
+  "Version: " + input.currentVersion + " -> " +
+    (input.dryRun ? input.newVersion + " (dry run)" : input.newVersion),
+);
 if (input.error) {
   console.log("Status: FAILED — " + input.error);
 } else if (input.dryRun) {

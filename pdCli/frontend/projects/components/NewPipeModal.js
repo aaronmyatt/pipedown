@@ -12,8 +12,8 @@
 PD.components.NewPipeModal = {
   // ── Lifecycle: register Escape handler and focus the name input ──
   // Ref: https://mithril.js.org/lifecycle-methods.html#oncreate
-  oncreate: function(vnode) {
-    vnode.state._keyHandler = function(e) {
+  oncreate: function (vnode) {
+    vnode.state._keyHandler = function (e) {
       if (e.key === "Escape") {
         e.preventDefault();
         PD.actions.closeNewPipeModal();
@@ -23,33 +23,33 @@ PD.components.NewPipeModal = {
     document.addEventListener("keydown", vnode.state._keyHandler);
 
     // Auto-focus the name input for immediate typing
-    var input = vnode.dom.querySelector("input");
+    const input = vnode.dom.querySelector("input");
     if (input) input.focus();
   },
 
   // ── Lifecycle: clean up keydown listener ──
-  onremove: function(vnode) {
+  onremove: function (vnode) {
     if (vnode.state._keyHandler) {
       document.removeEventListener("keydown", vnode.state._keyHandler);
     }
   },
 
-  view: function() {
+  view: function () {
     // Only render when the modal is open
     if (!PD.state.showNewPipeModal) return null;
 
     // Show which project the pipe will be added to
-    var projectName = PD.state.focusedProject
+    const projectName = PD.state.focusedProject
       ? PD.state.focusedProject.name
       : "Unknown";
 
     return m(".modal-overlay", {
       // Clicking the backdrop closes the modal
-      onclick: function(e) {
+      onclick: function (e) {
         if (e.target === e.currentTarget) {
           PD.actions.closeNewPipeModal();
         }
-      }
+      },
     }, [
       m(".modal-box", [
         m("h2", "New Pipe"),
@@ -64,29 +64,29 @@ PD.components.NewPipeModal = {
           type: "text",
           placeholder: "e.g. Fetch RSS Digest",
           value: PD.state.newPipeName,
-          oninput: function(e) {
+          oninput: function (e) {
             PD.state.newPipeName = e.target.value;
           },
           // Enter submits the form
-          onkeydown: function(e) {
+          onkeydown: function (e) {
             if (e.key === "Enter") {
               e.preventDefault();
               PD.actions.createNewPipe();
             }
-          }
+          },
         }),
 
         // ── Action buttons ──
         m(".modal-actions", [
           m("button.tb-btn", {
-            onclick: PD.actions.closeNewPipeModal
+            onclick: PD.actions.closeNewPipeModal,
           }, "Cancel"),
           m("button.tb-btn.primary", {
             onclick: PD.actions.createNewPipe,
-            disabled: PD.state.newPipeCreating || !PD.state.newPipeName.trim()
-          }, PD.state.newPipeCreating ? "Creating..." : "Create")
-        ])
-      ])
+            disabled: PD.state.newPipeCreating || !PD.state.newPipeName.trim(),
+          }, PD.state.newPipeCreating ? "Creating..." : "Create"),
+        ]),
+      ]),
     ]);
-  }
+  },
 };

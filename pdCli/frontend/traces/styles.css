@@ -105,8 +105,14 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.trace-item:hover { background: var(--surface-3); color: var(--text-1); }
-.trace-item.active { background: var(--surface-4); color: var(--text-1); }
+.trace-item:hover {
+  background: var(--surface-3);
+  color: var(--text-1);
+}
+.trace-item.active {
+  background: var(--surface-4);
+  color: var(--text-1);
+}
 .detail-header {
   margin-block-end: var(--size-3);
 }
@@ -149,15 +155,21 @@
   cursor: pointer;
   border-block-end: var(--border-size-1) solid var(--surface-2);
 }
-.step-item:hover { background: var(--surface-2); }
-.step-item.expanded { background: var(--surface-2); }
+.step-item:hover {
+  background: var(--surface-2);
+}
+.step-item.expanded {
+  background: var(--surface-2);
+}
 .step-index {
   font-family: var(--font-mono);
   font-size: var(--font-size-0);
   color: var(--text-2);
   text-align: center;
 }
-.step-name { font-weight: var(--font-weight-5); }
+.step-name {
+  font-weight: var(--font-weight-5);
+}
 .step-duration {
   font-family: var(--font-mono);
   font-size: var(--font-size-0);
@@ -179,9 +191,18 @@
   border-radius: var(--radius-1);
   font-family: var(--font-mono);
 }
-.delta-added { background: var(--green-2); color: var(--green-9); }
-.delta-modified { background: var(--yellow-2); color: var(--yellow-9); }
-.delta-removed { background: var(--red-2); color: var(--red-9); }
+.delta-added {
+  background: var(--green-2);
+  color: var(--green-9);
+}
+.delta-modified {
+  background: var(--yellow-2);
+  color: var(--yellow-9);
+}
+.delta-removed {
+  background: var(--red-2);
+  color: var(--red-9);
+}
 pre.json {
   font-family: var(--font-mono);
   font-size: var(--font-size-0);
@@ -207,5 +228,10 @@ pre.json {
   border: none;
   color: var(--text-2);
 }
-.tab:hover { background: var(--surface-3); }
-.tab.active { background: var(--surface-4); color: var(--text-1); }
+.tab:hover {
+  background: var(--surface-3);
+}
+.tab.active {
+  background: var(--surface-4);
+  color: var(--text-1);
+}

@@ -76,7 +76,11 @@ export function pdRunWith(
  *                     so Deno's --watch is only used for the production template.
  * Ref: templates/server.ts, templates/devServer.ts
  */
-export function pdServe(scriptName: string, testInput: string, entryPoint = "server.ts") {
+export function pdServe(
+  scriptName: string,
+  testInput: string,
+  entryPoint = "server.ts",
+) {
   // The devServer.ts template manages its own file watching and rebuilding
   // via Deno.watchFs, so we only enable Deno's --watch for the production
   // server template (which needs it to restart on .pd/ file changes).

@@ -10,10 +10,9 @@ const helpText = cliHelpTemplate({
   sections: [
     "Run the `deno repl` with your project pipes preloaded. ",
     `Example:
-    pd repl`
+    pd repl`,
   ],
 });
-
 
 export async function replCommand(input: CliInput) {
   if (pd.$p.get(input, "/flags/help") || pd.$p.get(input, "/flags/h")) {

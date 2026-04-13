@@ -12,25 +12,28 @@ PD.components.MainContent = {
   // injected into the DOM after markdown-it renders the HTML. We skip
   // injection in edit mode since the rendered HTML is not present.
   // Ref: PD.utils.injectStepToolbars in MarkdownRenderer.js
-  oncreate: function(vnode) {
+  oncreate: function (vnode) {
     if (PD.state.editMode) return;
     if (PD.state.markdownHtml && PD.state.pipeData) {
-      var viewer = vnode.dom.querySelector(".md-viewer");
+      const viewer = vnode.dom.querySelector(".md-viewer");
       if (viewer) PD.utils.injectStepToolbars(viewer);
     }
   },
-  onupdate: function(vnode) {
+  onupdate: function (vnode) {
     if (PD.state.editMode) return;
     if (PD.state.markdownHtml && PD.state.pipeData) {
-      var viewer = vnode.dom.querySelector(".md-viewer");
+      const viewer = vnode.dom.querySelector(".md-viewer");
       if (viewer) PD.utils.injectStepToolbars(viewer);
     }
   },
-  view: function() {
+  view: function () {
     if (!PD.state.selectedPipe) {
-      return m("div.detail", m("div.empty-state", [
-        m("p", "Select a pipe to view")
-      ]));
+      return m(
+        "div.detail",
+        m("div.empty-state", [
+          m("p", "Select a pipe to view"),
+        ]),
+      );
     }
 
     return m("div.detail", [
@@ -40,7 +43,7 @@ PD.components.MainContent = {
       // Both components occupy the same layout slot.
       PD.state.editMode
         ? m(PD.components.MarkdownEditor)
-        : m(PD.components.MarkdownRenderer)
+        : m(PD.components.MarkdownRenderer),
     ]);
-  }
+  },
 };

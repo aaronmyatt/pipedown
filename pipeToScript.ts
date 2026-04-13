@@ -149,7 +149,9 @@ function _pd_initSchema(input) {
   }
 }
 
-${stepNames.map((name: string, index: number) => String.raw`
+${
+        stepNames.map((name: string, index: number) =>
+          String.raw`
 // Post-step validator for step ${index}: "${name}"
 // Runs immediately after "${name}" to ensure it left the input
 // in a schema-valid state.
@@ -166,7 +168,9 @@ function _pd_validateSchema_${index}_${name}(input) {
     });
   }
 }
-`).join("")}
+`
+        ).join("")
+      }
 `;
     } else if (hasZodBlock) {
       // Helper-only mode: inject zod definitions at module level without
@@ -186,7 +190,10 @@ ${schemaBody}
     let funcSequenceItems: string;
     if (hasSchemaVar) {
       const withValidation = stepNames.flatMap(
-        (name: string, index: number) => [name, `_pd_validateSchema_${index}_${name}`],
+        (
+          name: string,
+          index: number,
+        ) => [name, `_pd_validateSchema_${index}_${name}`],
       );
       funcSequenceItems = ["_pd_initSchema", ...withValidation].join(", ");
     } else {
@@ -198,7 +205,7 @@ ${schemaBody}
 import Pipe from "jsr:@pd/pdpipe@0.2.2";
 import $p from "jsr:@pd/pointers@0.1.1";
 ${zodImport}
-${input.pipe.config?.build ? '' : 'import "jsr:@std/dotenv/load";'}
+${input.pipe.config?.build ? "" : 'import "jsr:@std/dotenv/load";'}
 import rawPipe from "./index.json" with {type: "json"};
 ${input.pipeImports?.join("\n")}
 ${schemaBlock}

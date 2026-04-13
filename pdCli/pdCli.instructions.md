@@ -1,6 +1,7 @@
 # pdCli
 
-Command-line interface for Pipedown. Build, run, test, serve, and manage markdown-based pipe definitions.
+Command-line interface for Pipedown. Build, run, test, serve, and manage
+markdown-based pipe definitions.
 
 ---
 
@@ -15,26 +16,28 @@ Command-line interface for Pipedown. Build, run, test, serve, and manage markdow
 
 ## Commands
 
-| Command | File | Description |
-|---------|------|-------------|
-| `pd` | defaultCommand.ts | Watch mode, auto-rebuild and serve |
-| `pd build` | buildCommand.ts | Build all markdown pipes to `.pd/` |
-| `pd run <file>` | runCommand.ts | Build and run a pipe |
-| `pd runWith <wrapper> <file>` | runWithCommand.ts | Run with wrapper (server, worker) |
-| `pd serve <file>` | serveCommand.ts | Build and serve as HTTP server |
-| `pd test` / `pd t` | testCommand.ts | Run all pipe tests |
-| `pd test-update` / `pd tu` | testCommand.ts | Update test snapshots |
-| `pd list` | listCommand.ts | List built pipes |
-| `pd clean` | cleanCommand.ts | Remove `.pd/` directory |
-| `pd repl` | replCommand.ts | REPL with pipes preloaded |
-| `pd help` | helpCommand.ts | Show help |
+| Command                       | File              | Description                        |
+| ----------------------------- | ----------------- | ---------------------------------- |
+| `pd`                          | defaultCommand.ts | Watch mode, auto-rebuild and serve |
+| `pd build`                    | buildCommand.ts   | Build all markdown pipes to `.pd/` |
+| `pd run <file>`               | runCommand.ts     | Build and run a pipe               |
+| `pd runWith <wrapper> <file>` | runWithCommand.ts | Run with wrapper (server, worker)  |
+| `pd serve <file>`             | serveCommand.ts   | Build and serve as HTTP server     |
+| `pd test` / `pd t`            | testCommand.ts    | Run all pipe tests                 |
+| `pd test-update` / `pd tu`    | testCommand.ts    | Update test snapshots              |
+| `pd list`                     | listCommand.ts    | List built pipes                   |
+| `pd clean`                    | cleanCommand.ts   | Remove `.pd/` directory            |
+| `pd repl`                     | replCommand.ts    | REPL with pipes preloaded          |
+| `pd help`                     | helpCommand.ts    | Show help                          |
 
 ---
 
 ## Files
 
 ### mod.ts
+
 Entry point and command router.
+
 - Parse CLI arguments
 - Initialize `.pd/` directory
 - Load `config.json`
@@ -42,17 +45,22 @@ Entry point and command router.
 - **Exports**: `checkFlags`
 
 ### helpers.ts
+
 Shared execution utilities.
+
 - `pdRun`, `pdRunWith`, `pdServe`, `pdRepl`
 - **Constants**: `PD_DIR`, `commonArgs`
 
 ### buildandserve.ts
+
 Development server with hot reload.
+
 - Watch `.md` files
 - Debounced rebuild
 - SSE reload
 
 ### reportErrors.ts
+
 Error formatting and display.
 
 ---
@@ -60,6 +68,7 @@ Error formatting and display.
 ## Flags
 
 **Global**
+
 - `-d, --debug` — Debug output
 - `-h, --help` — Help
 - `-v, --version` — Version
@@ -67,6 +76,7 @@ Error formatting and display.
 - `-p, --pretty` — Pretty print
 
 **Command-specific**
+
 - `--input` — JSON input for run/serve
 
 ---
@@ -74,7 +84,9 @@ Error formatting and display.
 ## Data Types
 
 ### CliInput
+
 Main object through command pipeline.
+
 - `flags` — Parsed args
 - `globalConfig` — From config.json
 - `projectPipes` — Discovered .md files
@@ -105,12 +117,14 @@ Main object through command pipeline.
 ## Dependencies
 
 **Internal**
+
 - `../deps.ts` — std lib, esbuild, pd modules
 - `../pdBuild.ts` — Build pipeline
 - `../stringTemplates.ts` — Code templates
 - `../pipedown.d.ts` — Types
 
 **External**
+
 - `@std/cli` — Arg parsing
 - `@std/fs` — File system
 - `@std/fmt/colors` — Colors

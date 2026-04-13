@@ -1,4 +1,4 @@
-import type { CliInput } from "../pipedown.d.ts";
+import type { CliInput, PDError } from "../pipedown.d.ts";
 import { pd, std } from "../deps.ts";
 import { PD_DIR } from "./helpers.ts";
 import { pdBuild } from "../pdBuild.ts";
@@ -45,7 +45,8 @@ export async function runStepCommand(input: CliInput) {
 
   await pdBuild(input);
 
-  const pipeName = fileName.replace(/\.md$/, "").replace(/[\W_]+/g, " ").trim().replace(/\s+/g, "");
+  const pipeName = fileName.replace(/\.md$/, "").replace(/[\W_]+/g, " ").trim()
+    .replace(/\s+/g, "");
   const pipeDir = std.join(PD_DIR, pipeName);
   const indexTsPath = std.join(pipeDir, "index.ts");
   const indexJsonPath = std.join(pipeDir, "index.json");
@@ -53,7 +54,11 @@ export async function runStepCommand(input: CliInput) {
   try {
     const pipeData = JSON.parse(await Deno.readTextFile(indexJsonPath));
     if (stepIndex >= pipeData.steps.length) {
-      console.error(`Error: step index ${stepIndex} is out of range (0-${pipeData.steps.length - 1})`);
+      console.error(
+        `Error: step index ${stepIndex} is out of range (0-${
+          pipeData.steps.length - 1
+        })`,
+      );
       return input;
     }
 
@@ -105,7 +110,7 @@ console.log(JSON.stringify(input, null, 2));
     });
 
     let runSuccess = false;
-    
+
     try {
       const command = new Deno.Command(Deno.execPath(), {
         args: [
@@ -135,15 +140,18 @@ console.log(JSON.stringify(input, null, 2));
       success: runSuccess,
     });
   } catch (e) {
-    console.error(`Error: ${e.message}`);
+    // Cast unknown catch variable to Error for .message access.
+    console.error(`Error: ${(e as Error).message}`);
     input.errors = input.errors || [];
-    input.errors.push(e);
+    // Construct PDError: spread Error props + add `func` to identify the failing step.
+    input.errors.push({ ...(e as Error), func: "runStep" } as PDError);
 
     // Notify pd-desktop of the failure.
     notifyTauri({
       type: "run_complete",
       title: "Step Run Failed",
-      message: `${fileName} (step ${stepIndex}): ${e.message}`,
+      // Cast again — same `e` from the enclosing catch block.
+      message: `${fileName} (step ${stepIndex}): ${(e as Error).message}`,
       pipe: pipeName,
       success: false,
     });

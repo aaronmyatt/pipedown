@@ -94,6 +94,7 @@
     "jsr:@std/streams@^1.0.17": "1.0.17",
     "jsr:@std/streams@^1.0.4": "1.0.7",
     "jsr:@std/streams@^1.0.7": "1.0.7",
+    "jsr:@std/yaml@*": "1.0.12",
     "npm:esbuild@0": "0.27.4",
     "npm:esbuild@0.12.23": "0.12.23",
     "npm:esbuild@0.2": "0.2.12",
@@ -438,6 +439,9 @@
     },
     "@std/streams@1.0.17": {
       "integrity": "7859f3d9deed83cf4b41f19223d4a67661b3d3819e9fc117698f493bf5992140"
+    },
+    "@std/yaml@1.0.12": {
+      "integrity": "7deabca4545bcedd07c5f69ea53acea71b8b4c67562f224e17b90d75944cb20c"
     }
   },
   "npm": {

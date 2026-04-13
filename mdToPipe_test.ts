@@ -1,3 +1,4 @@
+// deno-lint-ignore no-import-prefix no-unversioned-import
 import { assertEquals, assertExists } from "jsr:@std/assert";
 import { mdToPipe } from "./mdToPipe.ts";
 import type { Input, Pipe } from "./pipedown.d.ts";
@@ -21,10 +22,12 @@ function emptyPipe(): Pipe {
 }
 
 async function parse(markdown: string): Promise<{ pipe: Pipe } & Input> {
-  const result = await mdToPipe({
-    markdown,
-    pipe: emptyPipe(),
-  } as { markdown: string; pipe: Pipe } & Input);
+  const result = await mdToPipe(
+    {
+      markdown,
+      pipe: emptyPipe(),
+    } as { markdown: string; pipe: Pipe } & Input,
+  );
   return result as { pipe: Pipe } & Input;
 }
 
@@ -32,7 +35,9 @@ Deno.test("mdToPipe", async (t) => {
   // --- Pipe Name ---
 
   await t.step("extracts H1 as pipe name", async () => {
-    const result = await parse("# My Pipeline\n\n## Step\n\n```ts\ninput.x = 1;\n```");
+    const result = await parse(
+      "# My Pipeline\n\n## Step\n\n```ts\ninput.x = 1;\n```",
+    );
     assertEquals(result.pipe.name, "My Pipeline");
   });
 
@@ -44,7 +49,9 @@ Deno.test("mdToPipe", async (t) => {
   });
 
   await t.step("generates cleanName from pipe name", async () => {
-    const result = await parse("# My Cool Pipeline!\n\n## Step\n\n```ts\ninput.x = 1;\n```");
+    const result = await parse(
+      "# My Cool Pipeline!\n\n## Step\n\n```ts\ninput.x = 1;\n```",
+    );
     assertEquals(result.pipe.cleanName, "MyCoolPipeline");
   });
 
@@ -76,12 +83,16 @@ input.b = 2;
   });
 
   await t.step("extracts javascript code blocks as steps", async () => {
-    const result = await parse("# Test\n\n## Step\n\n```javascript\ninput.x = 1;\n```");
+    const result = await parse(
+      "# Test\n\n## Step\n\n```javascript\ninput.x = 1;\n```",
+    );
     assertEquals(result.pipe.steps.length, 1);
   });
 
   await t.step("extracts typescript code blocks as steps", async () => {
-    const result = await parse("# Test\n\n## Step\n\n```typescript\ninput.x = 1;\n```");
+    const result = await parse(
+      "# Test\n\n## Step\n\n```typescript\ninput.x = 1;\n```",
+    );
     assertEquals(result.pipe.steps.length, 1);
   });
 
@@ -136,12 +147,15 @@ input.data = [];
     assertEquals(result.pipe.steps[0].funcName, "FetchData");
   });
 
-  await t.step("uses H1 as step name when no H2 precedes code block", async () => {
-    // When a code block has no H2+ heading before it, findSteps falls back
-    // to the nearest heading (including H1)
-    const result = await parse("# Test\n\n```ts\ninput.x = 1;\n```");
-    assertEquals(result.pipe.steps[0].name, "Test");
-  });
+  await t.step(
+    "uses H1 as step name when no H2 precedes code block",
+    async () => {
+      // When a code block has no H2+ heading before it, findSteps falls back
+      // to the nearest heading (including H1)
+      const result = await parse("# Test\n\n```ts\ninput.x = 1;\n```");
+      assertEquals(result.pipe.steps[0].name, "Test");
+    },
+  );
 
   await t.step("assigns anonymous name when no heading at all", async () => {
     const result = await parse("```ts\ninput.x = 1;\n```");
@@ -248,7 +262,10 @@ input.x = input.value * 2;
 `);
     assertEquals(result.pipe.steps[0].inList, true);
     assertExists(result.pipe.steps[0].config?.checks);
-    assertEquals(result.pipe.steps[0].config?.checks?.includes("/user/authenticated"), true);
+    assertEquals(
+      result.pipe.steps[0].config?.checks?.includes("/user/authenticated"),
+      true,
+    );
   });
 
   await t.step("extracts if directive (alias for check)", async () => {
@@ -328,7 +345,10 @@ input.x = input.value * 2;
   \`\`\`
 `);
     assertExists(result.pipe.steps[0].config?.routes);
-    assertEquals(result.pipe.steps[0].config?.routes?.includes("/api/users/:id"), true);
+    assertEquals(
+      result.pipe.steps[0].config?.routes?.includes("/api/users/:id"),
+      true,
+    );
   });
 
   await t.step("extracts flags directive", async () => {
@@ -341,7 +361,10 @@ input.x = input.value * 2;
   \`\`\`
 `);
     assertExists(result.pipe.steps[0].config?.checks);
-    assertEquals(result.pipe.steps[0].config?.checks?.includes("/flags/verbose"), true);
+    assertEquals(
+      result.pipe.steps[0].config?.checks?.includes("/flags/verbose"),
+      true,
+    );
   });
 
   await t.step("extracts multiple conditions on one step", async () => {
@@ -484,8 +507,10 @@ input.result = input.name;
     assertEquals(result.pipe.schema!.includes("z.string()"), true);
   });
 
-  await t.step("pipe.schema is undefined when no zod block present", async () => {
-    const result = await parse(`# Test
+  await t.step(
+    "pipe.schema is undefined when no zod block present",
+    async () => {
+      const result = await parse(`# Test
 
 ## Step
 
@@ -493,8 +518,9 @@ input.result = input.name;
 input.x = 1;
 \`\`\`
 `);
-    assertEquals(result.pipe.schema, undefined);
-  });
+      assertEquals(result.pipe.schema, undefined);
+    },
+  );
 
   await t.step("zod block does not appear as a code step", async () => {
     const result = await parse(`# Test

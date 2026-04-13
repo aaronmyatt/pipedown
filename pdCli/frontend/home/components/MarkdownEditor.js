@@ -17,11 +17,11 @@ PD.components.MarkdownEditor = {
   // the editor is focused. Follows the same pattern RunDrawer.js uses for
   // its Escape handler.
   // Ref: https://mithril.js.org/lifecycle-methods.html#oncreate
-  oncreate: function(vnode) {
-    var textarea = vnode.dom.querySelector("textarea");
+  oncreate: function (vnode) {
+    const textarea = vnode.dom.querySelector("textarea");
     if (!textarea) return;
 
-    vnode.state._keyHandler = function(e) {
+    vnode.state._keyHandler = function (e) {
       // ── Cmd/Ctrl+S — save ──
       // Ref: https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent/metaKey
       if ((e.metaKey || e.ctrlKey) && e.key === "s") {
@@ -43,9 +43,9 @@ PD.components.MarkdownEditor = {
       // Ref: https://developer.mozilla.org/en-US/docs/Web/API/HTMLTextAreaElement/setSelectionRange
       if (e.key === "Tab") {
         e.preventDefault();
-        var start = textarea.selectionStart;
-        var end = textarea.selectionEnd;
-        var val = textarea.value;
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const val = textarea.value;
         // Insert two spaces at the caret position.
         textarea.value = val.substring(0, start) + "  " + val.substring(end);
         // Move the caret past the inserted spaces.
@@ -65,28 +65,31 @@ PD.components.MarkdownEditor = {
 
   // ── Lifecycle: clean up the keydown listener ──
   // Ref: https://mithril.js.org/lifecycle-methods.html#onremove
-  onremove: function(vnode) {
-    var textarea = vnode.dom.querySelector("textarea");
+  onremove: function (vnode) {
+    const textarea = vnode.dom.querySelector("textarea");
     if (textarea && vnode.state._keyHandler) {
       textarea.removeEventListener("keydown", vnode.state._keyHandler);
     }
   },
 
-  view: function() {
+  view: function () {
     return m("div.md-editor-wrapper", [
       // ── Dirty indicator ──
       // Shows a subtle hint when the buffer has unsaved changes, so the user
       // knows at a glance whether they need to save.
       PD.state.editDirty
         ? m("div.md-editor-status", "Unsaved changes — Cmd+S to save")
-        : m("div.md-editor-status", "Editing — Cmd+S to save, Escape to cancel"),
+        : m(
+          "div.md-editor-status",
+          "Editing — Cmd+S to save, Escape to cancel",
+        ),
 
       // ── Textarea ──
       // The textarea is the core editing surface. Its value is bound to
       // PD.state.editBuffer via oninput, and editDirty is set on any change.
       m("textarea.md-editor", {
         value: PD.state.editBuffer || "",
-        oninput: function(e) {
+        oninput: function (e) {
           PD.state.editBuffer = e.target.value;
           PD.state.editDirty = true;
         },
@@ -96,8 +99,8 @@ PD.components.MarkdownEditor = {
         autocomplete: "off",
         autocorrect: "off",
         autocapitalize: "off",
-        placeholder: "Write your pipe markdown here..."
-      })
+        placeholder: "Write your pipe markdown here...",
+      }),
     ]);
-  }
+  },
 };

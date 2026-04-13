@@ -1,10 +1,10 @@
 // Home Layout component
 PD.components.Layout = {
-  view: function() {
+  view: function () {
     // ── Sidebar toggle ──
     // When sidebarOpen is false the CSS class .sidebar-collapsed collapses
     // the first grid column to 0px with a transition.
-    var collapsed = !PD.state.sidebarOpen;
+    const collapsed = !PD.state.sidebarOpen;
 
     return m("div.layout", {
       class: collapsed ? "sidebar-collapsed" : "",
@@ -14,21 +14,21 @@ PD.components.Layout = {
       // Individual dropdowns use e.stopPropagation() so clicks inside
       // them don't reach this handler.
       // Ref: PD.state.pipeDropdownOpen, inputDropdownOpen, inputDropdownStep
-      onclick: function() {
+      onclick: function () {
         PD.state.pipeDropdownOpen = false;
         PD.actions.closeInputDropdowns();
-      }
+      },
     }, [
       m("div.topbar", [
         // ── Sidebar toggle button ──
         // Hamburger icon (☰) when sidebar is collapsed, chevron (◀) when open.
         // Flips PD.state.sidebarOpen on click.
         m("button.sidebar-toggle", {
-          onclick: function(e) {
+          onclick: function (e) {
             e.stopPropagation();
             PD.state.sidebarOpen = !PD.state.sidebarOpen;
           },
-          title: PD.state.sidebarOpen ? "Hide sidebar" : "Show sidebar"
+          title: PD.state.sidebarOpen ? "Hide sidebar" : "Show sidebar",
         }, PD.state.sidebarOpen ? "\u25C0" : "\u2630"),
         m("h1", m("a", { href: "/" }, "Pipedown")),
         m("a", { href: "/traces" }, "Traces"),
@@ -39,13 +39,23 @@ PD.components.Layout = {
         // Cycles auto → light → dark → auto via pd.theme.toggle().
         // Icon: auto = circle-half (◐), light = sun (☀), dark = moon (☾).
         // Ref: theme.js — pdCli/frontend/shared/theme.js
-        m("button.theme-toggle", {
-          onclick: function(e) {
-            e.stopPropagation();
-            pd.theme.toggle();
+        m(
+          "button.theme-toggle",
+          {
+            onclick: function (e) {
+              e.stopPropagation();
+              pd.theme.toggle();
+            },
+            title: "Theme: " + (pd.theme ? pd.theme.preference : "auto"),
           },
-          title: "Theme: " + (pd.theme ? pd.theme.preference : "auto")
-        }, pd.theme ? (pd.theme.preference === "light" ? "\u2600" : pd.theme.preference === "dark" ? "\u263E" : "\u25D0") : "\u25D0")
+          pd.theme
+            ? (pd.theme.preference === "light"
+              ? "\u2600"
+              : pd.theme.preference === "dark"
+              ? "\u263E"
+              : "\u25D0")
+            : "\u25D0",
+        ),
       ]),
       m(PD.components.Sidebar),
       m(PD.components.MainContent),
@@ -60,7 +70,7 @@ PD.components.Layout = {
       // extract mode (PD.state.extractMode === true). Shows selected step count,
       // name input, Extract and Cancel buttons.
       // Ref: PD.actions.enterExtractMode in state.js
-      m(PD.components.ExtractBar)
+      m(PD.components.ExtractBar),
     ]);
-  }
+  },
 };

@@ -1,7 +1,6 @@
-import type { CliInput } from "../pipedown.d.ts";
-import { pd, std, md } from "../deps.ts";
+import type { CliInput, PDError } from "../pipedown.d.ts";
+import { md, pd, std } from "../deps.ts";
 import { PD_DIR } from "./helpers.ts";
-import {Tag, TokenType} from "../rangeFinder.ts";
 
 const helpText = `
 llm - Generate or improve codeblocks using LLM
@@ -52,8 +51,10 @@ export async function getPipedownSystemPrompt(): Promise<string> {
   return _cachedSystemPrompt;
 }
 
-
-export async function loadPipeContext(markdownFile: string, projectPath?: string) {
+export async function loadPipeContext(
+  markdownFile: string,
+  projectPath?: string,
+) {
   const baseDir = projectPath ? std.join(projectPath, ".pd") : PD_DIR;
   const pipeDir = std.join(baseDir, markdownFile);
   const indexJsonPath = std.join(pipeDir, "index.json");
@@ -62,10 +63,17 @@ export async function loadPipeContext(markdownFile: string, projectPath?: string
     const pipeData = JSON.parse(await Deno.readTextFile(indexJsonPath));
     return pipeData.steps || [];
   } catch (error) {
-    throw new Error(`Could not load pipe data for ${markdownFile}: ${error.message}`);
+    // Deno's catch clause types errors as `unknown`; cast to Error to access .message.
+    // Ref: https://www.typescriptlang.org/docs/handbook/2/narrowing.html#using-type-predicates
+    throw new Error(
+      `Could not load pipe data for ${markdownFile}: ${
+        (error as Error).message
+      }`,
+    );
   }
 }
 
+// deno-lint-ignore no-explicit-any
 export function findTargetStep(steps: any[], target: string) {
   // Try to parse as index first
   const index = parseInt(target);
@@ -73,24 +81,37 @@ export function findTargetStep(steps: any[], target: string) {
     if (index >= 0 && index < steps.length) {
       return { step: steps[index], index };
     }
-    throw new Error(`Index ${index} is out of range. Available indices: 0-${steps.length - 1}`);
+    throw new Error(
+      `Index ${index} is out of range. Available indices: 0-${
+        steps.length - 1
+      }`,
+    );
   }
-  
+
   // Search by heading name
-  const stepIndex = steps.findIndex(step => 
+  const stepIndex = steps.findIndex((step) =>
     step.name.toLowerCase().includes(target.toLowerCase()) ||
     step.funcName.toLowerCase().includes(target.toLowerCase())
   );
-  
+
   if (stepIndex === -1) {
-    const availableNames = steps.map((step, i) => `${i}: ${step.name}`).join('\n  ');
-    throw new Error(`Could not find step with name containing "${target}". Available steps:\n  ${availableNames}`);
+    const availableNames = steps.map((step, i) => `${i}: ${step.name}`).join(
+      "\n  ",
+    );
+    throw new Error(
+      `Could not find step with name containing "${target}". Available steps:\n  ${availableNames}`,
+    );
   }
-  
+
   return { step: steps[stepIndex], index: stepIndex };
 }
 
-export async function buildContextPrompt(steps: any[], targetIndex: number, userPrompt: string) {
+export async function buildContextPrompt(
+  // deno-lint-ignore no-explicit-any
+  steps: any[],
+  targetIndex: number,
+  userPrompt: string,
+) {
   // Get preceding steps for context — the LLM needs to understand what data
   // transformations have already occurred so it can generate code that reads
   // from the correct `input` properties set by earlier steps.
@@ -152,13 +173,13 @@ export async function callLLM(prompt: string): Promise<string> {
 
   const { code, stdout, stderr } = await child.output();
   console.log(std.colors.brightBlue(`LLM command executed with code: ${code}`));
-  
+
   if (code !== 0) {
     const errorText = new TextDecoder().decode(stderr);
     console.error(std.colors.brightRed(`LLM command error: ${errorText}`));
     throw new Error(`LLM command failed: ${errorText}`);
   }
-  
+
   return new TextDecoder().decode(stdout).trim();
 }
 
@@ -181,7 +202,9 @@ function cleanLLMOutput(text: string): string {
   // can cause some models to wrap output in this format.
   try {
     const parsed = JSON.parse(cleaned);
-    if (parsed && typeof parsed === "object" && typeof parsed.code === "string") {
+    if (
+      parsed && typeof parsed === "object" && typeof parsed.code === "string"
+    ) {
       cleaned = parsed.code;
     }
   } catch {
@@ -191,9 +214,13 @@ function cleanLLMOutput(text: string): string {
   return cleaned;
 }
 
-async function updateMarkdownFile(markdownFile: string, targetIndex: number, newCode: string) {
+async function updateMarkdownFile(
+  markdownFile: string,
+  targetIndex: number,
+  newCode: string,
+) {
   const markdownPath = `${markdownFile}.md`;
-  
+
   try {
     const content = await Deno.readTextFile(markdownPath);
     const pipeDir = std.join(PD_DIR, markdownFile);
@@ -203,97 +230,110 @@ async function updateMarkdownFile(markdownFile: string, targetIndex: number, new
 
     // Create markdown-it instance
     const markdownIt = new md.MarkdownIt();
-    
+
     // Parse markdown content into tokens
     const tokens = markdownIt.parse(content, {});
-    
+
     // Find the target codeblock token within the range
     let codeblockFound = false;
-    for (let i = targetStep.range[0]; i < targetStep.range[1] && i < tokens.length; i++) {
+    for (
+      let i = targetStep.range[0];
+      i < targetStep.range[1] && i < tokens.length;
+      i++
+    ) {
       const token = tokens[i];
-      if (token && token.type === 'fence' && token.content.trim() === targetStep.code.trim()) {
+      if (
+        token && token.type === "fence" &&
+        token.content.trim() === targetStep.code.trim()
+      ) {
         // Update the codeblock content
         token.content = newCode;
         codeblockFound = true;
         break;
       }
     }
-    
+
     if (!codeblockFound) {
-      throw new Error(`Could not find the target codeblock in the specified range. Expected code:\n${targetStep.code}`);
+      throw new Error(
+        `Could not find the target codeblock in the specified range. Expected code:\n${targetStep.code}`,
+      );
     }
 
-    
     // Convert tokens back to markdown using custom serializer
     const updatedContent = tokensToMarkdown(tokens);
-    
+
     await Deno.writeTextFile(markdownPath, updatedContent);
-    console.log(std.colors.brightGreen(`✓ Updated codeblock in ${markdownPath}`));
-    
+    console.log(
+      std.colors.brightGreen(`✓ Updated codeblock in ${markdownPath}`),
+    );
   } catch (error) {
-    throw new Error(`Failed to update markdown file: ${error.message}`);
+    // Cast unknown catch variable to Error for .message access.
+    throw new Error(
+      `Failed to update markdown file: ${(error as Error).message}`,
+    );
   }
 }
 
 // Custom function to convert tokens back to markdown
+// deno-lint-ignore no-explicit-any
 function tokensToMarkdown(tokens: any[]): string {
-  let result = '';
-  
+  let result = "";
+
   for (const token of tokens) {
     switch (token.type) {
-      case 'heading_open':
-        result += '#'.repeat(token.tag.slice(1)) + ' ';
+      case "heading_open":
+        result += "#".repeat(token.tag.slice(1)) + " ";
         break;
-      case 'heading_close':
-        result += '\n\n';
+      case "heading_close":
+        result += "\n\n";
         break;
-      case 'paragraph_open':
+      case "paragraph_open":
         // No action needed
         break;
-      case 'paragraph_close':
-        result += '\n\n';
+      case "paragraph_close":
+        result += "\n\n";
         break;
-      case 'fence':
-        result += '```' + (token.info || '') + '\n';
+      case "fence":
+        result += "```" + (token.info || "") + "\n";
         result += token.content;
-        if (!token.content.endsWith('\n')) result += '\n';
-        result += '```\n\n';
+        if (!token.content.endsWith("\n")) result += "\n";
+        result += "```\n\n";
         break;
-      case 'code_inline':
-        result += '`' + token.content + '`';
+      case "code_inline":
+        result += "`" + token.content + "`";
         break;
-      case 'text':
+      case "text":
         result += token.content;
         break;
-      case 'softbreak':
-        result += '\n';
+      case "softbreak":
+        result += "\n";
         break;
-      case 'hardbreak':
-        result += '\n';
+      case "hardbreak":
+        result += "\n";
         break;
-      case 'bullet_list_open':
+      case "bullet_list_open":
         // No action needed
         break;
-      case 'bullet_list_close':
-        result += '\n';
+      case "bullet_list_close":
+        result += "\n";
         break;
-      case 'list_item_open':
-        result += '- ';
+      case "list_item_open":
+        result += "- ";
         break;
-      case 'list_item_close':
-        result += '\n';
+      case "list_item_close":
+        result += "\n";
         break;
-      case 'strong_open':
-        result += '**';
+      case "strong_open":
+        result += "**";
         break;
-      case 'strong_close':
-        result += '**';
+      case "strong_close":
+        result += "**";
         break;
-      case 'em_open':
-        result += '*';
+      case "em_open":
+        result += "*";
         break;
-      case 'em_close':
-        result += '*';
+      case "em_close":
+        result += "*";
         break;
       default:
         // For unhandled token types, try to preserve content if available
@@ -303,8 +343,8 @@ function tokensToMarkdown(tokens: any[]): string {
         break;
     }
   }
-  
-  return result.trim() + '\n';
+
+  return result.trim() + "\n";
 }
 
 export async function llmCommand(input: CliInput) {
@@ -312,25 +352,32 @@ export async function llmCommand(input: CliInput) {
     console.log(helpText);
     return input;
   }
-  
+
   const args = input.flags._;
   if (args.length < 4) {
     console.error("Error: Missing required arguments");
     console.log(helpText);
     return input;
   }
-  
+
   const [, markdownFile, target, ...promptParts] = args as string[];
-  const prompt = promptParts.join(' ');
+  const prompt = promptParts.join(" ");
 
   try {
-    console.log(std.colors.brightBlue(`Loading context for ${markdownFile}...`));
+    console.log(
+      std.colors.brightBlue(`Loading context for ${markdownFile}...`),
+    );
     const steps = await loadPipeContext(markdownFile);
-    
+
     console.log(std.colors.brightBlue(`Finding target step: ${target}...`));
-    const { step: targetStep, index: targetIndex } = findTargetStep(steps, target);
-    
-    console.log(std.colors.brightBlue(`Calling LLM to improve: ${targetStep.name}...`));
+    const { step: targetStep, index: targetIndex } = findTargetStep(
+      steps,
+      target,
+    );
+
+    console.log(
+      std.colors.brightBlue(`Calling LLM to improve: ${targetStep.name}...`),
+    );
     const contextPrompt = await buildContextPrompt(steps, targetIndex, prompt);
     const rawResult = await callLLM(contextPrompt);
     // Clean the LLM output: strip code fences and unwrap {"code": "..."} envelopes
@@ -338,16 +385,20 @@ export async function llmCommand(input: CliInput) {
     const improvedCode = cleanLLMOutput(rawResult);
 
     console.log(std.colors.brightBlue("Updating markdown file..."));
-    console.log(std.colors.brightGreen("Improved code:\n") + std.colors.dim(improvedCode));
+    console.log(
+      std.colors.brightGreen("Improved code:\n") + std.colors.dim(improvedCode),
+    );
     await updateMarkdownFile(markdownFile, targetIndex, improvedCode);
-    
+
     console.log(std.colors.brightGreen("✓ Successfully updated codeblock!"));
-    
   } catch (error) {
-    console.error(std.colors.brightRed(`Error: ${error.message}`));
+    console.error(std.colors.brightRed(`Error: ${(error as Error).message}`));
     input.errors = input.errors || [];
-    input.errors.push(error);
+    // PDError = { func: string } & Error — spread the caught error and add the
+    // required `func` identifier so the pipeline error reporter knows which step failed.
+    // Ref: pipedown.d.ts PDError type definition
+    input.errors.push({ ...(error as Error), func: "llm" } as PDError);
   }
-  
+
   return input;
 }

@@ -1,6 +1,7 @@
 import {
   assertEquals,
   assertStringIncludes,
+  // deno-lint-ignore no-import-prefix no-unversioned-import
 } from "jsr:@std/assert";
 import { pipeToScript } from "./pipeToScript.ts";
 import type { Pipe } from "./pipedown.d.ts";
@@ -149,7 +150,8 @@ Deno.test("pipeToScript", async (t) => {
           inList: false,
         },
         {
-          code: 'import { shared } from "npm:shared";\ninput.second = shared();',
+          code:
+            'import { shared } from "npm:shared";\ninput.second = shared();',
           range: [1, 1],
           name: "Second",
           funcName: "Second",
@@ -160,36 +162,41 @@ Deno.test("pipeToScript", async (t) => {
 
     const result = await pipeToScript({ pipe });
     assertEquals(result.success, true);
-    const importCount = result.script!.match(/import \{ shared \} from "npm:shared";/g)?.length ?? 0;
+    const importCount =
+      result.script!.match(/import \{ shared \} from "npm:shared";/g)?.length ??
+        0;
     assertEquals(importCount, 1);
   });
 
-  await t.step("keeps distinct import clauses from the same library", async () => {
-    const pipe = makePipe({
-      steps: [
-        {
-          code: 'import { a } from "npm:shared";\ninput.a = a();',
-          range: [0, 0],
-          name: "StepA",
-          funcName: "StepA",
-          inList: false,
-        },
-        {
-          code: 'import { b } from "npm:shared";\ninput.b = b();',
-          range: [1, 1],
-          name: "StepB",
-          funcName: "StepB",
-          inList: false,
-        },
-      ],
-    });
+  await t.step(
+    "keeps distinct import clauses from the same library",
+    async () => {
+      const pipe = makePipe({
+        steps: [
+          {
+            code: 'import { a } from "npm:shared";\ninput.a = a();',
+            range: [0, 0],
+            name: "StepA",
+            funcName: "StepA",
+            inList: false,
+          },
+          {
+            code: 'import { b } from "npm:shared";\ninput.b = b();',
+            range: [1, 1],
+            name: "StepB",
+            funcName: "StepB",
+            inList: false,
+          },
+        ],
+      });
 
-    const result = await pipeToScript({ pipe });
-    assertEquals(result.success, true);
-    const sharedImportCount = result.script!.split("\n")
-      .filter((line) => line.includes('from "npm:shared"')).length;
-    assertEquals(sharedImportCount, 2);
-  });
+      const result = await pipeToScript({ pipe });
+      assertEquals(result.success, true);
+      const sharedImportCount = result.script!.split("\n")
+        .filter((line) => line.includes('from "npm:shared"')).length;
+      assertEquals(sharedImportCount, 2);
+    },
+  );
 
   await t.step("handles steps with no imports", async () => {
     const pipe = makePipe({
@@ -266,27 +273,30 @@ Deno.test("pipeToScript", async (t) => {
     assertStringIncludes(result.script!, "export async function MyStep");
   });
 
-  await t.step("hoists imports including those from commented lines", async () => {
-    // Note: the regex `import.*from.*` captures the import even from
-    // `// import...` lines because the match starts at "import", not "//"
-    // This is known behavior — users should not have commented import lines
-    const pipe = makePipe({
-      steps: [
-        {
-          code:
-            'import { current } from "npm:current";\ninput.x = current();',
-          range: [0, 0],
-          name: "Step",
-          funcName: "Step",
-          inList: false,
-        },
-      ],
-    });
+  await t.step(
+    "hoists imports including those from commented lines",
+    async () => {
+      // Note: the regex `import.*from.*` captures the import even from
+      // `// import...` lines because the match starts at "import", not "//"
+      // This is known behavior — users should not have commented import lines
+      const pipe = makePipe({
+        steps: [
+          {
+            code:
+              'import { current } from "npm:current";\ninput.x = current();',
+            range: [0, 0],
+            name: "Step",
+            funcName: "Step",
+            inList: false,
+          },
+        ],
+      });
 
-    const result = await pipeToScript({ pipe });
-    assertEquals(result.success, true);
-    assertStringIncludes(result.script!, 'from "npm:current"');
-  });
+      const result = await pipeToScript({ pipe });
+      assertEquals(result.success, true);
+      assertStringIncludes(result.script!, 'from "npm:current"');
+    },
+  );
 
   await t.step("handles empty pipe with no steps", async () => {
     const pipe = makePipe({ steps: [] });
@@ -316,28 +326,32 @@ Deno.test("pipeToScript", async (t) => {
 
   // --- Zod Schema ---
 
-  await t.step("generates schema validation code when pipe has schema", async () => {
-    const pipe = makePipe({
-      schema: `import { z } from "npm:zod";\n\nexport const schema = z.object({\n  name: z.string(),\n  result: z.string().default(""),\n});`,
-      steps: [
-        {
-          code: 'input.result = input.name;',
-          range: [0, 0],
-          name: "Process",
-          funcName: "Process",
-          inList: false,
-        },
-      ],
-    });
+  await t.step(
+    "generates schema validation code when pipe has schema",
+    async () => {
+      const pipe = makePipe({
+        schema:
+          `import { z } from "npm:zod";\n\nexport const schema = z.object({\n  name: z.string(),\n  result: z.string().default(""),\n});`,
+        steps: [
+          {
+            code: "input.result = input.name;",
+            range: [0, 0],
+            name: "Process",
+            funcName: "Process",
+            inList: false,
+          },
+        ],
+      });
 
-    const result = await pipeToScript({ pipe });
-    assertEquals(result.success, true);
-    assertStringIncludes(result.script!, 'import { z } from "npm:zod"');
-    assertStringIncludes(result.script!, "_pd_initSchema");
-    assertStringIncludes(result.script!, "_pd_validateSchema");
-    assertStringIncludes(result.script!, "export const schema = z.object");
-    assertStringIncludes(result.script!, "PipeInput");
-  });
+      const result = await pipeToScript({ pipe });
+      assertEquals(result.success, true);
+      assertStringIncludes(result.script!, 'import { z } from "npm:zod"');
+      assertStringIncludes(result.script!, "_pd_initSchema");
+      assertStringIncludes(result.script!, "_pd_validateSchema");
+      assertStringIncludes(result.script!, "export const schema = z.object");
+      assertStringIncludes(result.script!, "PipeInput");
+    },
+  );
 
   await t.step("warns when schema imports are removed", async () => {
     const pipe = makePipe({
@@ -364,166 +378,202 @@ Deno.test("pipeToScript", async (t) => {
       const result = await pipeToScript({ pipe });
       assertEquals(result.success, true);
       assertEquals(warnings.length, 1);
-      assertStringIncludes(warnings[0], "removing import statements from pipe schema block");
-      assertStringIncludes(warnings[0], 'import { helper } from "./helper.ts";');
+      assertStringIncludes(
+        warnings[0],
+        "removing import statements from pipe schema block",
+      );
+      assertStringIncludes(
+        warnings[0],
+        'import { helper } from "./helper.ts";',
+      );
       assertStringIncludes(warnings[0], 'import { z } from "npm:zod";');
     } finally {
       console.warn = originalWarn;
     }
   });
 
-  await t.step("funcSequence includes init and validate wrappers with schema", async () => {
-    const pipe = makePipe({
-      schema: `export const schema = z.object({ x: z.number() });`,
-      steps: [
-        {
-          code: "input.x = 1;",
-          range: [0, 0],
-          name: "StepA",
-          funcName: "StepA",
-          inList: false,
-        },
-        {
-          code: "input.y = 2;",
-          range: [1, 1],
-          name: "StepB",
-          funcName: "StepB",
-          inList: false,
-        },
-      ],
-    });
+  await t.step(
+    "funcSequence includes init and validate wrappers with schema",
+    async () => {
+      const pipe = makePipe({
+        schema: `export const schema = z.object({ x: z.number() });`,
+        steps: [
+          {
+            code: "input.x = 1;",
+            range: [0, 0],
+            name: "StepA",
+            funcName: "StepA",
+            inList: false,
+          },
+          {
+            code: "input.y = 2;",
+            range: [1, 1],
+            name: "StepB",
+            funcName: "StepB",
+            inList: false,
+          },
+        ],
+      });
 
-    const result = await pipeToScript({ pipe });
-    assertEquals(result.success, true);
-    // Sequence should be: _pd_initSchema, StepA, _pd_validateSchema_0_StepA, StepB, _pd_validateSchema_1_StepB
-    // Each validator is named after the step it follows, so errors clearly
-    // report which step (by name and index) left the input in a bad state.
-    assertStringIncludes(result.script!, "_pd_initSchema, StepA, _pd_validateSchema_0_StepA, StepB, _pd_validateSchema_1_StepB");
-  });
+      const result = await pipeToScript({ pipe });
+      assertEquals(result.success, true);
+      // Sequence should be: _pd_initSchema, StepA, _pd_validateSchema_0_StepA, StepB, _pd_validateSchema_1_StepB
+      // Each validator is named after the step it follows, so errors clearly
+      // report which step (by name and index) left the input in a bad state.
+      assertStringIncludes(
+        result.script!,
+        "_pd_initSchema, StepA, _pd_validateSchema_0_StepA, StepB, _pd_validateSchema_1_StepB",
+      );
+    },
+  );
 
-  await t.step("generates schema validation with non-exported const schema", async () => {
-    // Users can omit `export` -- the schema variable is still used for
-    // validation wrappers; it just won't be importable from outside the pipe.
-    const pipe = makePipe({
-      schema: `const schema = z.object({\n  name: z.string(),\n});`,
-      steps: [
-        {
-          code: 'input.name = "hi";',
-          range: [0, 0],
-          name: "Step",
-          funcName: "Step",
-          inList: false,
-        },
-      ],
-    });
+  await t.step(
+    "generates schema validation with non-exported const schema",
+    async () => {
+      // Users can omit `export` -- the schema variable is still used for
+      // validation wrappers; it just won't be importable from outside the pipe.
+      const pipe = makePipe({
+        schema: `const schema = z.object({\n  name: z.string(),\n});`,
+        steps: [
+          {
+            code: 'input.name = "hi";',
+            range: [0, 0],
+            name: "Step",
+            funcName: "Step",
+            inList: false,
+          },
+        ],
+      });
 
-    const result = await pipeToScript({ pipe });
-    assertEquals(result.success, true);
-    assertStringIncludes(result.script!, 'import { z } from "npm:zod"');
-    assertStringIncludes(result.script!, "_pd_initSchema");
-    assertStringIncludes(result.script!, "_pd_validateSchema");
-    assertStringIncludes(result.script!, "PipeInput");
-    // The `const schema` should appear WITHOUT `export` prepended by us
-    assertStringIncludes(result.script!, "const schema = z.object");
-  });
+      const result = await pipeToScript({ pipe });
+      assertEquals(result.success, true);
+      assertStringIncludes(result.script!, 'import { z } from "npm:zod"');
+      assertStringIncludes(result.script!, "_pd_initSchema");
+      assertStringIncludes(result.script!, "_pd_validateSchema");
+      assertStringIncludes(result.script!, "PipeInput");
+      // The `const schema` should appear WITHOUT `export` prepended by us
+      assertStringIncludes(result.script!, "const schema = z.object");
+    },
+  );
 
-  await t.step("injects helper-only zod block without validation wrappers", async () => {
-    // When the zod block has no `schema` variable, definitions are still
-    // injected at module level so step code can use them (e.g. `.parse()`).
-    const pipe = makePipe({
-      schema: `const AggregatedDeveloper = z.object({\n  login: z.string(),\n  totalPRs: z.number(),\n});`,
-      steps: [
-        {
-          code: "const dev = AggregatedDeveloper.parse(input.raw);",
-          range: [0, 0],
-          name: "TestParse",
-          funcName: "TestParse",
-          inList: false,
-        },
-      ],
-    });
+  await t.step(
+    "injects helper-only zod block without validation wrappers",
+    async () => {
+      // When the zod block has no `schema` variable, definitions are still
+      // injected at module level so step code can use them (e.g. `.parse()`).
+      const pipe = makePipe({
+        schema:
+          `const AggregatedDeveloper = z.object({\n  login: z.string(),\n  totalPRs: z.number(),\n});`,
+        steps: [
+          {
+            code: "const dev = AggregatedDeveloper.parse(input.raw);",
+            range: [0, 0],
+            name: "TestParse",
+            funcName: "TestParse",
+            inList: false,
+          },
+        ],
+      });
 
-    const result = await pipeToScript({ pipe });
-    assertEquals(result.success, true);
-    // Zod import should be present — the definitions need it
-    assertStringIncludes(result.script!, 'import { z } from "npm:zod"');
-    // The definition should be at module level
-    assertStringIncludes(result.script!, "const AggregatedDeveloper = z.object");
-    // No validation wrappers since there's no `schema` variable
-    assertEquals(result.script!.includes("_pd_initSchema"), false);
-    assertEquals(result.script!.includes("_pd_validateSchema"), false);
-    assertEquals(result.script!.includes("PipeInput"), false);
-    // funcSequence should just include the step, without relying on exact whitespace
-    assertStringIncludes(result.script!, "TestParse");
-  });
+      const result = await pipeToScript({ pipe });
+      assertEquals(result.success, true);
+      // Zod import should be present — the definitions need it
+      assertStringIncludes(result.script!, 'import { z } from "npm:zod"');
+      // The definition should be at module level
+      assertStringIncludes(
+        result.script!,
+        "const AggregatedDeveloper = z.object",
+      );
+      // No validation wrappers since there's no `schema` variable
+      assertEquals(result.script!.includes("_pd_initSchema"), false);
+      assertEquals(result.script!.includes("_pd_validateSchema"), false);
+      assertEquals(result.script!.includes("PipeInput"), false);
+      // funcSequence should just include the step, without relying on exact whitespace
+      assertStringIncludes(result.script!, "TestParse");
+    },
+  );
 
-  await t.step("injects zod block with both schema and helper types", async () => {
-    // Mixed block: helper definitions + an exported schema — both should
-    // appear at module level, and validation wrappers should be generated.
-    const pipe = makePipe({
-      schema: `const Developer = z.object({ login: z.string() });\n\nexport const schema = z.object({\n  developers: z.array(Developer),\n});`,
-      steps: [
-        {
-          code: "input.developers = [];",
-          range: [0, 0],
-          name: "Init",
-          funcName: "Init",
-          inList: false,
-        },
-      ],
-    });
+  await t.step(
+    "injects zod block with both schema and helper types",
+    async () => {
+      // Mixed block: helper definitions + an exported schema — both should
+      // appear at module level, and validation wrappers should be generated.
+      const pipe = makePipe({
+        schema:
+          `const Developer = z.object({ login: z.string() });\n\nexport const schema = z.object({\n  developers: z.array(Developer),\n});`,
+        steps: [
+          {
+            code: "input.developers = [];",
+            range: [0, 0],
+            name: "Init",
+            funcName: "Init",
+            inList: false,
+          },
+        ],
+      });
 
-    const result = await pipeToScript({ pipe });
-    assertEquals(result.success, true);
-    // Helper type should be at module level
-    assertStringIncludes(result.script!, "const Developer = z.object");
-    // Schema + validation wrappers should exist
-    assertStringIncludes(result.script!, "export const schema = z.object");
-    assertStringIncludes(result.script!, "_pd_initSchema");
-    assertStringIncludes(result.script!, "PipeInput");
-  });
+      const result = await pipeToScript({ pipe });
+      assertEquals(result.success, true);
+      // Helper type should be at module level
+      assertStringIncludes(result.script!, "const Developer = z.object");
+      // Schema + validation wrappers should exist
+      assertStringIncludes(result.script!, "export const schema = z.object");
+      assertStringIncludes(result.script!, "_pd_initSchema");
+      assertStringIncludes(result.script!, "PipeInput");
+    },
+  );
 
-  await t.step("does not generate schema code when pipe has no schema", async () => {
-    const pipe = makePipe({
-      steps: [
-        {
-          code: "input.x = 1;",
-          range: [0, 0],
-          name: "Step",
-          funcName: "Step",
-          inList: false,
-        },
-      ],
-    });
+  await t.step(
+    "does not generate schema code when pipe has no schema",
+    async () => {
+      const pipe = makePipe({
+        steps: [
+          {
+            code: "input.x = 1;",
+            range: [0, 0],
+            name: "Step",
+            funcName: "Step",
+            inList: false,
+          },
+        ],
+      });
 
-    const result = await pipeToScript({ pipe });
-    assertEquals(result.success, true);
-    assertEquals(result.script!.includes("_pd_initSchema"), false);
-    assertEquals(result.script!.includes("_pd_validateSchema"), false);
-    assertEquals(result.script!.includes("npm:zod"), false);
-  });
+      const result = await pipeToScript({ pipe });
+      assertEquals(result.success, true);
+      assertEquals(result.script!.includes("_pd_initSchema"), false);
+      assertEquals(result.script!.includes("_pd_validateSchema"), false);
+      assertEquals(result.script!.includes("npm:zod"), false);
+    },
+  );
 
-  await t.step("does not render literal 'false' when build config present", async () => {
-    const pipe = makePipe({
-      config: { build: [{ format: "esm" }] },
-      steps: [
-        {
-          code: "input.x = 1;",
-          range: [0, 0],
-          name: "Step",
-          funcName: "Step",
-          inList: false,
-        },
-      ],
-    });
+  await t.step(
+    "does not render literal 'false' when build config present",
+    async () => {
+      const pipe = makePipe({
+        config: { build: [{ format: "esm" }] },
+        steps: [
+          {
+            code: "input.x = 1;",
+            range: [0, 0],
+            name: "Step",
+            funcName: "Step",
+            inList: false,
+          },
+        ],
+      });
 
-    const result = await pipeToScript({ pipe });
-    assertEquals(result.success, true);
-    // Each line of the script should not be the literal "false"
-    const lines = result.script!.split("\n");
-    const falseLines = lines.filter((l) => l.trim() === "false");
-    assertEquals(falseLines.length, 0, "Script should not contain a bare 'false' line");
-  });
+      const result = await pipeToScript({ pipe });
+      assertEquals(result.success, true);
+      // Each line of the script should not be the literal "false"
+      const lines = result.script!.split("\n");
+      const falseLines = lines.filter((l) => l.trim() === "false");
+      assertEquals(
+        falseLines.length,
+        0,
+        "Script should not contain a bare 'false' line",
+      );
+    },
+  );
 
   await t.step("includes dotenv import when no build config", async () => {
     const pipe = makePipe({

@@ -15,8 +15,8 @@
 PD.components.NewProjectModal = {
   // ── Lifecycle: register Escape handler and focus the name input ──
   // Ref: https://mithril.js.org/lifecycle-methods.html#oncreate
-  oncreate: function(vnode) {
-    vnode.state._keyHandler = function(e) {
+  oncreate: function (vnode) {
+    vnode.state._keyHandler = function (e) {
       if (e.key === "Escape") {
         e.preventDefault();
         PD.actions.closeNewProjectModal();
@@ -26,18 +26,18 @@ PD.components.NewProjectModal = {
     document.addEventListener("keydown", vnode.state._keyHandler);
 
     // Auto-focus the name input for immediate typing
-    var input = vnode.dom.querySelector("input");
+    const input = vnode.dom.querySelector("input");
     if (input) input.focus();
   },
 
   // ── Lifecycle: clean up keydown listener ──
-  onremove: function(vnode) {
+  onremove: function (vnode) {
     if (vnode.state._keyHandler) {
       document.removeEventListener("keydown", vnode.state._keyHandler);
     }
   },
 
-  view: function() {
+  view: function () {
     // Only render when the modal is open. Returning null removes the
     // component from the DOM entirely (triggers onremove/oncreate cycle).
     if (!PD.state.showNewProjectModal) return null;
@@ -45,25 +45,25 @@ PD.components.NewProjectModal = {
     // Resolve the display path for the new project directory.
     // Falls back to "$HOME/pipes" when config hasn't loaded yet.
     // Ref: resolveNewProjectDir in projectsDashboard.ts for the server-side equivalent
-    var config = PD.state.globalConfig || {};
-    var baseDir = config.newProjectDir || "$HOME/pipes";
+    const config = PD.state.globalConfig || {};
+    const baseDir = config.newProjectDir || "$HOME/pipes";
 
     // Build a live preview of the sanitised directory name so the user
     // can see exactly what path will be created on disk.
-    var safeName = PD.state.newProjectName.trim()
+    const safeName = PD.state.newProjectName.trim()
       ? PD.utils.sanitiseName(PD.state.newProjectName)
       : "";
-    var previewPath = safeName
+    const previewPath = safeName
       ? baseDir + "/" + safeName + "/"
       : baseDir + "/";
 
     return m(".modal-overlay", {
       // Clicking the backdrop (outside the modal box) closes the modal
-      onclick: function(e) {
+      onclick: function (e) {
         if (e.target === e.currentTarget) {
           PD.actions.closeNewProjectModal();
         }
-      }
+      },
     }, [
       m(".modal-box", [
         m("h2", "New Project"),
@@ -74,16 +74,16 @@ PD.components.NewProjectModal = {
           type: "text",
           placeholder: "e.g. My Data Pipeline",
           value: PD.state.newProjectName,
-          oninput: function(e) {
+          oninput: function (e) {
             PD.state.newProjectName = e.target.value;
           },
           // Enter submits the form — standard modal UX
-          onkeydown: function(e) {
+          onkeydown: function (e) {
             if (e.key === "Enter") {
               e.preventDefault();
               PD.actions.createNewProject();
             }
-          }
+          },
         }),
 
         // ── Path preview ──
@@ -94,14 +94,15 @@ PD.components.NewProjectModal = {
         // ── Action buttons ──
         m(".modal-actions", [
           m("button.tb-btn", {
-            onclick: PD.actions.closeNewProjectModal
+            onclick: PD.actions.closeNewProjectModal,
           }, "Cancel"),
           m("button.tb-btn.primary", {
             onclick: PD.actions.createNewProject,
-            disabled: PD.state.newProjectCreating || !PD.state.newProjectName.trim()
-          }, PD.state.newProjectCreating ? "Creating..." : "Create")
-        ])
-      ])
+            disabled: PD.state.newProjectCreating ||
+              !PD.state.newProjectName.trim(),
+          }, PD.state.newProjectCreating ? "Creating..." : "Create"),
+        ]),
+      ]),
     ]);
-  }
+  },
 };

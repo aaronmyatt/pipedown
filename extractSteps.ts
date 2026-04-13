@@ -93,17 +93,25 @@ export function parseStepIndices(spec: string, maxIndex: number): number[] {
       // Range: "2-5" → [2, 3, 4, 5]
       const parts = segment.split("-").map((p) => p.trim());
       if (parts.length !== 2) {
-        throw new Error('Invalid range: "' + segment + '". Expected format: "start-end"');
+        throw new Error(
+          'Invalid range: "' + segment + '". Expected format: "start-end"',
+        );
       }
 
       const start = parseInt(parts[0], 10);
       const end = parseInt(parts[1], 10);
 
       if (isNaN(start) || isNaN(end)) {
-        throw new Error('Invalid range: "' + segment + '". Both start and end must be integers');
+        throw new Error(
+          'Invalid range: "' + segment +
+            '". Both start and end must be integers',
+        );
       }
       if (start > end) {
-        throw new Error('Invalid range: "' + segment + '". Start (' + start + ") must be <= end (" + end + ")");
+        throw new Error(
+          'Invalid range: "' + segment + '". Start (' + start +
+            ") must be <= end (" + end + ")",
+        );
       }
 
       for (let i = start; i <= end; i++) {
@@ -113,7 +121,9 @@ export function parseStepIndices(spec: string, maxIndex: number): number[] {
       // Single index: "2"
       const idx = parseInt(segment, 10);
       if (isNaN(idx)) {
-        throw new Error('Invalid step index: "' + segment + '". Must be an integer');
+        throw new Error(
+          'Invalid step index: "' + segment + '". Must be an integer',
+        );
       }
       indices.add(idx);
     }
@@ -249,8 +259,10 @@ export function buildReplacementStep(
   // The import path targets the built .pd/<cleanName>/index.ts file.
   // pipeToScript.ts will hoist this import to the top of the parent's
   // generated TypeScript, making the pipe variable available at runtime.
-  const importLine = "import { pipe as " + camelName + "Pipe } from \"./" + kebabName + "/index.ts\";";
-  const processLine = "input." + camelName + " = await " + camelName + "Pipe.process(input);";
+  const importLine = "import { pipe as " + camelName + 'Pipe } from "./' +
+    kebabName + '/index.ts";';
+  const processLine = "input." + camelName + " = await " + camelName +
+    "Pipe.process(input);";
   const code = importLine + "\n" + processLine;
 
   // Determine the safety gate: reuse the first check from extracted steps,
