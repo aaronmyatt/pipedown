@@ -69,6 +69,17 @@ export type mdToPipeInput =
 
 /** A single executable step extracted from a markdown code block. */
 export type Step = {
+    /**
+     * Stable, unique identifier for this step, persisted in index.json
+     * but NOT written to markdown. Used by the web UI, sessions, and
+     * Pi patch proposals to reference steps durably across rebuilds.
+     *
+     * Generated via `crypto.randomUUID()` on first build; preserved
+     * across subsequent builds by matching steps on funcName.
+     *
+     * Ref: https://developer.mozilla.org/en-US/docs/Web/API/Crypto/randomUUID
+     */
+    stepId?: string;
     /** The raw code content of the ts/js code block. */
     code: string;
     /** Token range [startIndex, endIndex] in the parsed token array. */
@@ -100,6 +111,17 @@ export type Step = {
         /** Line number (0-indexed, exclusive) after the fence-close line in the original source. */
         codeEndLine?: number;
     };
+    /**
+     * Content-based fingerprint (SHA-256 hex) derived from the step's
+     * meaningful content: code, funcName, and config. Used by the session
+     * layer to detect whether a step has changed between runs — unchanged
+     * steps can reuse prior snapshots safely.
+     *
+     * Computed by `computeStepFingerprint()` during `pd build`.
+     *
+     * Ref: https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/digest
+     */
+    fingerprint?: string;
     /** The code content at parse time, for detecting modifications during round-trip. */
     originalCode?: string;
     /** The step name at parse time, for detecting title modifications during round-trip. */
