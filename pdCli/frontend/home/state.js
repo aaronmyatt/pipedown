@@ -111,7 +111,69 @@ window.PD = {
     extractMode: false,            // true when step selection UI is active
     extractSelected: {},           // { [stepIndex]: true } — selected steps
     extractName: "",               // user-entered name for the new sub-pipe
-    extracting: false              // true while the POST /api/extract is in flight
+    extracting: false,             // true while the POST /api/extract is in flight
+
+    // ── Sync/workspace state ──
+    // Tracks whether the structured workspace (index.json) is in sync with
+    // the markdown file on disk. Populated from pipeData.workspace.syncState
+    // when a pipe is selected, and updated by SSE events.
+    // Ref: WEB_FIRST_WORKFLOW_PLAN.md §7.3 — sync state model
+    // Ref: pipedown.d.ts — SyncState type
+    syncState: "clean",        // "clean" | "json_dirty" | "syncing"
+
+    // ── Sync preview state ──
+    // Tracks the expandable sync preview panel in SyncStatusBar.
+    // When the workspace is json_dirty, the user can click "Preview sync"
+    // to see the generated markdown before committing the sync.
+    // Ref: WEB_FIRST_WORKFLOW_PLAN.md Phase 4 — sync preview panel
+    syncPreview: null,           // markdown preview text from sync-preview API
+    syncPreviewLoading: false,   // loading state for preview fetch
+    syncPreviewOpen: false,      // whether preview panel is expanded
+
+    // ── Pi proposal state ──
+    // Tracks the current Pi-generated patch proposal being reviewed.
+    // Proposals are generated via POST /api/pi/proposals and contain
+    // focused operations that mutate index.json only (never markdown).
+    // The user reviews operations in the drawer, then applies or discards.
+    // Ref: WEB_FIRST_WORKFLOW_PLAN.md §6 — Pi / LLM Integration Plan
+    // Ref: pipedown.d.ts — PatchProposal, PatchOperation
+    activeProposal: null,       // current PatchProposal being reviewed
+    proposalLoading: false,     // true while Pi is generating a proposal
+    proposalError: null,        // error message from proposal generation
+
+    // ── Step editing state ──
+    // Controls inline structured editing of individual steps. When
+    // editingStep is non-null, the step at that index shows form fields
+    // instead of rendered markdown content.
+    // Ref: WEB_FIRST_WORKFLOW_PLAN.md §2 — Phase 2 structured editing
+    editingStep: null,          // step index being edited, or null
+    editStepBuffer: null,       // { name, description, code } being edited
+
+    // ── Pipe-level structured editing state ──
+    // Controls inline editing of pipe-level fields (description, schema).
+    // When editingPipeField is non-null, the corresponding editor replaces
+    // the toolbar button with a textarea + Save/Cancel.
+    editingPipeField: null,     // "description" | "schema" | null
+    editPipeBuffer: "",         // current edit text
+
+    // ── Session state ──
+    // Tracks the current run session, recent sessions for the selected pipe,
+    // and loading state for session API calls. Sessions enable incremental
+    // execution, per-step status tracking, and rerun-from-here workflows.
+    // Ref: sessionManager.ts — RunSession type and CRUD logic
+    // Ref: buildandserve.ts — POST /api/sessions, GET /api/sessions/:project/:pipe
+    activeSession: null,        // current RunSession object (or null)
+    sessionLoading: false,      // true while session API calls in flight
+    latestSessions: [],         // recent sessions for the currently selected pipe
+    _sessionExpandedStep: null, // which step is expanded in the drawer session panel (index or null)
+
+    // ── Session history state ──
+    // Tracks the "Sessions" tab/section in the drawer, showing a list of
+    // recent sessions with compact metadata. Click a session to set it as active.
+    // Ref: WEB_FIRST_WORKFLOW_PLAN.md Phase 5 — session history browsing
+    showSessionHistory: false,
+    sessionHistory: [],
+    sessionHistoryLoading: false
   },
   actions: {},
   utils: {},
@@ -340,6 +402,16 @@ PD.actions.selectPipe = function(pipe) {
   PD.state.editDirty = false;
   PD.state.editSaving = false;
 
+  // Reset structured edit state when switching pipes.
+  PD.state.editingStep = null;
+  PD.state.editStepBuffer = null;
+  PD.state.editingPipeField = null;
+  PD.state.editPipeBuffer = "";
+  PD.state.syncState = "clean";
+  PD.state.syncPreview = null;
+  PD.state.syncPreviewLoading = false;
+  PD.state.syncPreviewOpen = false;
+
   PD.state.selectedPipe = pipe;
 
   // ── Persist selection to URL hash ──
@@ -369,6 +441,22 @@ PD.actions.selectPipe = function(pipe) {
   PD.state.drawerInputBuffer = "{}";
   PD.state.drawerInputTarget = null;
 
+  // Reset session state — stale session data from the previous pipe
+  // must not linger when switching to a different pipe.
+  PD.state.activeSession = null;
+  PD.state.latestSessions = [];
+  PD.state.sessionLoading = false;
+  PD.state._sessionExpandedStep = null;
+  PD.state.showSessionHistory = false;
+  PD.state.sessionHistory = [];
+  PD.state.sessionHistoryLoading = false;
+
+  // Reset proposal state — stale proposal from the previous pipe
+  // must not linger when switching.
+  PD.state.activeProposal = null;
+  PD.state.proposalLoading = false;
+  PD.state.proposalError = null;
+
   // Close the drawer when switching pipes so stale output doesn't linger.
   PD.state.drawerOpen = false;
   PD.state.drawerOutput = "";
@@ -395,6 +483,21 @@ PD.actions.selectPipe = function(pipe) {
     PD.state.pipeData = results[1];
     PD.state.markdownHtml = PD.utils.renderMarkdownWithAnnotations(results[0], results[1]);
     PD.state.markdownLoading = false;
+
+    // ── Read sync state from pipe workspace metadata ──
+    // The workspace block in index.json tracks whether structured edits
+    // are in sync with the markdown file on disk.
+    // Ref: WEB_FIRST_WORKFLOW_PLAN.md §7.3 — sync state model
+    if (results[1] && results[1].workspace && results[1].workspace.syncState) {
+      PD.state.syncState = results[1].workspace.syncState;
+    } else {
+      PD.state.syncState = "clean";
+    }
+
+    // After pipe data loads, fetch the most recent sessions for this pipe.
+    // This populates session badges and the session panel in the drawer.
+    // Ref: PD.actions.loadLatestSession — fetches from GET /api/sessions/:project/:pipe
+    PD.actions.loadLatestSession();
   }).catch(function(err) {
     PD.state.markdownHtml = null;
     PD.state.markdownLoading = false;
@@ -600,6 +703,19 @@ PD.actions.refreshPipe = function() {
     PD.state.pipeData = results[1];
     PD.state.markdownHtml = PD.utils.renderMarkdownWithAnnotations(results[0], results[1]);
     PD.state.markdownLoading = false;
+
+    // ── Refresh sync state from workspace metadata ──
+    if (results[1] && results[1].workspace && results[1].workspace.syncState) {
+      PD.state.syncState = results[1].workspace.syncState;
+    } else {
+      PD.state.syncState = "clean";
+    }
+
+    // Also refresh the active session if one is open, so per-step status
+    // badges stay current after file changes trigger a rebuild.
+    if (PD.state.activeSession) {
+      PD.actions.refreshActiveSession();
+    }
   }).catch(function() {
     // On error, fall through — the existing content stays visible.
   }).then(function() {
@@ -769,10 +885,27 @@ PD.actions.loadPipeTraces = function() {
 
 // enterEditMode — switches to the textarea editor, copying the current raw
 // markdown into an editable buffer.
+// When syncState is "json_dirty", shows a warning that saving raw markdown
+// will overwrite any unsynced structured edits.
+// Ref: WEB_FIRST_WORKFLOW_PLAN.md §2 — raw markdown as secondary mode
 PD.actions.enterEditMode = function() {
+  // Warn if there are unsynced structured edits that would be lost
+  if (PD.state.syncState === "json_dirty") {
+    if (!confirm(
+      "You have unsynced structured edits. " +
+      "Saving raw markdown will replace them. Continue?"
+    )) {
+      return;
+    }
+  }
   PD.state.editMode = true;
   PD.state.editBuffer = PD.state.rawMarkdown || "";
   PD.state.editDirty = false;
+  // Cancel any active structured editors when entering raw mode
+  PD.state.editingStep = null;
+  PD.state.editStepBuffer = null;
+  PD.state.editingPipeField = null;
+  PD.state.editPipeBuffer = "";
 };
 
 // exitEditMode — discards any unsaved changes and returns to the rendered
@@ -807,10 +940,14 @@ PD.actions.saveEdit = function() {
   }).then(function(res) {
     if (!res.ok) throw new Error("Save failed: " + res.statusText);
     // Exit edit mode and re-select the pipe to refresh markdown + pipeData.
+    // Set syncState to "clean" because saving raw markdown triggers a rebuild
+    // which overwrites index.json — any unsynced structured edits are lost.
+    // Ref: WEB_FIRST_WORKFLOW_PLAN.md §7.4 — saving raw markdown rebuilds
     PD.state.editMode = false;
     PD.state.editBuffer = null;
     PD.state.editDirty = false;
     PD.state.editSaving = false;
+    PD.state.syncState = "clean";
     PD.actions.selectPipe(pipe);
   }).catch(function(err) {
     PD.state.editSaving = false;
@@ -1344,5 +1481,989 @@ PD.actions.performExtract = function() {
     // Extraction creates a new sub-pipe — refresh the full list so
     // the "Projects" section shows it.
     PD.actions.loadAllPipes();
+  });
+};
+
+// ═══════════════════════════════════════════════════════════════════════
+// ── Session Actions ──
+// These actions interact with the session-based execution API to enable
+// incremental runs, per-step status tracking, rerun-from-here, and
+// continue-from-last-step workflows.
+//
+// Session API endpoints (all in buildandserve.ts):
+//   POST /api/sessions              — create + optionally execute
+//   GET  /api/sessions/:project/:pipe — list recent sessions
+//   GET  /api/sessions/:project/:pipe/:sessionId — get full details
+//   POST /api/sessions/:project/:pipe/:sessionId/continue — resume
+//
+// Ref: sessionManager.ts — RunSession type, createSession, executeSession
+// Ref: pipedown.d.ts — RunSession, SessionStepRecord, SessionMode, StepStatus
+// ═══════════════════════════════════════════════════════════════════════
+
+/**
+ * loadLatestSession — Fetches recent sessions for the currently selected pipe
+ * and sets the most recent one as the active session.
+ *
+ * Called after selectPipe() loads pipe data, and whenever we need to refresh
+ * the session list (e.g. after a new session is created).
+ *
+ * The GET /api/sessions/:project/:pipe endpoint returns session summaries
+ * with snapshot data stripped to "[present]" for compactness. To get full
+ * step snapshot data for the active session, we follow up with a full
+ * session fetch via refreshActiveSession().
+ *
+ * @return {void}
+ * Ref: GET /api/sessions/:project/:pipe in buildandserve.ts
+ */
+PD.actions.loadLatestSession = function() {
+  if (!PD.state.selectedPipe || !PD.state.pipeData) return;
+  PD.state.sessionLoading = true;
+
+  // Use pipeData.name (the H1 heading) for the pipe name, matching how
+  // the session manager uses pipeName from the Pipe object (which is
+  // derived from fileName/cleanName/name). However, sessions use the
+  // pipe's fileName (the .pd directory name), not the display name.
+  // Ref: sessionManager.ts createSession — uses pipeData.fileName || cleanName || name
+  var pipeName = PD.state.selectedPipe.pipeName;
+
+  var url = "/api/sessions/" +
+    encodeURIComponent(PD.state.selectedPipe.projectName) +
+    "/" + encodeURIComponent(pipeName) + "?limit=5";
+
+  m.request({ method: "GET", url: url }).then(function(sessions) {
+    PD.state.latestSessions = sessions || [];
+    PD.state.sessionLoading = false;
+
+    // Set the most recent session as active (if any exist).
+    // Then fetch full details (with snapshot data) for the active session.
+    if (sessions && sessions.length > 0) {
+      PD.state.activeSession = sessions[0];
+      PD.actions.refreshActiveSession();
+    } else {
+      PD.state.activeSession = null;
+    }
+  }).catch(function() {
+    // Session fetch is non-critical — the page works without session data.
+    // Fail silently so the user isn't blocked from using the pipe.
+    PD.state.latestSessions = [];
+    PD.state.activeSession = null;
+    PD.state.sessionLoading = false;
+  });
+};
+
+/**
+ * refreshActiveSession — Re-fetches the full active session object from the
+ * server. This gets complete step snapshot data (before/after/delta) that
+ * the list endpoint strips for compactness.
+ *
+ * Called after SSE events signal step completion, after creating a new
+ * session, and periodically when needed.
+ *
+ * @return {void}
+ * Ref: GET /api/sessions/:project/:pipe/:sessionId in buildandserve.ts
+ */
+PD.actions.refreshActiveSession = function() {
+  if (!PD.state.activeSession || !PD.state.selectedPipe) return;
+
+  var session = PD.state.activeSession;
+  var pipeName = PD.state.selectedPipe.pipeName;
+
+  var url = "/api/sessions/" +
+    encodeURIComponent(session.projectName) +
+    "/" + encodeURIComponent(pipeName) +
+    "/" + encodeURIComponent(session.sessionId);
+
+  m.request({ method: "GET", url: url }).then(function(fullSession) {
+    if (fullSession) {
+      PD.state.activeSession = fullSession;
+    }
+  }).catch(function() {
+    // Best-effort refresh — if it fails, stale data remains visible.
+  });
+};
+
+/**
+ * createAndRunSession — Creates a new session via POST /api/sessions and
+ * executes it in the specified mode. Replaces the pipe run with a
+ * session-backed version that provides per-step tracking.
+ *
+ * The response from POST /api/sessions (when mode is provided) is the
+ * fully executed session object with step statuses and snapshots.
+ *
+ * @param {string} mode — SessionMode: "full", "to_step", "from_step", "single_step"
+ * @param {object} [extraOpts] — Additional body fields (targetStepIndex, startStepIndex, input)
+ * @return {void}
+ * Ref: POST /api/sessions in buildandserve.ts
+ */
+PD.actions.createAndRunSession = function(mode, extraOpts) {
+  if (!PD.state.selectedPipe) return;
+  PD.state.sessionLoading = true;
+
+  var body = {
+    project: PD.state.selectedPipe.projectName,
+    pipe: PD.state.selectedPipe.pipeName,
+    mode: mode || "full"
+  };
+
+  // Merge any extra options (targetStepIndex, startStepIndex, input)
+  if (extraOpts) {
+    Object.keys(extraOpts).forEach(function(k) {
+      body[k] = extraOpts[k];
+    });
+  }
+
+  // Open the drawer to show progress, similar to how postAction works.
+  PD.actions.startOp("session", "Session: " + (mode || "full"));
+
+  fetch("/api/sessions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  }).then(function(res) {
+    if (!res.ok) {
+      return res.text().then(function(bodyText) {
+        var msg = PD.utils.parseErrorBody(bodyText);
+        PD.state.drawerError = {
+          status: res.status,
+          statusText: res.statusText,
+          message: msg
+        };
+        PD.state.drawerStatus = "error";
+        PD.state.drawerOutput = msg;
+        PD.state.sessionLoading = false;
+        m.redraw.sync();
+      });
+    }
+    return res.json().then(function(session) {
+      // Store the returned session as the active session.
+      PD.state.activeSession = session;
+      PD.state.sessionLoading = false;
+
+      // Update drawer with session results for display.
+      PD.state.drawerStatus = session.status === "failed" ? "error" : "done";
+      PD.state.drawerLabel = "Session: " + session.mode + " (" + session.status + ")";
+
+      // Show the session output in the drawer. If the session completed
+      // successfully, we can display the final step's afterSnapshot as
+      // the pipeline output.
+      var lastDoneStep = null;
+      for (var i = session.steps.length - 1; i >= 0; i--) {
+        if (session.steps[i].status === "done" && session.steps[i].afterSnapshotRef) {
+          lastDoneStep = session.steps[i];
+          break;
+        }
+      }
+
+      if (lastDoneStep && lastDoneStep.afterSnapshotRef) {
+        try {
+          var output = JSON.parse(lastDoneStep.afterSnapshotRef);
+          PD.state.drawerParsedOutput = output;
+          PD.state.drawerOutputType = "json";
+          PD.state.drawerOutput = JSON.stringify(output, null, 2);
+        } catch (_) {
+          PD.state.drawerOutput = JSON.stringify(session, null, 2);
+        }
+      } else {
+        PD.state.drawerOutput = JSON.stringify(session, null, 2);
+      }
+
+      // Also refresh the session list so it includes the new session.
+      PD.actions.loadLatestSession();
+      m.redraw();
+    });
+  }).catch(function(err) {
+    PD.state.drawerError = {
+      status: 0,
+      statusText: "Network Error",
+      message: err.message
+    };
+    PD.state.drawerStatus = "error";
+    PD.state.drawerOutput = "Error: " + err.message;
+    PD.state.sessionLoading = false;
+    m.redraw();
+  });
+};
+
+/**
+ * runToStepSession — Creates a session that runs from step 0 to the target step.
+ * Session-backed replacement for runToStep().
+ *
+ * @param {number} stepIndex — The step index to run up to (inclusive)
+ * @return {void}
+ */
+PD.actions.runToStepSession = function(stepIndex) {
+  PD.actions.createAndRunSession("to_step", { targetStepIndex: stepIndex });
+};
+
+/**
+ * runNextStep — Runs just the next unexecuted step from the active session.
+ * Determines the first pending step and creates a single_step session for it.
+ *
+ * If there's no active session, falls back to creating a new full session
+ * targeting step 0.
+ *
+ * @return {void}
+ */
+PD.actions.runNextStep = function() {
+  var session = PD.state.activeSession;
+  var nextIndex = 0;
+
+  if (session && session.steps) {
+    // Find the first step that is NOT "done" — this is the next to execute.
+    for (var i = 0; i < session.steps.length; i++) {
+      if (session.steps[i].status !== "done") {
+        nextIndex = i;
+        break;
+      }
+      // If all steps are done, nextIndex stays at the last one
+      // (edge case: re-running the last step).
+      if (i === session.steps.length - 1) {
+        nextIndex = i;
+      }
+    }
+  }
+
+  PD.actions.createAndRunSession("single_step", { targetStepIndex: nextIndex });
+};
+
+/**
+ * rerunFromStep — Creates a session that re-executes from a specific step
+ * to the end of the pipe. Uses "from_step" mode.
+ *
+ * @param {number} stepIndex — The step index to start re-execution from
+ * @return {void}
+ */
+PD.actions.rerunFromStep = function(stepIndex) {
+  PD.actions.createAndRunSession("from_step", { startStepIndex: stepIndex });
+};
+
+/**
+ * continueSession — Continues the active session from the last completed step.
+ * Uses the POST /api/sessions/:project/:pipe/:sessionId/continue endpoint.
+ *
+ * This is useful after a to_step partial run or after a failed step is fixed.
+ * The continue endpoint resets the session mode to "continue" and executes
+ * from the first non-done step.
+ *
+ * @return {void}
+ * Ref: POST /api/sessions/:project/:pipe/:sessionId/continue in buildandserve.ts
+ */
+PD.actions.continueSession = function() {
+  if (!PD.state.activeSession || !PD.state.selectedPipe) return;
+  PD.state.sessionLoading = true;
+
+  var session = PD.state.activeSession;
+  var pipeName = PD.state.selectedPipe.pipeName;
+
+  var url = "/api/sessions/" +
+    encodeURIComponent(session.projectName) +
+    "/" + encodeURIComponent(pipeName) +
+    "/" + encodeURIComponent(session.sessionId) + "/continue";
+
+  // Open the drawer to show progress.
+  PD.actions.startOp("session", "Continuing session...");
+
+  fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({})
+  }).then(function(res) {
+    if (!res.ok) {
+      return res.text().then(function(bodyText) {
+        var msg = PD.utils.parseErrorBody(bodyText);
+        PD.state.drawerError = {
+          status: res.status,
+          statusText: res.statusText,
+          message: msg
+        };
+        PD.state.drawerStatus = "error";
+        PD.state.drawerOutput = msg;
+        PD.state.sessionLoading = false;
+        m.redraw.sync();
+      });
+    }
+    return res.json().then(function(continued) {
+      PD.state.activeSession = continued;
+      PD.state.sessionLoading = false;
+
+      PD.state.drawerStatus = continued.status === "failed" ? "error" : "done";
+      PD.state.drawerLabel = "Session: continue (" + continued.status + ")";
+
+      // Show the final output from the continued session.
+      var lastDoneStep = null;
+      for (var i = continued.steps.length - 1; i >= 0; i--) {
+        if (continued.steps[i].status === "done" && continued.steps[i].afterSnapshotRef) {
+          lastDoneStep = continued.steps[i];
+          break;
+        }
+      }
+
+      if (lastDoneStep && lastDoneStep.afterSnapshotRef) {
+        try {
+          var output = JSON.parse(lastDoneStep.afterSnapshotRef);
+          PD.state.drawerParsedOutput = output;
+          PD.state.drawerOutputType = "json";
+          PD.state.drawerOutput = JSON.stringify(output, null, 2);
+        } catch (_) {
+          PD.state.drawerOutput = JSON.stringify(continued, null, 2);
+        }
+      } else {
+        PD.state.drawerOutput = JSON.stringify(continued, null, 2);
+      }
+
+      PD.actions.loadLatestSession();
+      m.redraw();
+    });
+  }).catch(function(err) {
+    PD.state.drawerError = {
+      status: 0,
+      statusText: "Network Error",
+      message: err.message
+    };
+    PD.state.drawerStatus = "error";
+    PD.state.drawerOutput = "Error: " + err.message;
+    PD.state.sessionLoading = false;
+    m.redraw();
+  });
+};
+
+// ── Session utility: step status symbol ──
+// Returns a short Unicode character representing a step's execution status.
+// Used by MarkdownRenderer for step badges and RunDrawer for the mini status bar.
+// Ref: pipedown.d.ts — StepStatus type
+PD.utils.stepStatusSymbol = function(status) {
+  switch (status) {
+    case "pending":  return "\u25CB";   // ○ gray circle
+    case "running":  return "\u25CC";   // ◌ dotted circle (spinner)
+    case "done":     return "\u2713";   // ✓ check mark
+    case "failed":   return "\u2717";   // ✗ ballot X
+    case "skipped":  return "\u2014";   // — em dash
+    case "stale":    return "\u26A0";   // ⚠ warning
+    case "reused":   return "\u21BB";   // ↻ clockwise arrow
+    default:         return "\u25CB";   // ○ default to pending
+  }
+};
+
+// ── Session utility: step status CSS class ──
+// Returns a CSS class name for styling status badges.
+// Ref: styles.css — .step-status-badge--pending, --running, --done, etc.
+PD.utils.stepStatusClass = function(status) {
+  return "step-status-badge--" + (status || "pending");
+};
+
+// ═══════════════════════════════════════════════════════════════════════
+// ── Phase 2: Structured Edit + Sync Actions ──
+// These actions interact with the structured edit API endpoints to enable
+// pipe-level and step-level editing via index.json, plus sync/rebuild.
+//
+// Ref: WEB_FIRST_WORKFLOW_PLAN.md §2 — Phase 2 checklist
+// Ref: buildandserve.ts — PATCH /api/workspaces, POST /api/workspaces/.../sync
+// ═══════════════════════════════════════════════════════════════════════
+
+/**
+ * syncToMarkdown — Triggers a structured-to-markdown sync via the API.
+ * Reads the current index.json, generates markdown with pipeToMarkdown(),
+ * writes the .md file, and rebuilds. Updates syncState throughout.
+ *
+ * Phase 4 enhancement: sets syncState to "syncing" immediately, refreshes
+ * pipeData on success (which should show syncState "clean"), and shows
+ * an error in the drawer on failure while keeping the dirty state.
+ *
+ * @return {void}
+ * Ref: POST /api/workspaces/:project/:pipe/sync in buildandserve.ts
+ */
+PD.actions.syncToMarkdown = function() {
+  if (!PD.state.selectedPipe) return;
+  // Immediately mark as syncing so the UI shows a spinner.
+  PD.state.syncState = "syncing";
+  // Close the sync preview panel since we're about to sync.
+  PD.state.syncPreviewOpen = false;
+  PD.state.syncPreview = null;
+  m.redraw();
+
+  var url = "/api/workspaces/" +
+    encodeURIComponent(PD.state.selectedPipe.projectName) +
+    "/" + encodeURIComponent(PD.state.selectedPipe.pipeName) +
+    "/sync";
+
+  fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "{}"
+  }).then(function(res) {
+    if (!res.ok) throw new Error("Sync failed: " + res.statusText);
+    return res.json();
+  }).then(function(result) {
+    // Update sync state from the result envelope.
+    // On success, syncState should be "clean" and pipeData refresh
+    // will confirm via the workspace metadata in index.json.
+    PD.state.syncState = result.syncState || "clean";
+    // Refresh pipe data to reflect the rebuilt index.json.
+    // The SSE sync_state_changed event may also trigger a refresh.
+    PD.actions.refreshPipe();
+  }).catch(function(err) {
+    // Revert to dirty on failure — the sync didn't complete.
+    // The workspace remains recoverable with unsynced edits intact.
+    PD.state.syncState = "json_dirty";
+    PD.state.drawerOpen = true;
+    PD.state.drawerLabel = "Sync error";
+    PD.state.drawerStatus = "error";
+    PD.state.drawerOutput = err.message || "Sync failed";
+    PD.state.drawerError = {
+      status: 0,
+      statusText: "Sync Failed",
+      message: err.message || "Sync failed"
+    };
+    m.redraw();
+  });
+};
+
+/**
+ * loadSyncPreview — Fetches the generated markdown preview from the
+ * sync-preview API without actually writing to disk. The preview is
+ * displayed in the expandable panel below the SyncStatusBar.
+ *
+ * Uses GET /api/workspaces/:pipeName/sync-preview which reads index.json,
+ * generates markdown via pipeToMarkdown(), and returns a SyncResult
+ * envelope with the markdown field populated.
+ *
+ * @return {void}
+ * Ref: GET /api/workspaces/:pipeName/sync-preview in buildandserve.ts
+ */
+PD.actions.loadSyncPreview = function() {
+  if (!PD.state.selectedPipe || PD.state.syncPreviewLoading) return;
+  PD.state.syncPreviewLoading = true;
+  PD.state.syncPreview = null;
+  m.redraw();
+
+  // The sync-preview endpoint uses just pipeName (not project/pipe).
+  // URL shape: /api/workspaces/:pipeName/sync-preview
+  // Ref: buildandserve.ts — GET /api/workspaces/:pipeName/sync-preview
+  var url = "/api/workspaces/" +
+    encodeURIComponent(PD.state.selectedPipe.pipeName) +
+    "/sync-preview";
+
+  m.request({ method: "GET", url: url }).then(function(result) {
+    // The result is a SyncResult envelope; we want the .markdown field.
+    PD.state.syncPreview = result.markdown || null;
+    PD.state.syncPreviewLoading = false;
+  }).catch(function(err) {
+    PD.state.syncPreview = null;
+    PD.state.syncPreviewLoading = false;
+    // Show the error in the sync preview panel (not the drawer).
+    console.error("[pd:sync] loadSyncPreview failed:", err.message);
+  });
+};
+
+/**
+ * rebuildFromMarkdown — Discards structured edits by rebuilding index.json
+ * from the markdown source file. Returns workspace to "clean" state.
+ *
+ * @return {void}
+ * Ref: POST /api/workspaces/:project/:pipe/rebuild in buildandserve.ts
+ */
+PD.actions.rebuildFromMarkdown = function() {
+  if (!PD.state.selectedPipe) return;
+  PD.state.syncState = "syncing";
+  // Close sync preview panel since rebuild makes it stale.
+  PD.state.syncPreviewOpen = false;
+  PD.state.syncPreview = null;
+  m.redraw();
+
+  var url = "/api/workspaces/" +
+    encodeURIComponent(PD.state.selectedPipe.projectName) +
+    "/" + encodeURIComponent(PD.state.selectedPipe.pipeName) +
+    "/rebuild";
+
+  fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "{}"
+  }).then(function(res) {
+    if (!res.ok) throw new Error("Rebuild failed: " + res.statusText);
+    return res.json();
+  }).then(function() {
+    PD.state.syncState = "clean";
+    // Reset any in-progress edits since we just rebuilt
+    PD.state.editingStep = null;
+    PD.state.editStepBuffer = null;
+    PD.state.editingPipeField = null;
+    PD.state.editPipeBuffer = "";
+    PD.actions.refreshPipe();
+  }).catch(function(err) {
+    PD.state.syncState = "json_dirty";
+    PD.state.drawerOpen = true;
+    PD.state.drawerLabel = "Rebuild error";
+    PD.state.drawerStatus = "error";
+    PD.state.drawerOutput = err.message || "Rebuild failed";
+    PD.state.drawerError = {
+      status: 0,
+      statusText: "Rebuild Failed",
+      message: err.message || "Rebuild failed"
+    };
+    m.redraw();
+  });
+};
+
+/**
+ * loadSessionHistory — Fetches recent sessions for the currently selected
+ * pipe. Populates the session history panel in the drawer.
+ *
+ * @return {void}
+ * Ref: GET /api/sessions/:project/:pipe in buildandserve.ts
+ */
+PD.actions.loadSessionHistory = function() {
+  if (!PD.state.selectedPipe || PD.state.sessionHistoryLoading) return;
+  PD.state.sessionHistoryLoading = true;
+  PD.state.sessionHistory = [];
+  m.redraw();
+
+  var pipeName = PD.state.selectedPipe.pipeName;
+  var url = "/api/sessions/" +
+    encodeURIComponent(PD.state.selectedPipe.projectName) +
+    "/" + encodeURIComponent(pipeName) + "?limit=20";
+
+  m.request({ method: "GET", url: url }).then(function(sessions) {
+    PD.state.sessionHistory = sessions || [];
+    PD.state.sessionHistoryLoading = false;
+  }).catch(function() {
+    PD.state.sessionHistory = [];
+    PD.state.sessionHistoryLoading = false;
+  });
+};
+
+/**
+ * saveStepEdit — Sends a PATCH request to update a step's fields
+ * via the structured edit API. On success, refreshes pipe data and
+ * sets syncState to "json_dirty".
+ *
+ * @param {number} stepIndex — the zero-based step index to update
+ * @param {object} fields — { name?, description?, code? }
+ * @return {void}
+ * Ref: PATCH /api/workspaces/:project/:pipe/steps/:stepIndex
+ */
+PD.actions.saveStepEdit = function(stepIndex, fields) {
+  if (!PD.state.selectedPipe) return;
+
+  var url = "/api/workspaces/" +
+    encodeURIComponent(PD.state.selectedPipe.projectName) +
+    "/" + encodeURIComponent(PD.state.selectedPipe.pipeName) +
+    "/steps/" + stepIndex;
+
+  fetch(url, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(fields)
+  }).then(function(res) {
+    if (!res.ok) throw new Error("Save failed: " + res.statusText);
+    return res.json();
+  }).then(function() {
+    // Exit step edit mode
+    PD.state.editingStep = null;
+    PD.state.editStepBuffer = null;
+    PD.state.syncState = "json_dirty";
+    // Refresh pipe to pick up the updated index.json
+    PD.actions.refreshPipe();
+  }).catch(function(err) {
+    PD.state.drawerOpen = true;
+    PD.state.drawerLabel = "Step edit error";
+    PD.state.drawerStatus = "error";
+    PD.state.drawerOutput = err.message || "Failed to save step edit";
+    m.redraw();
+  });
+};
+
+/**
+ * savePipeFieldEdit — Sends a PATCH request to update pipe-level fields
+ * (description, schema) via the structured edit API.
+ *
+ * @param {object} fields — { pipeDescription?, schema? }
+ * @return {void}
+ * Ref: PATCH /api/workspaces/:project/:pipe
+ */
+PD.actions.savePipeFieldEdit = function(fields) {
+  if (!PD.state.selectedPipe) return;
+
+  var url = "/api/workspaces/" +
+    encodeURIComponent(PD.state.selectedPipe.projectName) +
+    "/" + encodeURIComponent(PD.state.selectedPipe.pipeName);
+
+  fetch(url, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(fields)
+  }).then(function(res) {
+    if (!res.ok) throw new Error("Save failed: " + res.statusText);
+    return res.json();
+  }).then(function() {
+    // Exit pipe field edit mode
+    PD.state.editingPipeField = null;
+    PD.state.editPipeBuffer = "";
+    PD.state.syncState = "json_dirty";
+    PD.actions.refreshPipe();
+  }).catch(function(err) {
+    PD.state.drawerOpen = true;
+    PD.state.drawerLabel = "Pipe edit error";
+    PD.state.drawerStatus = "error";
+    PD.state.drawerOutput = err.message || "Failed to save pipe edit";
+    m.redraw();
+  });
+};
+
+/**
+ * enterStepEditMode — Enters inline edit mode for a step. Copies the
+ * step's current name, description, and code into the edit buffer.
+ *
+ * @param {number} stepIndex — zero-based index of the step to edit
+ * @return {void}
+ */
+PD.actions.enterStepEditMode = function(stepIndex) {
+  if (!PD.state.pipeData || !PD.state.pipeData.steps) return;
+  var step = PD.state.pipeData.steps[stepIndex];
+  if (!step) return;
+
+  PD.state.editingStep = stepIndex;
+  PD.state.editStepBuffer = {
+    name: step.name || "",
+    description: step.description || "",
+    code: step.code || ""
+  };
+  m.redraw();
+};
+
+/**
+ * cancelStepEdit — Exits step edit mode without saving.
+ * @return {void}
+ */
+PD.actions.cancelStepEdit = function() {
+  PD.state.editingStep = null;
+  PD.state.editStepBuffer = null;
+  m.redraw();
+};
+
+/**
+ * enterPipeFieldEdit — Enters inline edit mode for a pipe-level field.
+ * Copies the current value into editPipeBuffer.
+ *
+ * @param {string} fieldName — "description" or "schema"
+ * @return {void}
+ */
+PD.actions.enterPipeFieldEdit = function(fieldName) {
+  if (!PD.state.pipeData) return;
+
+  PD.state.editingPipeField = fieldName;
+  if (fieldName === "description") {
+    PD.state.editPipeBuffer = PD.state.pipeData.pipeDescription || "";
+  } else if (fieldName === "schema") {
+    PD.state.editPipeBuffer = PD.state.pipeData.schema || "";
+  }
+  m.redraw();
+};
+
+/**
+ * cancelPipeFieldEdit — Exits pipe field edit mode without saving.
+ * @return {void}
+ */
+PD.actions.cancelPipeFieldEdit = function() {
+  PD.state.editingPipeField = null;
+  PD.state.editPipeBuffer = "";
+  m.redraw();
+};
+
+// ═══════════════════════════════════════════════════════════════════════
+// ── Phase 3: Pi Proposal Actions ──
+// These actions interact with the Pi proposal API to generate, review,
+// apply, discard, and refine Pi-generated patch proposals.
+//
+// Proposals are focused patches that mutate index.json only (never markdown
+// directly). The user reviews the proposed operations in the drawer, then
+// explicitly applies or discards them.
+//
+// Ref: WEB_FIRST_WORKFLOW_PLAN.md §6 — Pi / LLM Integration Plan
+// Ref: proposalManager.ts — proposal CRUD, prompt assembly
+// Ref: buildandserve.ts — POST /api/pi/proposals, apply, discard, refine
+// ═══════════════════════════════════════════════════════════════════════
+
+/**
+ * askPiForStep — Generate a step-scoped Pi proposal.
+ *
+ * Sends the user's prompt to the Pi proposal API scoped to a specific step.
+ * The LLM returns a structured JSON proposal with operations that the user
+ * can review, apply, or discard.
+ *
+ * On success, stores the proposal in PD.state.activeProposal and opens
+ * the drawer in "proposal" mode for review.
+ *
+ * @param {number} stepIndex — zero-based index of the target step
+ * @param {string} prompt — the user's instruction for Pi
+ * @return {void}
+ *
+ * Ref: POST /api/pi/proposals in buildandserve.ts
+ */
+PD.actions.askPiForStep = function(stepIndex, prompt) {
+  if (!PD.state.selectedPipe || !prompt) return;
+
+  PD.state.proposalLoading = true;
+  PD.state.proposalError = null;
+  PD.state.activeProposal = null;
+  // Open the drawer to show loading state.
+  PD.state.drawerOpen = true;
+  PD.state.drawerMode = "proposal";
+  PD.state.drawerLabel = "Pi: generating proposal...";
+  PD.state.drawerStatus = "running";
+  PD.state.drawerError = null;
+  m.redraw();
+
+  fetch("/api/pi/proposals", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      project: PD.state.selectedPipe.projectName,
+      pipe: PD.state.selectedPipe.pipeName,
+      scopeType: "step",
+      stepIndex: stepIndex,
+      prompt: prompt
+    })
+  }).then(function(res) {
+    if (!res.ok) {
+      return res.text().then(function(bodyText) {
+        var msg = PD.utils.parseErrorBody(bodyText);
+        PD.state.proposalError = msg;
+        PD.state.proposalLoading = false;
+        PD.state.drawerStatus = "error";
+        PD.state.drawerLabel = "Pi: proposal failed";
+        PD.state.drawerError = { status: res.status, statusText: res.statusText, message: msg };
+        m.redraw.sync();
+      });
+    }
+    return res.json().then(function(proposal) {
+      PD.state.activeProposal = proposal;
+      PD.state.proposalLoading = false;
+      PD.state.drawerStatus = "done";
+      PD.state.drawerLabel = "Pi Proposal: " + (proposal.summary || "ready");
+      m.redraw();
+    });
+  }).catch(function(err) {
+    PD.state.proposalError = err.message;
+    PD.state.proposalLoading = false;
+    PD.state.drawerStatus = "error";
+    PD.state.drawerLabel = "Pi: proposal failed";
+    PD.state.drawerError = { status: 0, statusText: "Network Error", message: err.message };
+    m.redraw();
+  });
+};
+
+/**
+ * askPiForPipe — Generate a pipe-scoped Pi proposal.
+ *
+ * Same as askPiForStep but scoped to the entire pipe, allowing Pi to
+ * suggest description changes, schema updates, step reordering, new
+ * steps, or multi-step modifications.
+ *
+ * @param {string} prompt — the user's instruction for Pi
+ * @return {void}
+ */
+PD.actions.askPiForPipe = function(prompt) {
+  if (!PD.state.selectedPipe || !prompt) return;
+
+  PD.state.proposalLoading = true;
+  PD.state.proposalError = null;
+  PD.state.activeProposal = null;
+  PD.state.drawerOpen = true;
+  PD.state.drawerMode = "proposal";
+  PD.state.drawerLabel = "Pi: generating proposal...";
+  PD.state.drawerStatus = "running";
+  PD.state.drawerError = null;
+  m.redraw();
+
+  fetch("/api/pi/proposals", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      project: PD.state.selectedPipe.projectName,
+      pipe: PD.state.selectedPipe.pipeName,
+      scopeType: "pipe",
+      prompt: prompt
+    })
+  }).then(function(res) {
+    if (!res.ok) {
+      return res.text().then(function(bodyText) {
+        var msg = PD.utils.parseErrorBody(bodyText);
+        PD.state.proposalError = msg;
+        PD.state.proposalLoading = false;
+        PD.state.drawerStatus = "error";
+        PD.state.drawerLabel = "Pi: proposal failed";
+        PD.state.drawerError = { status: res.status, statusText: res.statusText, message: msg };
+        m.redraw.sync();
+      });
+    }
+    return res.json().then(function(proposal) {
+      PD.state.activeProposal = proposal;
+      PD.state.proposalLoading = false;
+      PD.state.drawerStatus = "done";
+      PD.state.drawerLabel = "Pi Proposal: " + (proposal.summary || "ready");
+      m.redraw();
+    });
+  }).catch(function(err) {
+    PD.state.proposalError = err.message;
+    PD.state.proposalLoading = false;
+    PD.state.drawerStatus = "error";
+    PD.state.drawerLabel = "Pi: proposal failed";
+    PD.state.drawerError = { status: 0, statusText: "Network Error", message: err.message };
+    m.redraw();
+  });
+};
+
+/**
+ * applyProposal — Apply the active proposal to index.json.
+ *
+ * POSTs to /api/pi/proposals/:proposalId/apply, which applies all
+ * operations from the proposal to the pipe's index.json. On success,
+ * refreshes pipe data and sets syncState to "json_dirty".
+ *
+ * @return {void}
+ * Ref: POST /api/pi/proposals/:id/apply in buildandserve.ts
+ */
+PD.actions.applyProposal = function() {
+  if (!PD.state.activeProposal || !PD.state.selectedPipe) return;
+
+  var proposal = PD.state.activeProposal;
+  var url = "/api/pi/proposals/" + encodeURIComponent(proposal.proposalId) + "/apply";
+
+  PD.state.proposalLoading = true;
+  m.redraw();
+
+  fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      project: PD.state.selectedPipe.projectName,
+      pipe: PD.state.selectedPipe.pipeName
+    })
+  }).then(function(res) {
+    if (!res.ok) {
+      return res.text().then(function(bodyText) {
+        var msg = PD.utils.parseErrorBody(bodyText);
+        PD.state.proposalError = msg;
+        PD.state.proposalLoading = false;
+        PD.state.drawerError = { status: res.status, statusText: res.statusText, message: msg };
+        PD.state.drawerStatus = "error";
+        m.redraw.sync();
+      });
+    }
+    return res.json().then(function() {
+      // Clear proposal state and refresh.
+      PD.state.activeProposal = null;
+      PD.state.proposalLoading = false;
+      PD.state.proposalError = null;
+      PD.state.drawerMode = null;
+      PD.state.drawerStatus = "done";
+      PD.state.drawerLabel = "Proposal applied";
+      PD.state.syncState = "json_dirty";
+      PD.actions.refreshPipe();
+      m.redraw();
+    });
+  }).catch(function(err) {
+    PD.state.proposalError = err.message;
+    PD.state.proposalLoading = false;
+    PD.state.drawerError = { status: 0, statusText: "Network Error", message: err.message };
+    PD.state.drawerStatus = "error";
+    m.redraw();
+  });
+};
+
+/**
+ * discardProposal — Discard the active proposal without applying.
+ *
+ * POSTs to /api/pi/proposals/:proposalId/discard, which sets the
+ * proposal's status to "discarded". Clears the proposal from the UI.
+ *
+ * @return {void}
+ * Ref: POST /api/pi/proposals/:id/discard in buildandserve.ts
+ */
+PD.actions.discardProposal = function() {
+  if (!PD.state.activeProposal || !PD.state.selectedPipe) return;
+
+  var proposal = PD.state.activeProposal;
+  var url = "/api/pi/proposals/" + encodeURIComponent(proposal.proposalId) + "/discard";
+
+  fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      project: PD.state.selectedPipe.projectName,
+      pipe: PD.state.selectedPipe.pipeName
+    })
+  }).then(function(res) {
+    if (!res.ok) throw new Error("Discard failed: " + res.statusText);
+    // Clear proposal state and close drawer.
+    PD.state.activeProposal = null;
+    PD.state.proposalError = null;
+    PD.state.drawerMode = null;
+    PD.state.drawerOpen = false;
+    m.redraw();
+  }).catch(function(err) {
+    PD.state.proposalError = err.message;
+    m.redraw();
+  });
+};
+
+/**
+ * refineProposal — Refine the active proposal with user feedback.
+ *
+ * POSTs to /api/pi/proposals/:proposalId/refine with the user's feedback.
+ * The LLM generates a new proposal that supersedes the current one.
+ * The old proposal is marked "superseded" and the new one becomes active.
+ *
+ * @param {string} feedback — the user's refinement feedback
+ * @return {void}
+ * Ref: POST /api/pi/proposals/:id/refine in buildandserve.ts
+ */
+PD.actions.refineProposal = function(feedback) {
+  if (!PD.state.activeProposal || !PD.state.selectedPipe || !feedback) return;
+
+  var proposal = PD.state.activeProposal;
+  var url = "/api/pi/proposals/" + encodeURIComponent(proposal.proposalId) + "/refine";
+
+  PD.state.proposalLoading = true;
+  PD.state.proposalError = null;
+  PD.state.drawerLabel = "Pi: refining proposal...";
+  PD.state.drawerStatus = "running";
+  m.redraw();
+
+  fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      project: PD.state.selectedPipe.projectName,
+      pipe: PD.state.selectedPipe.pipeName,
+      feedback: feedback
+    })
+  }).then(function(res) {
+    if (!res.ok) {
+      return res.text().then(function(bodyText) {
+        var msg = PD.utils.parseErrorBody(bodyText);
+        PD.state.proposalError = msg;
+        PD.state.proposalLoading = false;
+        PD.state.drawerStatus = "error";
+        PD.state.drawerLabel = "Pi: refinement failed";
+        PD.state.drawerError = { status: res.status, statusText: res.statusText, message: msg };
+        m.redraw.sync();
+      });
+    }
+    return res.json().then(function(newProposal) {
+      PD.state.activeProposal = newProposal;
+      PD.state.proposalLoading = false;
+      PD.state.drawerStatus = "done";
+      PD.state.drawerLabel = "Pi Proposal: " + (newProposal.summary || "refined");
+      m.redraw();
+    });
+  }).catch(function(err) {
+    PD.state.proposalError = err.message;
+    PD.state.proposalLoading = false;
+    PD.state.drawerStatus = "error";
+    PD.state.drawerLabel = "Pi: refinement failed";
+    PD.state.drawerError = { status: 0, statusText: "Network Error", message: err.message };
+    m.redraw();
   });
 };

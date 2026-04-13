@@ -648,3 +648,113 @@
   cursor: pointer;
   accent-color: var(--green-6);
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ── Session Status Badges ──
+   Small inline indicators inserted before step heading text to show
+   the step's execution status (pending, running, done, failed, etc.)
+   within the active session.
+   Ref: MarkdownRenderer.js — step status badge injection
+   Ref: state.js — PD.utils.stepStatusSymbol, PD.utils.stepStatusClass
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.step-status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.4em;
+  height: 1.4em;
+  font-size: 0.75em;
+  line-height: 1;
+  border-radius: 50%;
+  margin-inline-end: var(--size-1);
+  vertical-align: middle;
+  font-weight: var(--font-weight-7);
+}
+
+/* Status-specific colors.
+   Open Props color tokens ensure consistency with the rest of the UI.
+   Ref: https://open-props.style/#colors */
+.step-status-badge--pending {
+  color: var(--gray-6);
+  background: var(--gray-2);
+}
+
+.step-status-badge--running {
+  color: var(--yellow-8);
+  background: var(--yellow-2);
+  /* Subtle pulse animation to indicate ongoing work */
+  animation: badge-pulse 1.2s ease-in-out infinite;
+}
+
+.step-status-badge--done {
+  color: var(--green-7);
+  background: var(--green-2);
+}
+
+.step-status-badge--failed {
+  color: var(--red-7);
+  background: var(--red-2);
+}
+
+.step-status-badge--skipped {
+  color: var(--gray-5);
+  background: var(--gray-2);
+}
+
+.step-status-badge--stale {
+  color: var(--orange-7);
+  background: var(--orange-2);
+}
+
+.step-status-badge--reused {
+  color: var(--blue-7);
+  background: var(--blue-2);
+}
+
+@keyframes badge-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* ── Session-aware toolbar buttons ──
+   Subtle visual distinction for session-specific actions (Run next,
+   Rerun from here) vs legacy toolbar buttons. */
+.session-btn {
+  font-size: var(--font-size-00) !important;
+  border-style: dashed !important;
+}
+
+/* ── Session step dot in RunDrawer mini bar ──
+   Small clickable status indicators in the session summary panel. */
+.session-step-dot {
+  font-family: var(--font-sans);
+  transition: transform 0.1s ease;
+}
+
+.session-step-dot:hover {
+  transform: scale(1.3);
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   ── Sync Preview Panel ──
+   Expandable panel below the SyncStatusBar that shows the generated
+   markdown preview. Visible only when PD.state.syncPreviewOpen is true
+   and the workspace is in "json_dirty" state.
+   Ref: SyncStatusBar.js — sync preview rendering
+   ════════════════════════════════════════════════════════════════════════ */
+
+.sync-preview-panel {
+  animation: sync-preview-slide 0.2s ease;
+}
+
+@keyframes sync-preview-slide {
+  from {
+    opacity: 0;
+    max-height: 0;
+  }
+  to {
+    opacity: 1;
+    max-height: 500px;
+  }
+}

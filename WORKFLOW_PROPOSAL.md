@@ -609,22 +609,32 @@ This is a better decision point than choosing purely by instinct now.
    - direct markdown patching is human-friendly but fragile
    - `index.json` patching is safer but needs excellent round-trip UX
 
+> Go for index.json patching. The json represetnation should be the source of truth for the LLM. `pd sync` can be leveraged for Pi/the LLM to apply changes back to the markdown files.
+
 2. **How much state should be persisted between iterative runs?**
    - enough to support resume/replay
    - not so much that users become confused about stale hidden state
+
+> Agreed.
 
 3. **Should inline web editing stay raw-markdown-first or become structured?**
    - raw markdown preserves the product’s identity
    - structured editing improves step-level workflows
    - the best answer may be both, with easy toggling
 
+> Let's keep the raw/holistic markdown editing as a sub-option, but not the primary experience. Let's go for a more structured editing experience.
+
 4. **How conversational should Pi be inside the product?**
    - command-like helpers are predictable
    - open-ended chat is flexible
    - the likely sweet spot is scoped conversation with patch preview
 
+> Keep the Pi interactions pipe or step scoped. Interactions should result in a focused, diffable patch.
+
 5. **Is TUI a real product direction or just a delivery mechanism for power users?**
    - important to validate before investing heavily in a second major frontend
+
+> Let's skip the TUI for now.
 
 ---
 

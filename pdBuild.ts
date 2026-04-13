@@ -2,7 +2,7 @@ import {pd, std} from "./deps.ts";
 import {mdToPipe} from "./mdToPipe.ts";
 import {pipeToScript} from "./pipeToScript.ts";
 import * as utils from "./pdUtils.ts";
-import type {Step, WalkOptions, BuildInput} from "./pipedown.d.ts";
+import type {Step, WalkOptions, BuildInput, Pipe, WorkspaceMetadata} from "./pipedown.d.ts";
 import {defaultTemplateFiles} from "./defaultTemplateFiles.ts";
 import {exportPipe} from "./exportPipe.ts";
 import {readPipedownConfig} from "./pdConfig.ts";
@@ -162,6 +162,170 @@ async function mergeParentDirConfig(input: BuildInput) {
   }
 }
 
+// ── Step Fingerprinting ──
+// Each step gets a content-based fingerprint (SHA-256 hex) derived from
+// its meaningful content: code, funcName, and config. This fingerprint
+// is used by the session layer to detect whether a step has changed
+// between runs — unchanged upstream steps can safely reuse prior
+// snapshots, making "rerun from here" fast and trustworthy.
+//
+// Ref: WEB_FIRST_WORKFLOW_PLAN.md §4.1-C (step fingerprint)
+// Ref: WEB_FIRST_WORKFLOW_PLAN.md §8.3 (snapshot reuse model)
+// Ref: https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/digest
+
+/**
+ * Computes a SHA-256 hex fingerprint from a step's meaningful content.
+ *
+ * The fingerprint captures three fields that define what a step *does*:
+ *   1. `code`     — the actual executable logic
+ *   2. `funcName` — the sanitised identifier (reflects heading changes)
+ *   3. `config`   — conditional execution guards (checks, routes, etc.)
+ *
+ * Fields like `description`, `name`, `sourceMap`, and `range` are
+ * deliberately excluded — they affect documentation and positioning
+ * but not execution behaviour.
+ *
+ * @param step - The step to fingerprint
+ * @returns Hex-encoded SHA-256 hash string
+ */
+export async function computeStepFingerprint(step: Step): Promise<string> {
+  // Build a deterministic string from the meaningful fields.
+  // JSON.stringify on config ensures object key order is consistent
+  // (V8 preserves insertion order for string keys).
+  const content = [
+    step.code ?? "",
+    step.funcName ?? "",
+    step.config ? JSON.stringify(step.config) : "",
+  ].join("\n");
+
+  // Use the Web Crypto API (available in Deno) to compute SHA-256.
+  // Ref: https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/digest
+  const encoder = new TextEncoder();
+  const data = encoder.encode(content);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+
+  // Convert the ArrayBuffer to a hex string.
+  // Ref: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Uint8Array
+  const hashArray = new Uint8Array(hashBuffer);
+  return Array.from(hashArray)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+// ── Step ID Assignment ──
+// Stable `stepId` values allow the web UI, sessions, and Pi patch proposals
+// to reference steps durably across rebuilds. IDs are persisted in index.json
+// but never written to markdown — they are a structured-workspace concern.
+//
+// Matching strategy (in priority order):
+//   1. Exact match: same funcName at same array index → reuse stepId
+//   2. Name match:  same funcName at a different index (step was moved) → reuse stepId
+//   3. No match:    step is genuinely new → generate a fresh UUID
+//
+// Ref: WEB_FIRST_WORKFLOW_PLAN.md §4.1-C, §0 checklist
+// Ref: https://developer.mozilla.org/en-US/docs/Web/API/Crypto/randomUUID
+
+/**
+ * Reads the existing index.json for a pipe directory and returns the
+ * steps array with their stepId values. Returns an empty array if the
+ * file doesn't exist or can't be parsed (defensive — first build or
+ * corrupted file should not block the pipeline).
+ *
+ * @param pipeDir - Absolute path to the .pd/<pipe>/ directory
+ * @returns Array of prior steps with their stepId values
+ */
+async function readPriorSteps(pipeDir: string): Promise<Step[]> {
+  try {
+    const indexJsonPath = std.join(pipeDir, "index.json");
+    const content = await Deno.readTextFile(indexJsonPath);
+    const priorPipe = JSON.parse(content) as Pipe;
+    return priorPipe.steps || [];
+  } catch (_e) {
+    // File doesn't exist yet (first build) or is unreadable — that's fine,
+    // all steps will get fresh UUIDs.
+    return [];
+  }
+}
+
+/**
+ * Assigns stable `stepId` values to each step in every pipe. Tries to
+ * preserve existing IDs from the prior index.json by matching on funcName.
+ * Also initialises the `workspace` metadata block on each pipe.
+ *
+ * This runs between `mergeParentDirConfig` and `writePipeDir` in the
+ * build pipeline so that IDs are set before index.json is written.
+ *
+ * @param input - The build input containing parsed pipes
+ * @returns The mutated input with stepIds and workspace metadata set
+ */
+export async function assignStepIds(input: BuildInput) {
+  for (const pipe of (input.pipes || [])) {
+    const priorSteps = await readPriorSteps(pipe.dir);
+
+    // Build a lookup of prior stepIds by funcName for name-based matching.
+    // If multiple prior steps share the same funcName (unusual but possible),
+    // the first one wins — subsequent duplicates get fresh IDs.
+    const priorByFuncName = new Map<string, string>();
+    for (const ps of priorSteps) {
+      if (ps.stepId && ps.funcName && !priorByFuncName.has(ps.funcName)) {
+        priorByFuncName.set(ps.funcName, ps.stepId);
+      }
+    }
+
+    // Track which prior stepIds have been claimed so we don't accidentally
+    // assign the same ID to two different new steps.
+    const usedIds = new Set<string>();
+
+    for (let i = 0; i < pipe.steps.length; i++) {
+      const step = pipe.steps[i];
+      let assignedId: string | undefined;
+
+      // Priority 1: exact match — same funcName at same index
+      const priorAtIndex = priorSteps[i];
+      if (
+        priorAtIndex?.stepId &&
+        priorAtIndex.funcName === step.funcName &&
+        !usedIds.has(priorAtIndex.stepId)
+      ) {
+        assignedId = priorAtIndex.stepId;
+      }
+
+      // Priority 2: name match — same funcName at a different index (step moved)
+      if (!assignedId) {
+        const idFromName = priorByFuncName.get(step.funcName);
+        if (idFromName && !usedIds.has(idFromName)) {
+          assignedId = idFromName;
+        }
+      }
+
+      // Priority 3: no match found — generate a new UUID
+      // Ref: https://developer.mozilla.org/en-US/docs/Web/API/Crypto/randomUUID
+      if (!assignedId) {
+        assignedId = crypto.randomUUID();
+      }
+
+      step.stepId = assignedId;
+      usedIds.add(assignedId);
+
+      // Compute content-based fingerprint for snapshot reuse detection.
+      // This runs alongside ID assignment so both are set before index.json
+      // is written. Ref: WEB_FIRST_WORKFLOW_PLAN.md §8.3
+      step.fingerprint = await computeStepFingerprint(step);
+    }
+
+    // Set workspace metadata — after a build, the workspace is always "clean"
+    // because index.json was just regenerated from the canonical markdown.
+    // Ref: WEB_FIRST_WORKFLOW_PLAN.md §7.3
+    pipe.workspace = {
+      syncState: "clean",
+      lastBuiltAt: new Date().toISOString(),
+      lastModifiedBy: "build",
+    } as WorkspaceMetadata;
+  }
+
+  return input;
+}
+
 async function writePipeDir(input: BuildInput) {
   for (const pipe of (input.pipes || [])) {
     if (input.debug) console.log(`Creating pipe directory: ${pipe.dir}`);
@@ -238,6 +402,7 @@ export const pdBuild = async (input: BuildInput) => {
     // copyFiles,
     parseMdFiles,
     mergeParentDirConfig,
+    assignStepIds,
     writePipeDir,
     writePipeJson,
     writePipeMd,

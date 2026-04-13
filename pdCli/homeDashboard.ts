@@ -223,6 +223,7 @@ export function homePage(): string {
   <script src="/frontend/home/components/MarkdownRenderer.js"><\/script>
   <script src="/frontend/home/components/PipeToolbar.js"><\/script>
   <script src="/frontend/home/components/MarkdownEditor.js"><\/script>
+  <script src="/frontend/home/components/SyncStatusBar.js"><\/script>
   <script src="/frontend/home/components/MainContent.js"><\/script>
   <script src="/frontend/home/components/NewPipeModal.js"><\/script>
   <script src="/frontend/home/components/ExtractBar.js"><\/script>
