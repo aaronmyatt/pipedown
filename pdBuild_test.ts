@@ -4,10 +4,6 @@ import {
   assertStringIncludes,
   // deno-lint-ignore no-import-prefix no-unversioned-import
 } from "jsr:@std/assert";
-// deno-lint-ignore no-import-prefix
-import { exists } from "jsr:@std/fs@1.0.5";
-// deno-lint-ignore no-import-prefix
-import { join } from "jsr:@std/path@1.0.7";
 import { mdToPipe } from "./mdToPipe.ts";
 import { pipeToScript } from "./pipeToScript.ts";
 import type { Input, Pipe } from "./pipedown.d.ts";
@@ -300,64 +296,8 @@ input.done = true;
   });
 });
 
-// Test the pdBuild output if we're in a directory with testPipes
-Deno.test("integration: pdBuild generates expected files", async (t) => {
-  const testPipesDir = join(Deno.cwd(), "..", "testPipes");
-  const pdDir = join(testPipesDir, ".pd");
-  const readPermission = await Deno.permissions.query({
-    name: "read",
-    path: testPipesDir,
-  });
-
-  if (readPermission.state !== "granted") {
-    console.log("Skipping pdBuild file tests: read permission not granted.");
-    return;
-  }
-
-  const pdDirExists = await exists(pdDir);
-  if (!pdDirExists) {
-    console.log(
-      "Skipping pdBuild file tests - .pd directory not found. Run `pd build` in testPipes/ first.",
-    );
-    return;
-  }
-
-  await t.step(".pd directory exists with deno.json", async () => {
-    assertEquals(await exists(join(pdDir, "deno.json")), true);
-  });
-
-  await t.step("generated pipes have required files", async () => {
-    // Check for at least one known pipe
-    const testTestsDir = join(pdDir, "testTests");
-    if (await exists(testTestsDir)) {
-      assertEquals(await exists(join(testTestsDir, "index.ts")), true);
-      assertEquals(await exists(join(testTestsDir, "index.json")), true);
-      assertEquals(await exists(join(testTestsDir, "index.md")), true);
-      assertEquals(await exists(join(testTestsDir, "test.ts")), true);
-      assertEquals(await exists(join(testTestsDir, "cli.ts")), true);
-      assertEquals(await exists(join(testTestsDir, "server.ts")), true);
-    }
-  });
-
-  await t.step("index.json has valid pipe structure", async () => {
-    const testTestsJson = join(pdDir, "testTests", "index.json");
-    if (await exists(testTestsJson)) {
-      const content = await Deno.readTextFile(testTestsJson);
-      const pipe = JSON.parse(content);
-      assertExists(pipe.name);
-      assertExists(pipe.steps);
-      assertEquals(Array.isArray(pipe.steps), true);
-      assertEquals(pipe.steps.length > 0, true);
-    }
-  });
-
-  await t.step("deno.json import map has entries for pipes", async () => {
-    const denoJson = join(pdDir, "deno.json");
-    const content = await Deno.readTextFile(denoJson);
-    const config = JSON.parse(content);
-    assertExists(config.imports);
-    // Should have at least one pipe import
-    const importKeys = Object.keys(config.imports);
-    assertEquals(importKeys.length > 0, true);
-  });
-});
+// Note: Cross-repo filesystem validation against a built sibling testPipes
+// checkout intentionally lives in the CI compat workflow rather than the core
+// `deno test` suite. Keeping this file self-contained ensures the core tests
+// pass in clean CI environments where ../testPipes is not checked out.
+// Ref: .github/workflows/ci.yml (testpipes-compat job)
