@@ -242,7 +242,7 @@ async function writeTrace(
 // --- Main execution ---
 
 const flags = parseArgs(Deno.args);
-const input = JSON.parse(flags.input || flags.i || "{}");
+const input = JSON.parse(flags.input || "{}");
 $p.set(input, "/flags", flags);
 $p.set(input, "/mode/cli", true);
 $p.set(input, "/mode/trace", true);

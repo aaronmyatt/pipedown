@@ -3,7 +3,7 @@ import {parseArgs} from "jsr:@std/cli@1.0.28";
 import $p from "jsr:@pd/pointers@0.1.1";
 
 const flags = parseArgs(Deno.args);
-const input = JSON.parse(flags.input || flags.i || '{}');
+const input = JSON.parse(flags.input || '{}');
 $p.set(input, "/flags", flags);
 $p.set(input, "/mode/cli", true);
 

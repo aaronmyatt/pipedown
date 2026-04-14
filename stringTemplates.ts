@@ -414,6 +414,8 @@ export const helpText = cliHelpTemplate({
     sync <pipeName>                         Write .pd/<pipeName>/index.json back to the source .md file
 
   Watch & Interactive:
+    interactive <file.md>                   Replay a pipe via the interactive workflow entry point
+    i <file.md>                             Short alias for interactive
     watch                                   Watch .md files for changes, rebuild on save. Use --assist <path> for stub detection
     repl                                    Open a Deno REPL with all project pipes preloaded
 
@@ -435,6 +437,8 @@ export const helpText = cliHelpTemplate({
   pd build                                          # Build all .md pipelines
   pd run myPipe.md                                  # Build and run myPipe.md
   pd run myPipe.md --input '{"key": "value"}'       # Run with initial input
+  pd interactive myPipe.md                          # Replay a pipe via the interactive workflow
+  pd i myPipe.md                                    # Short alias for interactive
   pd run-with server myPipe.md                      # Run with a user template in the templates/ directory
   pd run-step myPipe.md 2                           # Run steps 0-2, print intermediate state
   pd inspect myPipe.md                              # Dump full pipe structure as JSON

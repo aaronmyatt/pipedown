@@ -43,6 +43,7 @@ const version = projectMetadata.version;
 import { helpCommand } from "./helpCommand.ts";
 import { buildCommand } from "./buildCommand.ts";
 import { runCommand } from "./runCommand.ts";
+import { interactiveCommand } from "./interactiveCommand.ts";
 import { runWithCommand } from "./runWithCommand.ts";
 import { serveCommand } from "./serveCommand.ts";
 import { listCommand } from "./listCommand.ts";
@@ -230,6 +231,8 @@ const funcs = [
   checkMinFlags(["build"], buildCommand),
   checkMinFlags(["serve", "*", "*"], serveCommand),
   checkMinFlags(["repl"], replCommand),
+  checkMinFlags(["interactive", "*"], interactiveCommand),
+  checkMinFlags(["i", "*"], interactiveCommand),
   checkMinFlags(["run", "*"], runCommand),
   checkMinFlags(["run-with", "*", "*", "*"], runWithCommand),
   checkMinFlags(["llm", "*", "*", "*"], llmCommand),
@@ -276,12 +279,13 @@ const flags: Args = std.parseArgs(Deno.args, {
     "build",
     "dev",
     "no-trace",
+    "interactive",
+    "i",
   ],
   string: [
     "out",
     "step",
     "instruction",
-    "i",
   ],
 });
 if (flags.version || flags.v) {

@@ -15,6 +15,8 @@ import { firstNotNullishOf } from "jsr:@std/collections@1.1.6";
 import { parseArgs } from "jsr:@std/cli@1.0.28";
 
 import { parse as keycodeParse } from "jsr:@cliffy/keycode@1.0.0";
+import { keypress, type KeyPressEvent } from "jsr:@cliffy/keypress@1.0.0";
+import { Select } from "jsr:@cliffy/prompt@1.0.0-rc.7/select";
 import MarkdownIt from "npm:markdown-it@14.1.1";
 
 import { process } from "jsr:@pd/pdpipe@0.2.2";
@@ -46,4 +48,5 @@ export const pd = {
   $p,
 };
 
-export { keycodeParse };
+export { keycodeParse, keypress, Select };
+export type { KeyPressEvent };
