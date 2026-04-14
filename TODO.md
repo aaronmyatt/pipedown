@@ -86,16 +86,16 @@ Add support for:
 
 Tasks:
 
-- [ ] update `pdCli/mod.ts` routing for `interactive` and `i`
-- [ ] add a boolean interactive flag for `run`
-- [ ] remove the current string meaning of top-level `-i`
-- [ ] update help text in `stringTemplates.ts`
+- [x] update `pdCli/mod.ts` routing for `interactive` and `i`
+- [x] add a boolean interactive flag for `run`
+- [x] remove the current string meaning of top-level `-i`
+- [x] update help text in `stringTemplates.ts`
 
 Important cleanup:
 
-- [ ] standardize user input on `--input`
-- [ ] remove `flags.i` input alias from `templates/cli.ts`
-- [ ] remove `flags.i` input alias from `templates/trace.ts`
+- [x] standardize user input on `--input`
+- [x] remove `flags.i` input alias from `templates/cli.ts`
+- [x] remove `flags.i` input alias from `templates/trace.ts`
 
 ---
 
@@ -103,18 +103,20 @@ Important cleanup:
 
 Extend `pdCli/traceDashboard.ts` with reusable helpers:
 
-- [ ] `latestTraceForPipe(projectName, pipeName)`
-- [ ] `recentTracesForPipe(projectName, pipeName, limit)`
-- [ ] `extractReplayableInput(trace)`
+- [x] `latestTraceForPipe(projectName, pipeName)`
+- [x] `recentTracesForPipe(projectName, pipeName, limit)`
+- [x] `extractReplayableInput(trace)`
 
 `extractReplayableInput(trace)` should:
 
-- [ ] start from `trace.input`
-- [ ] strip runtime-added keys like `flags` and `mode`
-- [ ] return `{}` when no usable input exists
+- [x] start from `trace.input`
+- [x] strip runtime-added keys like `flags` and `mode`
+- [x] return `{}` when no usable input exists
 
 If trace naming is inconsistent, add one compatibility helper rather than ad hoc
 fixes in multiple places.
+
+- [x] compatibility helper added for project/pipe alias lookup.
 
 ---
 
@@ -125,26 +127,26 @@ thin.
 
 Behavior:
 
-- [ ] build the target pipe
-- [ ] load replay input from latest trace, else `{}`
-- [ ] run once immediately
-- [ ] start a debounced watcher using the existing `watchCommand.ts` pattern
-- [ ] rebuild + rerun on markdown changes
+- [x] build the target pipe
+- [x] load replay input from latest trace, else `{}`
+- [x] run once immediately
+- [x] start a debounced watcher using the existing `watchCommand.ts` pattern
+- [x] rebuild + rerun on markdown changes
 
 Interactive actions:
 
-- [ ] `r` — rerun now with current input
-- [ ] `i` — edit JSON input in `$EDITOR` via temp file
-- [ ] `s` — choose from recent deduped trace inputs
-- [ ] `e` — open the target pipe in `$EDITOR`
-- [ ] `t` — show the latest trace path/summary
-- [ ] `q` — quit
+- [x] `r` — rerun now with current input
+- [x] `i` — edit JSON input in `$EDITOR` via temp file
+- [x] `s` — choose from recent deduped trace inputs
+- [x] `e` — open the target pipe in `$EDITOR`
+- [x] `t` — show the latest trace path/summary
+- [x] `q` — quit
 
 Guardrails:
 
-- [ ] force tracing on in interactive mode, or fail fast if tracing is disabled
+- [x] force tracing on in interactive mode, or fail fast if tracing is disabled
 - [ ] reuse existing ignore patterns for `.pd/`, `.git/`, etc.
-- [ ] debounce rebuild/rerun to avoid storms
+- [x] debounce rebuild/rerun to avoid storms
 
 ---
 
@@ -206,8 +208,8 @@ Backend note:
 
 Make trace lookup predictable for both CLI and web.
 
-- [ ] standardize on filename-based pipe identity
-- [ ] keep compatibility fallback for older traces if needed
+- [x] standardize on filename-based pipe identity
+- [x] keep compatibility fallback for older traces if needed
 - [ ] remove stale frontend comments that imply H1-only trace naming
 - [ ] ensure CLI and web use the same lookup rule
 
@@ -217,14 +219,14 @@ Make trace lookup predictable for both CLI and web.
 
 Small, high-value coverage only.
 
-- [ ] test replay-input extraction (`flags` / `mode` stripped)
-- [ ] test latest-trace selection ordering
-- [ ] test trace-name compatibility fallback if added
-- [ ] update CLI help/docs for:
-  - [ ] `pd interactive <file.md>`
-  - [ ] `pd i <file.md>`
-  - [ ] `pd run <file.md> -i`
-  - [ ] `r / i / s / e / t / q`
+- [x] test replay-input extraction (`flags` / `mode` stripped)
+- [x] test latest-trace selection ordering
+- [x] test trace-name compatibility fallback if added
+- [x] update CLI help/docs for:
+  - [x] `pd interactive <file.md>`
+  - [x] `pd i <file.md>`
+  - [x] `pd run <file.md> -i`
+  - [x] `r / i / s / e / t / q`
 
 Manual smoke checklist:
 
