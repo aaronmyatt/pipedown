@@ -7,6 +7,9 @@
       "./pipedown.d.ts"
     ]
   },
+  "imports": {
+    "@std/assert": "jsr:@std/assert@1.0.19"
+  },
   "name": "@pd/pdcli",
   "version": "0.5.0",
   "description": "CLI tool that transforms markdown files into executable TypeScript pipelines — build, run, test, and serve Pipedown pipes",
