@@ -36,8 +36,7 @@ import { join } from "jsr:@std/path@1.0.7";
 // deno-lint-ignore no-import-prefix
 import { exists } from "jsr:@std/fs@1.0.5";
 import { mdToPipe } from "./mdToPipe.ts";
-import { assignStepIds, computeStepFingerprint } from "./pdBuild.ts";
-import { pdBuild } from "./pdBuild.ts";
+import { assignStepIds, computeStepFingerprint, pdBuild } from "./pdBuild.ts";
 import type { BuildInput, Input, Pipe, Step } from "./pipedown.d.ts";
 
 // ── Helpers ──
