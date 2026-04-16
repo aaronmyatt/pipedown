@@ -408,6 +408,83 @@ const maybeExportPipe = async (input: BuildInput) => {
   await exportPipe(input);
 };
 
+// ── Dependency Resolution ──
+// Classifies each pipe's hoisted import statements into two buckets:
+//   1. `pipes`      — other pipedown pipes (matched against the import map keys)
+//   2. `localFiles` — relative-path imports (./foo.ts, ../lib/bar.ts)
+//
+// External packages (npm:, jsr:, https://) are excluded — they don't need
+// watching. The result is stored on pipe.dependencies and serialized into
+// index.json so file watchers can monitor only the files that affect a pipe.
+
+/**
+ * Regex to extract the module specifier from an import statement.
+ * Matches both single-quoted and double-quoted `from "specifier"` clauses.
+ * Ref: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/import
+ */
+const importSpecifierRegex = /from\s+["']([^"']+)["']/;
+
+/**
+ * Classify each pipe's imports as pipe dependencies or local file dependencies.
+ * Runs after writeDefaultGeneratedTemplates (when the import map is fully built)
+ * so we can match import specifiers against known pipe names.
+ *
+ * @param input - Build input with pipes[] and importMap populated
+ * @returns The mutated input with pipe.dependencies set on each pipe
+ */
+function resolveDependencies(input: BuildInput) {
+  // Build a set of known pipe names from the import map.
+  // The import map has entries like { "LLM": "./LLM/index.ts" } — we want
+  // the keys that point to pipe index.ts files (not "/" or "./" prefixes).
+  // Ref: defaultTemplateFiles.ts writeDenoImportMap()
+  const importMapEntries = input.importMap?.imports || {};
+  const knownPipeNames = new Set<string>();
+  for (const [key, value] of Object.entries(importMapEntries)) {
+    if (
+      typeof value === "string" &&
+      value.endsWith("index.ts") &&
+      !key.startsWith("/") &&
+      !key.startsWith(".")
+    ) {
+      knownPipeNames.add(key);
+    }
+  }
+
+  const detectImports = /import.*from.*/gm;
+
+  for (const pipe of (input.pipes || [])) {
+    const depPipes = new Set<string>();
+    const depLocalFiles = new Set<string>();
+
+    // Collect all import statements from all steps (same extraction as
+    // pipeToScript's extractImportsFromSteps but we classify instead of hoist).
+    for (const step of pipe.steps) {
+      const matches = step.code.matchAll(detectImports);
+      for (const match of matches) {
+        const specifierMatch = match[0].match(importSpecifierRegex);
+        if (!specifierMatch) continue;
+        const specifier = specifierMatch[1];
+
+        if (knownPipeNames.has(specifier)) {
+          // This import references another pipedown pipe by name
+          depPipes.add(specifier);
+        } else if (specifier.startsWith("./") || specifier.startsWith("../")) {
+          // Relative local file import — watch this file for changes
+          depLocalFiles.add(specifier);
+        }
+        // Everything else (npm:, jsr:, https://, @pkg/) is external — skip
+      }
+    }
+
+    pipe.dependencies = {
+      pipes: [...depPipes],
+      localFiles: [...depLocalFiles],
+    };
+  }
+
+  return input;
+}
+
 function report(input: BuildInput) {
   if (input.debug) {
     input.markdownFilesProcesses = input.pipes?.length;
@@ -431,6 +508,12 @@ export const pdBuild = async (input: BuildInput) => {
     writePipeMd,
     transformMdFiles,
     writeDefaultGeneratedTemplates,
+    // resolveDependencies runs after writeDefaultGeneratedTemplates because it
+    // needs the import map (populated by writeDenoImportMap) to classify step
+    // imports as pipe deps vs local file deps. We re-write index.json after
+    // so the dependencies field is persisted for file watchers to consume.
+    resolveDependencies,
+    writePipeJson,
     writeUserTemplates,
     maybeExportPipe,
     report,

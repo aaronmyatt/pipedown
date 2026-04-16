@@ -216,6 +216,18 @@ export type Pipe = {
   originalConfig?: string;
   /** The original markdown source text, for lossless round-trip reconstruction. */
   rawSource?: string;
+  /**
+   * Immediate dependencies discovered from step import statements.
+   * Populated during `pd build` by classifying hoisted imports against
+   * the import map (pipe deps) and relative paths (local file deps).
+   * Used by file watchers to monitor only the files that affect this pipe.
+   */
+  dependencies?: {
+    /** Other pipedown pipe names this pipe imports (e.g. ["AuthModule", "FetchData"]). */
+    pipes: string[];
+    /** Relative local file paths imported by step code (e.g. ["./helpers.ts"]). */
+    localFiles: string[];
+  };
 };
 
 /** Input/output for the rangeFinder token classifier. */
