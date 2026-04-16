@@ -572,8 +572,58 @@ if (corsOrigin) console.log(`${c.dim}├─${c.reset} CORS: ${c.green}${corsOrig
 if (staticDir) console.log(`${c.dim}├─${c.reset} Static: ${c.cyan}${staticDir}${c.reset}`);
 console.log(`${c.dim}└─${c.reset} Watching for .md changes...\n`);
 
+// ── Dependency-aware watch set ──
+// Read the pipe's dependencies from index.json to build a set of file paths
+// that should trigger a rebuild. Includes the pipe's own .md file plus any
+// local file imports and dependent pipe .md files.
+// Ref: pdBuild.ts resolveDependencies()
+
+/**
+ * Build the set of file paths to watch for this pipe.
+ * Re-reads index.json each time so new dependencies are picked up after rebuild.
+ */
+async function buildWatchSet(): Promise<Set<string>> {
+  const paths = new Set<string>();
+  try {
+    const pipeJson = JSON.parse(await Deno.readTextFile(pipeDir + "index.json"));
+    // Always watch the pipe's own .md source
+    if (pipeJson.mdPath) paths.add(pipeJson.mdPath);
+
+    const deps = pipeJson.dependencies;
+    if (deps) {
+      // Resolve dependent pipe names to their .md paths
+      for (const depName of deps.pipes || []) {
+        try {
+          const depJson = JSON.parse(
+            await Deno.readTextFile(pipeDir + "../" + depName + "/index.json"),
+          );
+          if (depJson.mdPath) paths.add(depJson.mdPath);
+        } catch { /* dep pipe not built yet — skip */ }
+      }
+      // Resolve local file imports relative to the .md source directory
+      if (pipeJson.mdPath) {
+        const mdDir = pipeJson.mdPath.replace(/\/[^/]+$/, "");
+        for (const localFile of deps.localFiles || []) {
+          // Normalize relative paths (handle ../ segments)
+          const parts = (mdDir + "/" + localFile.replace(/^\.\//, "")).split("/");
+          const resolved: string[] = [];
+          for (const p of parts) {
+            if (p === "..") resolved.pop();
+            else if (p !== "." && p !== "") resolved.push(p);
+          }
+          paths.add("/" + resolved.join("/"));
+        }
+      }
+    }
+  } catch { /* index.json not readable — fall back to watching all .md */ }
+  return paths;
+}
+
+let watchSet = await buildWatchSet();
+
 // ── File watcher ──
-// Watch for .md file changes, rebuild, re-import the pipe, and push SSE reload.
+// Watch for changes to the pipe's .md source and its dependencies, rebuild,
+// re-import the pipe, and push SSE reload.
 // Uses the same debounce pattern as buildandserve.ts and watchCommand.ts.
 // The pdBuild import is dynamic because this template runs from .pd/{pipe}/
 // and the build module is at the pipedown package root.
@@ -606,6 +656,9 @@ const rebuild = debounce(async (filePath: string) => {
     // Re-import the pipe with cache-busting query param
     await loadPipe();
 
+    // Refresh the watch set so newly added dependencies are picked up
+    watchSet = await buildWatchSet();
+
     const duration = Math.round(performance.now() - start);
     console.log(`${c.green}Rebuilt${c.reset} in ${duration}ms — live at http://${hostname}:${port}\n`);
 
@@ -622,17 +675,24 @@ const rebuild = debounce(async (filePath: string) => {
 }, 200);
 
 // Start the file watcher — runs forever alongside the server.
+// Watches for changes to the pipe's .md source and its dependency files.
+// Falls back to watching all .md files if the watch set is empty (e.g. first
+// build before dependencies are resolved).
 // Ref: https://docs.deno.com/api/deno/~/Deno.watchFs
 (async () => {
   for await (const event of Deno.watchFs(Deno.cwd(), { recursive: true })) {
     const notInProtectedDir = event.paths.every((path) => !path.match(pathRegex));
-    const hasValidExtension = event.paths.every((path) => path.endsWith(".md"));
+    // If we have a dependency-aware watch set, only rebuild for files in it.
+    // Otherwise fall back to watching all .md files (legacy behavior).
+    const isRelevantFile = watchSet.size > 0
+      ? event.paths.some((path) => watchSet.has(path))
+      : event.paths.every((path) => path.endsWith(".md"));
 
     if (
       event.kind === "modify" &&
       event.paths.length === 1 &&
       notInProtectedDir &&
-      hasValidExtension
+      isRelevantFile
     ) {
       rebuild(event.paths[0]);
     }

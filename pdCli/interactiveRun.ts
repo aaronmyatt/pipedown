@@ -1,7 +1,7 @@
 import type { CliInput } from "../pipedown.d.ts";
 import { keypress, pd, Select, std } from "../deps.ts";
 import { pdBuild } from "../pdBuild.ts";
-import { pdRun } from "./helpers.ts";
+import { pdRun, readPipeJson, resolvePipeWatchPaths } from "./helpers.ts";
 import { notifyTauri } from "./notifyTauri.ts";
 import {
   dedupeReplayableInputs,
@@ -534,6 +534,9 @@ export async function interactiveRun(input: CliInput) {
       console.log(formatRerunBanner(reason));
       await playPipeDownAnimation(reason);
       await buildAndRunOnce(input, target, currentInput);
+      // Refresh dependency watch paths after rebuild so newly added imports
+      // are picked up by the file watchers on the next iteration.
+      await refreshDepWatchPaths();
       pipeAliases = await loadTracePipeAliases(target);
       lastTrace = await latestTraceForAliases(projectAliases, pipeAliases);
       lastStatus = lastTrace
@@ -585,27 +588,72 @@ export async function interactiveRun(input: CliInput) {
   await runNow("initial run");
 
   const targetAbsolutePath = toAbsoluteInteractivePath(target.path);
-  const watcher = Deno.watchFs(std.dirname(targetAbsolutePath), {
-    recursive: false,
-  });
-  const watcherTask = (async () => {
-    for await (const event of watcher) {
-      if (watcherClosed) break;
 
-      // Editors often save by rename/write rather than a plain modify, so we
-      // treat all content-changing events as rerun triggers.
-      // Ref: https://docs.deno.com/api/deno/~/Deno.watchFs
-
-      if (
-        (event.kind === "modify" ||
-          event.kind === "create" ||
-          event.kind === "remove",
-          event.kind === "rename") &&
-        eventTouchesInteractiveTarget(targetAbsolutePath, event.paths)
-      ) {
-        rerunDebounced(`file changed (${event.kind})`);
-      }
+  // ── Dependency-aware watch set ──
+  // After the initial build, read the pipe's index.json to discover its
+  // dependencies (other pipes, local files). We watch these in addition
+  // to the target .md file so that changes to imported files also trigger
+  // a rerun. The set is refreshed after each build.
+  // Ref: helpers.ts resolvePipeWatchPaths()
+  let depWatchPaths = new Set<string>();
+  async function refreshDepWatchPaths() {
+    // target is guaranteed non-null here (guarded by early return at line 443)
+    const pipe = await readPipeJson(target!.pipeName);
+    if (pipe) {
+      const paths = await resolvePipeWatchPaths(pipe);
+      depWatchPaths = new Set(paths);
     }
+  }
+  await refreshDepWatchPaths();
+
+  // Collect all unique directories that contain watched files so we can
+  // set up Deno.watchFs watchers for each. The target dir is always included.
+  const watchDirs = new Set<string>();
+  watchDirs.add(std.dirname(targetAbsolutePath));
+  for (const p of depWatchPaths) {
+    watchDirs.add(std.dirname(p));
+  }
+
+  // Checks whether a filesystem event affects any of our watched paths
+  // (the target .md itself or any of its dependency files).
+  function eventTouchesDeps(eventPaths: string[]): boolean {
+    return eventPaths.some((ep) => {
+      const abs = toAbsoluteInteractivePath(ep);
+      return depWatchPaths.has(abs);
+    });
+  }
+
+  // Start a watcher for each unique directory containing watched files.
+  // Ref: https://docs.deno.com/api/deno/~/Deno.watchFs
+  const watchers: Deno.FsWatcher[] = [];
+  for (const dir of watchDirs) {
+    watchers.push(Deno.watchFs(dir, { recursive: false }));
+  }
+
+  const watcherTask = (async () => {
+    // Merge events from all watchers into a single stream.
+    // Each watcher runs its own async loop; any match triggers a rerun.
+    await Promise.race(watchers.map(async (watcher) => {
+      for await (const event of watcher) {
+        if (watcherClosed) break;
+
+        // Editors often save by rename/write rather than a plain modify, so we
+        // treat all content-changing events as rerun triggers.
+        // Ref: https://docs.deno.com/api/deno/~/Deno.watchFs
+
+        if (
+          (event.kind === "modify" ||
+            event.kind === "create" ||
+            event.kind === "remove",
+            event.kind === "rename") &&
+          (eventTouchesInteractiveTarget(targetAbsolutePath, event.paths) ||
+            eventTouchesDeps(event.paths))
+        ) {
+          rerunDebounced(`file changed (${event.kind})`);
+          // Refresh dep paths after rebuild completes (done inside runNow)
+        }
+      }
+    }));
   })();
 
   while (true) {
@@ -742,7 +790,7 @@ export async function interactiveRun(input: CliInput) {
   }
 
   watcherClosed = true;
-  watcher.close();
+  for (const w of watchers) w.close();
   await watcherTask.catch(() => undefined);
   return input;
 }

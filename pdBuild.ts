@@ -358,18 +358,22 @@ async function transformMdFiles(input: BuildInput) {
     const scriptPath = std.join(pipe.dir, "index.ts");
     const output = await pipeToScript({ pipe });
     if (output.success && output.script) {
+      // Narrow the union type — in the success branch, sourceMapJSON is present.
+      // Ref: https://www.typescriptlang.org/docs/handbook/2/narrowing.html
+      const sourceMapJSON = (output as { sourceMapJSON?: string }).sourceMapJSON;
+
       // Append the sourceMappingURL directive so Deno resolves the source map
       // at runtime, rewriting stack traces to point at the .md file.
       // Ref: https://sourcemaps.info/spec.html#h-linking-generated-code
-      const script = output.sourceMapJSON
+      const script = sourceMapJSON
         ? output.script + "\n//# sourceMappingURL=index.ts.map\n"
         : output.script;
       await Deno.writeTextFile(scriptPath, script);
 
       // Write the V3 source map alongside the generated TypeScript
-      if (output.sourceMapJSON) {
+      if (sourceMapJSON) {
         const mapPath = std.join(pipe.dir, "index.ts.map");
-        await Deno.writeTextFile(mapPath, output.sourceMapJSON);
+        await Deno.writeTextFile(mapPath, sourceMapJSON);
       }
     } else {
       input.errors = input.errors || [];

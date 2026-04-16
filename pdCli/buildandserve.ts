@@ -1,7 +1,8 @@
-import type { BuildInput } from "../pipedown.d.ts";
+import type { BuildInput, Pipe } from "../pipedown.d.ts";
 import { std } from "../deps.ts";
 
 import { pdBuild } from "../pdBuild.ts";
+import { PD_DIR, resolvePipeWatchPaths } from "./helpers.ts";
 // pipeToMarkdown converts a Pipe JSON object back to markdown source.
 // Used here to persist LLM-generated changes (descriptions, schemas, code, etc.)
 // back to the original .md file — the same round-trip mechanism that `pd sync` uses.
@@ -340,6 +341,37 @@ function spawnAndStream(
 }
 
 async function watchFs(input: BuildInput) {
+  // ── Dependency-aware watch map ──
+  // Build a map from watched file paths → pipe mdPaths so that changes to
+  // local dependency files (e.g. ./helpers.ts) trigger rebuilds of the
+  // pipes that import them. Refreshed after every build via lazyIO.
+  // Ref: helpers.ts resolvePipeWatchPaths()
+  type WatchMap = Map<string, Set<string>>;
+  async function buildWatchMap(): Promise<WatchMap> {
+    const map: WatchMap = new Map();
+    try {
+      for await (
+        const entry of std.walk(PD_DIR, {
+          exts: [".json"],
+          match: [/index\.json$/],
+        })
+      ) {
+        const content = await Deno.readTextFile(entry.path);
+        const pipe = JSON.parse(content) as Pipe;
+        const watchPaths = await resolvePipeWatchPaths(pipe);
+        for (const wp of watchPaths) {
+          if (!map.has(wp)) map.set(wp, new Set());
+          map.get(wp)!.add(pipe.mdPath);
+        }
+      }
+    } catch {
+      // .pd/ may not exist yet — that's fine
+    }
+    return map;
+  }
+
+  let watchMap = await buildWatchMap();
+
   for await (const event of Deno.watchFs(Deno.cwd(), { recursive: true })) {
     const pathRegex = new RegExp(
       /\.pd|deno|dist|\.git|\.vscode|\.github|\.cache|\.history|\.log|\.lock|\.swp/,
@@ -348,18 +380,27 @@ async function watchFs(input: BuildInput) {
       !path.match(pathRegex)
     );
 
-    const extensions = [".md"];
-    const hasValidExtension = event.paths.every((path) =>
-      extensions.some((ext) => path.endsWith(ext))
+    // Watch .md files and any files tracked as local dependencies
+    const isRelevantFile = event.paths.every((path) =>
+      path.endsWith(".md") || watchMap.has(path)
     );
 
     if (
       event.kind === "modify" && event.paths.length === 1 &&
-      notInProtectedDir && hasValidExtension
+      notInProtectedDir && isRelevantFile
     ) {
       const fileName = event.paths[0];
+      // If this file is a dependency of a pipe, rebuild the dependent pipe(s)
+      const affectedPipePaths = watchMap.get(fileName);
+      const matchPattern = affectedPipePaths && affectedPipePaths.size > 0
+        ? [...affectedPipePaths].join("|")
+        : fileName;
+
       console.log(std.colors.brightGreen(`File changed: ${fileName}`));
-      lazyIO(Object.assign(input, { match: fileName }));
+      lazyIO(Object.assign(input, { match: matchPattern }));
+
+      // Refresh watch map after build completes
+      watchMap = await buildWatchMap();
     }
   }
 }
