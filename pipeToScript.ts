@@ -1,6 +1,7 @@
 import type { PipeToScriptInput, Step } from "./pipedown.d.ts";
 import { pd } from "./deps.ts";
 import { sanitizeString } from "./pdUtils.ts";
+import { generateSourceMap } from "./sourceMap.ts";
 
 const detectImports = /import.*from.*/gm;
 
@@ -223,11 +224,23 @@ export { pipe, rawPipe, process };
     return input;
   };
 
+  // Generate a V3 source map after the script template is assembled.
+  // Maps generated index.ts lines back to the original markdown code blocks
+  // so Deno can rewrite stack traces to point at .md source lines.
+  // Ref: https://sourcemaps.info/spec.html
+  const buildSourceMap = (input: PipeToScriptInput) => {
+    if (input.script && input.pipe) {
+      input.sourceMapJSON = generateSourceMap(input.script, input.pipe);
+    }
+    return input;
+  };
+
   const funcs = [
     extractImportsFromSteps,
     sanitizeStepNames,
     stepsToFunctions,
     scriptTemplate,
+    buildSourceMap,
   ];
 
   const output = await pd.process<PipeToScriptInput>(funcs, input, {});
@@ -247,5 +260,10 @@ export { pipe, rawPipe, process };
 
   return hasErrors
     ? { ...base, success: false, script: "", errors: output.errors }
-    : { ...base, success: true, script: output.script };
+    : {
+      ...base,
+      success: true,
+      script: output.script,
+      sourceMapJSON: output.sourceMapJSON,
+    };
 };
