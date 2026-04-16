@@ -244,6 +244,8 @@ export type PipeToScriptInput = {
   pipeImports?: string[];
   functions?: string[];
   script?: string;
+  /** V3 source map JSON mapping generated index.ts lines back to markdown. */
+  sourceMapJSON?: string;
   errors?: PDError[];
 } & Input;
 
