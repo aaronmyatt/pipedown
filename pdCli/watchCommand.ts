@@ -50,7 +50,10 @@ export async function watchCommand(input: CliInput) {
     const map: WatchMap = new Map();
     try {
       for await (
-        const entry of std.walk(PD_DIR, { exts: [".json"], match: [/index\.json$/] })
+        const entry of std.walk(PD_DIR, {
+          exts: [".json"],
+          match: [/index\.json$/],
+        })
       ) {
         const content = await Deno.readTextFile(entry.path);
         const pipe = JSON.parse(content) as Pipe;

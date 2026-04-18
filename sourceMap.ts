@@ -70,7 +70,47 @@ export function encodeSegment(
 
 // Regex matching single-line import statements — same pattern used by
 // pipeToScript.ts to hoist imports from step code to the module header.
-const detectImports = /import.*from.*/gm;
+//
+// We intentionally keep this broad (`import.*from.*`) to preserve historical
+// behavior where even commented import lines are treated as hoist candidates.
+// The regex is non-global so repeated `.test()` calls are stateless.
+const detectImportLine = /import.*from.*/;
+
+/**
+ * Detect whether a step code line is treated as a hoisted import.
+ *
+ * This helper centralizes the rule shared by script generation and source-map
+ * generation so both phases make *identical* include/exclude decisions.
+ * Keeping those rules in lock-step prevents mapping drift.
+ *
+ * Ref: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/import
+ *
+ * @param codeLine - One line from a markdown step code block
+ * @returns True when the line is treated as a hoisted import line
+ */
+export function isHoistedImportLine(codeLine: string): boolean {
+  return detectImportLine.test(codeLine.trim());
+}
+
+/**
+ * Remove hoisted import lines from a step code block.
+ *
+ * The generated step function body should not contain the original import
+ * lines once those imports have been moved to the module header. We remove
+ * the full line (not just the matched substring) so we do not leave behind
+ * blank placeholder lines that would shift runtime line numbers.
+ *
+ * Ref: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String/split
+ *
+ * @param stepCode - Raw code from the markdown fenced block
+ * @returns Step code with hoisted import lines removed
+ */
+export function stripHoistedImportsFromStepCode(stepCode: string): string {
+  return stepCode
+    .split("\n")
+    .filter((line) => !isHoistedImportLine(line))
+    .join("\n");
+}
 
 /**
  * Build a mapping from generated line numbers to markdown source lines.
@@ -112,10 +152,13 @@ export function buildLineMapping(
     const mdContentStart = step.sourceMap.codeStartLine + 1;
 
     // Split the step's original code into lines and walk through them,
-    // tracking which markdown source line each corresponds to. Lines that
-    // match the import regex were hoisted to the module header by
-    // pipeToScript and stripped from the function body — we advance the
-    // source line counter but don't emit a mapping for them in the body.
+    // tracking which markdown source line each corresponds to.
+    //
+    // Import lines are hoisted to the module header and removed from the
+    // generated function body. We therefore advance markdown line counters for
+    // those lines, but we do not allocate generated-body line mappings for
+    // them. This keeps generated-line and markdown-line progression aligned.
+    //
     // markdown-it token.content always ends with a trailing newline, which
     // produces an empty string when split. Drop it so we don't generate a
     // spurious mapping for the closing fence line.
@@ -123,22 +166,17 @@ export function buildLineMapping(
     if (codeLines.length > 0 && codeLines[codeLines.length - 1] === "") {
       codeLines.pop();
     }
+
     let mdLine = mdContentStart;
     // genBodyLine starts on the line after the function declaration
     // (which itself has a 4-space indent prefix in the generated output)
     let genBodyLine = genDeclLine + 1;
 
     for (const codeLine of codeLines) {
-      if (detectImports.test(codeLine.trim())) {
-        // Reset lastIndex because we use the `g` flag — without this,
-        // alternating test() calls on different strings can skip matches.
-        // Ref: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/RegExp/lastIndex
-        detectImports.lastIndex = 0;
+      if (isHoistedImportLine(codeLine)) {
         mdLine++;
         continue;
       }
-      // Reset lastIndex for the same reason as above
-      detectImports.lastIndex = 0;
 
       mapping.set(genBodyLine, mdLine);
       genBodyLine++;
@@ -147,6 +185,200 @@ export function buildLineMapping(
   }
 
   return mapping;
+}
+
+// ── Source Map Decoding / Composition Helpers ──
+// Deno executes transpiled JavaScript for .ts modules. When an external map is
+// attached to a TypeScript file, V8 stack traces use *runtime JS* line numbers.
+// We therefore compose:
+//   runtime JS line -> generated TS line -> markdown line.
+//
+// Ref: https://docs.deno.com/runtime/fundamentals/debugging/
+// Ref: https://sourcemaps.info/spec.html#mappings-structure
+
+/**
+ * Decode one Base64-VLQ value from a segment string.
+ *
+ * Ref: https://sourcemaps.info/spec.html#base64-vlq
+ *
+ * @param encoded - The segment string being decoded
+ * @param start   - Start index within `encoded`
+ * @returns Decoded signed value and the next unread index
+ */
+function decodeVLQ(
+  encoded: string,
+  start: number,
+): { value: number; nextIndex: number } {
+  let result = 0;
+  let shift = 0;
+  let index = start;
+  let continuation = false;
+
+  do {
+    const char = encoded[index++];
+    const charIndex = BASE64_CHARS.indexOf(char);
+    if (charIndex < 0) {
+      throw new Error(`Invalid Base64-VLQ character: ${char}`);
+    }
+
+    continuation = (charIndex & 0x20) !== 0;
+    const digit = charIndex & 0x1f;
+    result += digit << shift;
+    shift += 5;
+  } while (continuation);
+
+  const isNegative = (result & 1) === 1;
+  const value = result >> 1;
+  return { value: isNegative ? -value : value, nextIndex: index };
+}
+
+/**
+ * Build a generated-line → source-line mapping from a Source Map V3 JSON.
+ *
+ * We keep the first source-bearing segment on each generated line. For runtime
+ * stack traces this is sufficient because we emit line-level markdown mappings
+ * (column 0 only) and only need stable line correspondence.
+ *
+ * Ref: https://sourcemaps.info/spec.html#mappings-structure
+ *
+ * @param sourceMapJSON       - The V3 source map JSON string to decode
+ * @param expectedSourceIndex - Optional source index to include (default 0)
+ * @returns Map from 0-indexed generated line number → 0-indexed source line
+ */
+export function buildGeneratedToSourceLineMappingFromSourceMap(
+  sourceMapJSON: string,
+  expectedSourceIndex = 0,
+): Map<number, number> {
+  const parsed = JSON.parse(sourceMapJSON) as { mappings: string };
+  const generatedToSource = new Map<number, number>();
+
+  let previousSourceIndex = 0;
+  let previousSourceLine = 0;
+
+  const generatedLines = parsed.mappings.split(";");
+
+  for (
+    let generatedLine = 0;
+    generatedLine < generatedLines.length;
+    generatedLine++
+  ) {
+    const lineSegments = generatedLines[generatedLine];
+    if (!lineSegments) continue;
+
+    for (const segment of lineSegments.split(",")) {
+      if (!segment) continue;
+
+      let cursor = 0;
+
+      // Field 1: generated column delta (always present)
+      const generatedColumnDecoded = decodeVLQ(segment, cursor);
+      cursor = generatedColumnDecoded.nextIndex;
+
+      // 1-field segments have no source info (unmapped segment)
+      if (cursor >= segment.length) continue;
+
+      // Fields 2-4: source index, source line, source column (all deltas)
+      const sourceIndexDecoded = decodeVLQ(segment, cursor);
+      previousSourceIndex += sourceIndexDecoded.value;
+      cursor = sourceIndexDecoded.nextIndex;
+
+      const sourceLineDecoded = decodeVLQ(segment, cursor);
+      previousSourceLine += sourceLineDecoded.value;
+      cursor = sourceLineDecoded.nextIndex;
+
+      const sourceColumnDecoded = decodeVLQ(segment, cursor);
+      cursor = sourceColumnDecoded.nextIndex;
+
+      // Field 5 (name index) is optional and irrelevant for line mapping.
+      if (cursor < segment.length) {
+        const nameDecoded = decodeVLQ(segment, cursor);
+        cursor = nameDecoded.nextIndex;
+      }
+
+      // Keep the first source-bearing segment for the line.
+      if (
+        previousSourceIndex === expectedSourceIndex &&
+        !generatedToSource.has(generatedLine)
+      ) {
+        generatedToSource.set(generatedLine, previousSourceLine);
+      }
+    }
+  }
+
+  return generatedToSource;
+}
+
+/**
+ * Generate a runtime-accurate source map for Deno TypeScript execution.
+ *
+ * Deno stack traces for `.ts` modules are reported using transpiled JavaScript
+ * line numbers. To map those back to markdown lines, we compose:
+ *
+ *   transpiled JS line -> generated TS line -> markdown line
+ *
+ * The final emitted map still references the markdown source only, preserving
+ * the existing contract that framework/template boilerplate remains unmapped.
+ *
+ * Ref: https://docs.deno.com/runtime/fundamentals/debugging/
+ * Ref: https://sourcemaps.info/spec.html
+ *
+ * @param script                  - Generated TypeScript source (`index.ts`)
+ * @param transpiledScript        - Transpiled JavaScript produced from script
+ * @param transpiledSourceMapJSON - Source map from transpiled JS -> TS
+ * @param pipe                    - Pipe metadata and markdown source
+ * @returns JSON string of a V3 map for runtime JS lines -> markdown lines
+ */
+export function generateRuntimeSourceMap(
+  script: string,
+  transpiledScript: string,
+  transpiledSourceMapJSON: string,
+  pipe: Pipe,
+): string {
+  const tsLineToMarkdown = buildLineMapping(script.split("\n"), pipe.steps);
+  if (tsLineToMarkdown.size === 0) return "";
+
+  const runtimeLineToTsLine = buildGeneratedToSourceLineMappingFromSourceMap(
+    transpiledSourceMapJSON,
+    0,
+  );
+
+  const runtimeLineToMarkdown = new Map<number, number>();
+  for (const [runtimeLine, tsLine] of runtimeLineToTsLine.entries()) {
+    const markdownLine = tsLineToMarkdown.get(tsLine);
+    if (markdownLine != null) {
+      runtimeLineToMarkdown.set(runtimeLine, markdownLine);
+    }
+  }
+
+  if (runtimeLineToMarkdown.size === 0) return "";
+
+  const sourcePath = std.relative(pipe.absoluteDir || pipe.dir, pipe.mdPath);
+  const runtimeLines = transpiledScript.split("\n");
+
+  let lastSourceLine = 0;
+  const mappingParts: string[] = [];
+
+  for (let runtimeLine = 0; runtimeLine < runtimeLines.length; runtimeLine++) {
+    const sourceLine = runtimeLineToMarkdown.get(runtimeLine);
+    if (sourceLine != null) {
+      const sourceLineDelta = sourceLine - lastSourceLine;
+      mappingParts.push(encodeSegment(0, 0, sourceLineDelta, 0));
+      lastSourceLine = sourceLine;
+    } else {
+      mappingParts.push("");
+    }
+  }
+
+  const sourceMap = {
+    version: 3,
+    file: "index.ts",
+    sources: [sourcePath],
+    sourcesContent: [pipe.rawSource ?? null],
+    names: [],
+    mappings: mappingParts.join(";"),
+  };
+
+  return JSON.stringify(sourceMap);
 }
 
 /**

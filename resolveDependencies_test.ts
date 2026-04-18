@@ -1,8 +1,6 @@
 import { assertEquals } from "@std/assert";
 import { mdToPipe } from "./mdToPipe.ts";
-import { pipeToScript } from "./pipeToScript.ts";
-import type { BuildInput, Input, Pipe } from "./pipedown.d.ts";
-import { pdBuild } from "./pdBuild.ts";
+import type { Input, Pipe } from "./pipedown.d.ts";
 
 // ── resolveDependencies integration tests ──
 // These tests verify that the dependency resolution step in pdBuild correctly
@@ -17,19 +15,21 @@ import { pdBuild } from "./pdBuild.ts";
  * imports. Returns the pipe with its steps and code intact.
  */
 async function parsePipe(markdown: string): Promise<Pipe> {
-  const result = await mdToPipe({
-    markdown,
-    pipe: {
-      name: "",
-      cleanName: "",
-      steps: [],
-      dir: "",
-      absoluteDir: "",
-      fileName: "",
-      mdPath: "",
-      config: { inputs: [], build: [], skip: [], exclude: [] },
-    },
-  } as { markdown: string; pipe: Pipe } & Input);
+  const result = await mdToPipe(
+    {
+      markdown,
+      pipe: {
+        name: "",
+        cleanName: "",
+        steps: [],
+        dir: "",
+        absoluteDir: "",
+        fileName: "",
+        mdPath: "",
+        config: { inputs: [], build: [], skip: [], exclude: [] },
+      },
+    } as { markdown: string; pipe: Pipe } & Input,
+  );
   return result.pipe as Pipe;
 }
 

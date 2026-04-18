@@ -1,6 +1,7 @@
-import { pd, std } from "./deps.ts";
+import { denoEmit, pd, std } from "./deps.ts";
 import { mdToPipe } from "./mdToPipe.ts";
 import { pipeToScript } from "./pipeToScript.ts";
+import { generateRuntimeSourceMap } from "./sourceMap.ts";
 import * as utils from "./pdUtils.ts";
 import type { BuildInput, Pipe, Step, WalkOptions } from "./pipedown.d.ts";
 import { defaultTemplateFiles } from "./defaultTemplateFiles.ts";
@@ -360,13 +361,14 @@ async function transformMdFiles(input: BuildInput) {
     if (output.success && output.script) {
       // Narrow the union type — in the success branch, sourceMapJSON is present.
       // Ref: https://www.typescriptlang.org/docs/handbook/2/narrowing.html
-      const sourceMapJSON = (output as { sourceMapJSON?: string }).sourceMapJSON;
+      const sourceMapJSON =
+        (output as { sourceMapJSON?: string }).sourceMapJSON;
 
       // Append the sourceMappingURL directive so Deno resolves the source map
       // at runtime, rewriting stack traces to point at the .md file.
       // Ref: https://sourcemaps.info/spec.html#h-linking-generated-code
       const script = sourceMapJSON
-        ? output.script + "\n//# sourceMappingURL=index.ts.map\n"
+        ? output.script + "\n//# sourceMappingURL=./index.ts.map\n"
         : output.script;
       await Deno.writeTextFile(scriptPath, script);
 
@@ -386,6 +388,81 @@ async function transformMdFiles(input: BuildInput) {
       );
     }
   }
+  return input;
+}
+
+// ── Runtime-Accurate Source Map Recomposition ──
+// Deno executes transpiled JavaScript for .ts modules. In practice, runtime
+// stack frames use transpiled JS line numbers when an external source map is
+// attached to a TypeScript source. To map those frames back to markdown lines,
+// we transpile each generated index.ts and compose:
+//   runtime JS -> generated TS -> markdown.
+//
+// This keeps our “map only user-authored markdown lines” behavior while making
+// line numbers match what Deno reports at runtime.
+// Ref: https://docs.deno.com/runtime/fundamentals/debugging/
+// Ref: https://jsr.io/@deno/emit/doc/~/transpile
+
+/**
+ * Rebuild each pipe's source map using runtime JS line numbers from Deno's
+ * transpilation output, then compose those lines back to markdown locations.
+ *
+ * Falls back to the initial TS-line source map if transpilation or
+ * recomposition fails for a given pipe.
+ *
+ * @param input - Build input containing generated pipes and .pd paths
+ * @returns The unchanged build input
+ */
+async function rebuildRuntimeSourceMaps(input: BuildInput) {
+  const importMapPath = std.join(resolvePdDir(input), "deno.json");
+
+  for (const pipe of (input.pipes || [])) {
+    const scriptPath = std.join(pipe.dir, "index.ts");
+    const mapPath = std.join(pipe.dir, "index.ts.map");
+
+    if (!await std.exists(scriptPath) || !await std.exists(mapPath)) {
+      continue;
+    }
+
+    try {
+      const script = await Deno.readTextFile(scriptPath);
+      const transpileOutput = await denoEmit.transpile(scriptPath, {
+        compilerOptions: {
+          sourceMap: true,
+          inlineSources: true,
+        },
+        importMap: importMapPath,
+      });
+
+      const rootURL = std.toFileUrl(scriptPath).href;
+      const transpiledScript = transpileOutput.get(rootURL);
+      const transpiledSourceMapJSON = transpileOutput.get(`${rootURL}.map`);
+
+      if (!transpiledScript || !transpiledSourceMapJSON) {
+        continue;
+      }
+
+      const runtimeSourceMapJSON = generateRuntimeSourceMap(
+        script,
+        transpiledScript,
+        transpiledSourceMapJSON,
+        pipe,
+      );
+
+      if (runtimeSourceMapJSON) {
+        await Deno.writeTextFile(mapPath, runtimeSourceMapJSON);
+      }
+    } catch (error) {
+      // Preserve existing build behavior: if runtime recomposition fails,
+      // retain the initial TS-based map rather than aborting the full build.
+      if (input.debug) {
+        console.warn(
+          `Warning: runtime source-map recomposition failed for ${pipe.name}: ${error}`,
+        );
+      }
+    }
+  }
+
   return input;
 }
 
@@ -512,6 +589,7 @@ export const pdBuild = async (input: BuildInput) => {
     writePipeMd,
     transformMdFiles,
     writeDefaultGeneratedTemplates,
+    rebuildRuntimeSourceMaps,
     // resolveDependencies runs after writeDefaultGeneratedTemplates because it
     // needs the import map (populated by writeDenoImportMap) to classify step
     // imports as pipe deps vs local file deps. We re-write index.json after

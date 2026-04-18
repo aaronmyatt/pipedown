@@ -8,6 +8,7 @@ import {
   join,
   parse as parsePath,
   relative,
+  toFileUrl,
 } from "jsr:@std/path@1.1.4";
 import { serveFile } from "jsr:@std/http@1.0.25";
 import { debounce } from "jsr:@std/async@1.2.0";
@@ -21,6 +22,7 @@ import MarkdownIt from "npm:markdown-it@14.1.1";
 
 import { process } from "jsr:@pd/pdpipe@0.2.2";
 import { $p } from "jsr:@pd/pointers@0.1.1";
+import { transpile } from "jsr:@deno/emit@0.46.0";
 //import { httpImports } from "https://deno.land/x/esbuild_plugin_http_imports@v1.3.0/index.ts";
 
 export const std = {
@@ -38,6 +40,7 @@ export const std = {
   basename,
   debounce,
   firstNotNullishOf,
+  toFileUrl,
 };
 export const md = {
   MarkdownIt,
@@ -46,6 +49,13 @@ export const md = {
 export const pd = {
   process,
   $p,
+};
+
+// Deno's runtime transpiler is used during build-time source-map
+// recomposition so stack traces align with transpiled execution lines.
+// Ref: https://jsr.io/@deno/emit/doc/~/transpile
+export const denoEmit = {
+  transpile,
 };
 
 export { keycodeParse, keypress, Select };

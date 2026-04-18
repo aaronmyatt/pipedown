@@ -1,7 +1,10 @@
 import type { PipeToScriptInput, Step } from "./pipedown.d.ts";
 import { pd } from "./deps.ts";
 import { sanitizeString } from "./pdUtils.ts";
-import { generateSourceMap } from "./sourceMap.ts";
+import {
+  generateSourceMap,
+  stripHoistedImportsFromStepCode,
+} from "./sourceMap.ts";
 
 const detectImports = /import.*from.*/gm;
 
@@ -62,8 +65,15 @@ export const pipeToScript = async (input: PipeToScriptInput) => {
 
   const stepsToFunctions = (input: PipeToScriptInput) => {
     input.functions = input.pipe.steps.map((step: Step) => {
+      // Remove hoisted import lines *as full lines* before embedding step code
+      // into the generated function body. If we only remove the matched
+      // substring, blank placeholder lines remain and runtime line numbers drift
+      // away from markdown source lines.
+      // Ref: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String/replace
+      const functionBody = stripHoistedImportsFromStepCode(step.code);
+
       return `export async function ${step.funcName} (input, opts) {
-    ${step.code.replaceAll(detectImports, "")}
+    ${functionBody}
 }`;
     });
     return input;

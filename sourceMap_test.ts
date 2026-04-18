@@ -1,5 +1,12 @@
 import { assertEquals } from "@std/assert";
-import { encodeVLQ, encodeSegment, buildLineMapping, generateSourceMap } from "./sourceMap.ts";
+import {
+  buildGeneratedToSourceLineMappingFromSourceMap,
+  buildLineMapping,
+  encodeSegment,
+  encodeVLQ,
+  generateRuntimeSourceMap,
+  generateSourceMap,
+} from "./sourceMap.ts";
 import type { Pipe, Step } from "./pipedown.d.ts";
 
 // ── VLQ Encoding Tests ──
@@ -82,7 +89,9 @@ Deno.test("buildLineMapping - maps function declaration to heading line", () => 
     "MyStep",
     "const x = 1;\n",
     // Markdown: heading at line 10, fence at line 12, code at line 13
-    12, 15, 10,
+    12,
+    15,
+    10,
   );
 
   const script = [
@@ -240,7 +249,8 @@ Deno.test("generateSourceMap - returns empty string when no steps have sourceMap
     inList: false,
   };
   const pipe = makePipe([step]);
-  const script = "export async function NoMap (input, opts) {\n    const x = 1;\n}\n";
+  const script =
+    "export async function NoMap (input, opts) {\n    const x = 1;\n}\n";
 
   const result = generateSourceMap(script, pipe);
   assertEquals(result, "");
@@ -253,12 +263,12 @@ Deno.test("generateSourceMap - mappings string has correct structure", () => {
   const pipe = makePipe([step]);
 
   const script = [
-    "// lint",           // line 0 — unmapped
+    "// lint", // line 0 — unmapped
     'import Pipe from "jsr:@pd/pdpipe";', // line 1 — unmapped
-    "",                  // line 2 — unmapped
+    "", // line 2 — unmapped
     "export async function Hello (input, opts) {", // line 3 → md line 2
-    "    console.log('hi');",                       // line 4 → md line 5
-    "}",                 // line 5 — unmapped
+    "    console.log('hi');", // line 4 → md line 5
+    "}", // line 5 — unmapped
   ].join("\n");
 
   const result = generateSourceMap(script, pipe);
@@ -276,3 +286,141 @@ Deno.test("generateSourceMap - mappings string has correct structure", () => {
   // Line 5 should be unmapped
   assertEquals(segments[5], "");
 });
+
+Deno.test("buildGeneratedToSourceLineMappingFromSourceMap - decodes line mappings", () => {
+  const sourceMapJSON = JSON.stringify({
+    version: 3,
+    sources: ["index.ts"],
+    names: [],
+    // line0 -> src0 (AAAA), line1 -> src1 (AACA), line2 unmapped, line3 -> src2
+    mappings: "AAAA;AACA;;AACA",
+  });
+
+  const mapping = buildGeneratedToSourceLineMappingFromSourceMap(sourceMapJSON);
+  assertEquals(mapping.get(0), 0);
+  assertEquals(mapping.get(1), 1);
+  assertEquals(mapping.has(2), false);
+  assertEquals(mapping.get(3), 2);
+});
+
+Deno.test(
+  "generateRuntimeSourceMap - maps transpiled runtime lines back to markdown",
+  () => {
+    // This code mirrors the jiraCli Sprints shape where imports are hoisted
+    // out of the function body before code generation.
+    const stepCode = `import formatTableAs from "jsr:@dep/table";
+import getSprints from "sprints";
+
+if (!input.boardId) {
+  console.error("# Sprints\\n\\nNo board ID is available. Run --boards first or pass --boardId.");
+  return;
+}
+
+const results = await getSprints.process({ boardId: input.boardId, state: 'closed' });
+
+input.body = new formatTableAs.Markdown()
+  .add("Sprint ID", "Name", "State", "Start", "End");
+
+results.sprints.forEach(sprint => input.body.add(
+  sprint.id,
+  sprint.name,
+  sprint.state,
+  sprint.startDate || "",
+  sprint.endDate || sprint.completeDate || "",
+));
+input.body = [
+  "# Sprints",
+  \`Board ID: \${boardId}\`,
+  \`State: closed\`,
+  results.fetchResults,
+  results.sprints.length > 0 ? input.body.build() : "No sprints were returned for this board/state.",
+].join("\\n\\n");
+`;
+
+    const step = makeStep("Sprints", stepCode, 205, 234, 202);
+    const pipe = makePipe([step], "/project/jiraCli.md");
+
+    // Generated TypeScript after import hoisting (imports removed from body).
+    const script = [
+      "export async function Sprints (input, opts) {",
+      "    ",
+      "if (!input.boardId) {",
+      '  console.error("# Sprints\\n\\nNo board ID is available. Run --boards first or pass --boardId.");',
+      "  return;",
+      "}",
+      "",
+      "const results = await getSprints.process({ boardId: input.boardId, state: 'closed' });",
+      "",
+      "input.body = new formatTableAs.Markdown()",
+      '  .add("Sprint ID", "Name", "State", "Start", "End");',
+      "",
+      "results.sprints.forEach(sprint => input.body.add(",
+      "  sprint.id,",
+      "  sprint.name,",
+      "  sprint.state,",
+      '  sprint.startDate || "",',
+      '  sprint.endDate || sprint.completeDate || "",',
+      "));",
+      "input.body = [",
+      '  "# Sprints",',
+      "  `Board ID: ${boardId}`,",
+      "  `State: closed`,",
+      "  results.fetchResults,",
+      '  results.sprints.length > 0 ? input.body.build() : "No sprints were returned for this board/state.",',
+      '].join("\\n\\n");',
+      "",
+      "}",
+      "",
+    ].join("\n");
+
+    // Synthetic transpile output that simulates runtime JS line drift versus
+    // generated TS lines (for example: collapsed multiline expressions).
+    // The board line appears on runtime line 3 but corresponds to TS line 21.
+    const transpiledScript = [
+      "export async function Sprints(input, opts) {",
+      "if (!input.boardId) return;",
+      "const results = await getSprints.process({ boardId: input.boardId, state: 'closed' });",
+      "const body = `Board ID: ${boardId}`;",
+      "}",
+    ].join("\n");
+
+    const transpiledSourceMap = JSON.stringify({
+      version: 3,
+      file: "index.ts",
+      sources: ["index.ts"],
+      names: [],
+      mappings: [
+        // runtime line 0 -> ts line 0
+        encodeSegment(0, 0, 0, 0),
+        // runtime line 1 -> ts line 2
+        encodeSegment(0, 0, 2, 0),
+        // runtime line 2 -> ts line 7
+        encodeSegment(0, 0, 5, 0),
+        // runtime line 3 -> ts line 21 (board line)
+        encodeSegment(0, 0, 14, 0),
+        // runtime line 4 -> ts line 27
+        encodeSegment(0, 0, 6, 0),
+      ].join(";"),
+    });
+
+    const runtimeSourceMapJSON = generateRuntimeSourceMap(
+      script,
+      transpiledScript,
+      transpiledSourceMap,
+      pipe,
+    );
+
+    const runtimeLineMap = buildGeneratedToSourceLineMappingFromSourceMap(
+      runtimeSourceMapJSON,
+    );
+
+    const transpiledLines = transpiledScript.split("\n");
+    const boardLineInRuntime = transpiledLines.findIndex((line) =>
+      line.includes("`Board ID: ${boardId}`")
+    );
+    assertEquals(boardLineInRuntime >= 0, true);
+
+    // Markdown line 229 is 0-indexed as 228.
+    assertEquals(runtimeLineMap.get(boardLineInRuntime), 228);
+  },
+);

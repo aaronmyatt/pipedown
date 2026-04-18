@@ -113,6 +113,43 @@ Deno.test("pipeToScript", async (t) => {
     assertEquals(funcMatch![1].includes("import"), false);
   });
 
+  await t.step(
+    "does not leave blank placeholder lines when removing hoisted imports",
+    async () => {
+      const pipe = makePipe({
+        steps: [
+          {
+            code:
+              'import { foo } from "npm:bar";\nimport { baz } from "npm:baz";\n\ninput.value = foo() + baz();',
+            range: [0, 0],
+            name: "WithImport",
+            funcName: "WithImport",
+            inList: false,
+          },
+        ],
+      });
+
+      const result = await pipeToScript({ pipe });
+      assertEquals(result.success, true);
+
+      const lines = result.script!.split("\n");
+      const functionLine = lines.findIndex((line) =>
+        line.includes("async function WithImport")
+      );
+      assertEquals(functionLine >= 0, true);
+
+      // The markdown step intentionally has exactly one blank line between the
+      // import block and executable code. After hoisting imports, we should
+      // preserve that single user-authored blank line (line +1) and place code
+      // immediately after it (line +2), with no extra placeholder lines.
+      assertEquals(lines[functionLine + 1].trim(), "");
+      assertStringIncludes(
+        lines[functionLine + 2],
+        "input.value = foo() + baz();",
+      );
+    },
+  );
+
   await t.step("handles multiple imports from different steps", async () => {
     const pipe = makePipe({
       steps: [
