@@ -445,6 +445,10 @@ export async function interactiveRun(input: CliInput) {
     return input;
   }
 
+  // Capture the narrowed target in a dedicated constant so nested helpers do
+  // not lose the non-null guarantee from the early return above.
+  const activeTarget = target;
+
   const noTraceFlag = Deno.args.includes("--no-trace") ||
     Boolean(pd.$p.get(input, "/flags/no-trace"));
   const configTrace = input.globalConfig?.trace;
@@ -584,26 +588,41 @@ export async function interactiveRun(input: CliInput) {
     void requestRerun(reason);
   }, 250);
 
-  console.log(std.colors.brightCyan(`Interactive pipe: ${target.path}`));
-  await runNow("initial run");
-
-  const targetAbsolutePath = toAbsoluteInteractivePath(target.path);
-
   // ── Dependency-aware watch set ──
-  // After the initial build, read the pipe's index.json to discover its
-  // dependencies (other pipes, local files). We watch these in addition
-  // to the target .md file so that changes to imported files also trigger
-  // a rerun. The set is refreshed after each build.
+  // `runNow()` refreshes this set after every rebuild so imported local files
+  // also trigger reruns. The declaration must live before the initial
+  // `await runNow(...)` call because `let` bindings stay in the temporal dead
+  // zone until execution reaches their initializer.
+  // Ref: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/let#temporal_dead_zone_tdz
   // Ref: helpers.ts resolvePipeWatchPaths()
   let depWatchPaths = new Set<string>();
+
+  /**
+   * Refresh the dependency-aware watch set for the active pipe.
+   *
+   * We read the built pipe metadata instead of reparsing markdown directly so
+   * the watcher list matches the same dependency graph that execution uses.
+   *
+   * @returns A promise that resolves after the dependency watch set is updated.
+   */
   async function refreshDepWatchPaths() {
-    // target is guaranteed non-null here (guarded by early return at line 443)
-    const pipe = await readPipeJson(target!.pipeName);
+    // `activeTarget` preserves the early-return narrowing from above, which is
+    // clearer than sprinkling non-null assertions through nested callbacks.
+    const pipe = await readPipeJson(activeTarget.pipeName);
     if (pipe) {
       const paths = await resolvePipeWatchPaths(pipe);
       depWatchPaths = new Set(paths);
     }
   }
+
+  console.log(std.colors.brightCyan(`Interactive pipe: ${target.path}`));
+  await runNow("initial run");
+
+  const targetAbsolutePath = toAbsoluteInteractivePath(target.path);
+
+  // After the initial build, read the pipe's index.json to discover its
+  // dependencies (other pipes, local files). We watch these in addition to the
+  // target `.md` file so imported files trigger reruns too.
   await refreshDepWatchPaths();
 
   // Collect all unique directories that contain watched files so we can
