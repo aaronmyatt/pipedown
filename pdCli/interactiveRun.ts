@@ -663,7 +663,7 @@ export async function interactiveRun(input: CliInput) {
         if (
           (event.kind === "modify" ||
             event.kind === "create" ||
-            event.kind === "remove",
+            event.kind === "remove" ||
             event.kind === "rename") &&
           (eventTouchesInteractiveTarget(targetAbsolutePath, event.paths) ||
             eventTouchesDeps(event.paths))
