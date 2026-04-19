@@ -3,6 +3,7 @@ import { rangeFinder } from "./rangeFinder.ts";
 import type {
   Input,
   mdToPipeInput,
+  PDError,
   Pipe,
   PipeConfig,
   Step,
@@ -216,7 +217,38 @@ const mergeMetaConfig = (input: mdToPipeInput) => {
     (metaBlockRange: number[]) => {
       const token = input.tokens.at(metaBlockRange[0]);
       if (!token) return {};
-      return JSON.parse(token.content || "{}");
+
+      // JSON.parse throws a SyntaxError for invalid JSON. We catch it here
+      // and record it as a PDError so the build pipeline can surface a helpful
+      // message pointing to the specific file and block content, rather than
+      // crashing with a cryptic uncaught exception.
+      // Ref: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/JSON/parse
+      try {
+        return JSON.parse(token.content || "{}");
+      } catch (e) {
+        // Build a concise error message: file path + the SyntaxError description
+        // + a truncated preview of the malformed block so the user can locate it.
+        const filePath = input.pipe.mdPath || "<unknown>";
+        const preview = (token.content || "").slice(0, 80).replace(/\n/g, "↵");
+        const message =
+          `Malformed JSON config block in "${filePath}": ${
+            (e as SyntaxError).message
+          }` +
+          `\n  Block preview: ${preview}`;
+
+        // PDError extends Error and adds a `func` field for pipeline attribution.
+        // We use Object.assign to attach the `func` property to a real Error
+        // instance so the stack trace is preserved.
+        // Ref: pipedown.d.ts — PDError type definition
+        const pdErr = Object.assign(new Error(message), {
+          func: "mergeMetaConfig",
+        }) as PDError;
+        input.errors = input.errors || [];
+        input.errors.push(pdErr);
+        // Return empty object so the rest of the pipeline still runs;
+        // the error will be reported and the build will fail at the end.
+        return {};
+      }
     },
   ).reduce((acc: PipeConfig, step: Step) => {
     return std.deepMerge(acc, step);

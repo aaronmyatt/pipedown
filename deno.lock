@@ -2014,7 +2014,9 @@
   },
   "workspace": {
     "dependencies": [
-      "jsr:@std/assert@1.0.19"
+      "jsr:@std/assert@1.0.19",
+      "jsr:@std/cli@1.0.28",
+      "jsr:@std/path@1.1.4"
     ]
   }
 }

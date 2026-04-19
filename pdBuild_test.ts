@@ -301,3 +301,113 @@ input.done = true;
 // `deno test` suite. Keeping this file self-contained ensures the core tests
 // pass in clean CI environments where ../testPipes is not checked out.
 // Ref: .github/workflows/ci.yml (testpipes-compat job)
+
+// ── Malformed JSON Config Block Tests ──
+// These tests verify that mdToPipe handles invalid JSON in ```json``` meta
+// blocks gracefully: recording a PDError on the output rather than throwing,
+// while still parsing the rest of the pipe correctly so downstream steps
+// remain intact.
+
+Deno.test("mdToPipe: malformed JSON config block populates errors", async (t) => {
+  // Helper shared across sub-steps — wraps mdToPipe with a minimal Pipe stub.
+  // @param markdown - Raw markdown string to parse.
+  // @param mdPath   - Fake file path used in error messages (for assertion).
+  // @return The full mdToPipe output object (pipe + errors).
+  async function parseWith(markdown: string, mdPath: string) {
+    return await mdToPipe(
+      {
+        markdown,
+        pipe: {
+          name: "",
+          cleanName: "",
+          steps: [],
+          dir: "",
+          absoluteDir: "",
+          fileName: "",
+          // mdPath is included in the PDError message so the user knows which
+          // file contains the broken JSON block.
+          mdPath,
+          config: {
+            inputs: [],
+            build: [],
+            skip: [],
+            exclude: [],
+          },
+        },
+      } as Parameters<typeof mdToPipe>[0],
+    );
+  }
+
+  await t.step(
+    "single bad JSON block records an error with file path context",
+    async () => {
+      const result = await parseWith(
+        `# Bad Config Pipe
+
+\`\`\`json
+{ "unclosed": true, bad json syntax here
+\`\`\`
+
+## A Step
+
+\`\`\`ts
+input.done = true;
+\`\`\`
+`,
+        "/fake/path/bad-config.md",
+      );
+
+      // The pipe should still be parsed successfully — other steps are intact.
+      // mergeMetaConfig returns {} on error so the rest of the pipeline runs.
+      assertEquals(result.pipe.steps.length, 1);
+      assertEquals(result.pipe.steps[0].funcName, "AStep");
+
+      // An error must have been recorded — errors is non-null and non-empty.
+      assertExists(result.errors);
+      assertEquals(
+        result.errors!.length > 0,
+        true,
+        "Expected at least one error",
+      );
+
+      // The error message should pinpoint both the file and describe the cause.
+      assertStringIncludes(
+        result.errors![0].message,
+        "Malformed JSON config block",
+      );
+      assertStringIncludes(result.errors![0].message, "bad-config.md");
+    },
+  );
+
+  await t.step("valid JSON block does not produce errors", async () => {
+    const result = await parseWith(
+      `# Good Config Pipe
+
+\`\`\`json
+{ "apiUrl": "https://api.example.com" }
+\`\`\`
+
+## A Step
+
+\`\`\`ts
+input.done = true;
+\`\`\`
+`,
+      "/fake/path/good-config.md",
+    );
+
+    // No errors should be recorded for well-formed JSON.
+    assertEquals(
+      result.errors == null || result.errors.length === 0,
+      true,
+      "Expected no errors for valid JSON",
+    );
+
+    // The parsed config value should be accessible on the pipe.
+    // Ref: mergeMetaConfig in mdToPipe.ts — merges metaBlocks into pipe.config
+    assertEquals(
+      (result.pipe.config as Record<string, unknown>)?.apiUrl,
+      "https://api.example.com",
+    );
+  });
+});

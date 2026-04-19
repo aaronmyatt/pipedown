@@ -1,164 +1,130 @@
-import { assertEquals } from "@std/assert";
-import { mdToPipe } from "./mdToPipe.ts";
-import type { Input, Pipe } from "./pipedown.d.ts";
+import { assert, assertEquals } from "@std/assert";
+import { pdBuild } from "./pdBuild.ts";
+import type { BuildInput, Pipe } from "./pipedown.d.ts";
+import { std } from "./deps.ts";
 
-// ── resolveDependencies integration tests ──
-// These tests verify that the dependency resolution step in pdBuild correctly
-// classifies step imports into pipe deps and local file deps, and that the
-// result is persisted in the generated index.json.
-//
-// Since resolveDependencies is an internal function (not exported), we test it
-// through the full build pipeline using in-memory markdown.
+// ── Integration fixtures ──
+// These tests exercise the *real* pdBuild pipeline (including
+// defaultTemplateFiles + resolveDependencies + writePipeJson) so we can catch
+// end-to-end regression bugs that unit-level regex tests miss.
 
 /**
- * Helper: parse markdown into a Pipe and run pipeToScript to get the hoisted
- * imports. Returns the pipe with its steps and code intact.
+ * Create a minimal temporary project containing two pipes:
+ *
+ *   1) authModule.md  -> exported pipe name "authModule"
+ *   2) main.md        -> imports "authModule" and "./helpers.ts"
+ *
+ * This gives us one inter-pipe dependency plus one local-file dependency.
+ *
+ * @returns Absolute path to the temporary project root
  */
-async function parsePipe(markdown: string): Promise<Pipe> {
-  const result = await mdToPipe(
-    {
-      markdown,
-      pipe: {
-        name: "",
-        cleanName: "",
-        steps: [],
-        dir: "",
-        absoluteDir: "",
-        fileName: "",
-        mdPath: "",
-        config: { inputs: [], build: [], skip: [], exclude: [] },
-      },
-    } as { markdown: string; pipe: Pipe } & Input,
+async function createFixtureProject(): Promise<string> {
+  // Deno.makeTempDir() creates an isolated test workspace that is safe to
+  // mutate freely and delete at the end of the test.
+  // Ref: https://docs.deno.com/api/deno/~/Deno.makeTempDir
+  const root = await Deno.makeTempDir({ prefix: "pd-resolve-deps-" });
+
+  await Deno.writeTextFile(
+    std.join(root, "authModule.md"),
+    `# Auth Module
+
+## Make Auth
+
+\`\`\`ts
+input.auth = { token: "fixture-token" };
+\`\`\`
+`,
   );
-  return result.pipe as Pipe;
+
+  await Deno.writeTextFile(
+    std.join(root, "main.md"),
+    `# Main
+
+## Compose
+
+\`\`\`ts
+import authModule from "authModule";
+import { helper } from "./helpers.ts";
+
+const auth = await authModule.process(input);
+input.result = helper(auth);
+\`\`\`
+`,
+  );
+
+  await Deno.writeTextFile(
+    std.join(root, "helpers.ts"),
+    `export function helper(value: unknown): unknown {
+  return value;
+}
+`,
+  );
+
+  return root;
 }
 
-Deno.test("resolveDependencies: classifies pipe imports vs local imports vs external", async () => {
-  // Simulate what resolveDependencies does manually since we can't import it
-  // directly. We replicate the classification logic to verify correctness.
-  const pipe = await parsePipe(`# Dep Test
+/**
+ * Read and parse a generated pipe JSON file from .pd/<pipeName>/index.json.
+ *
+ * @param projectRoot - Fixture project root
+ * @param pipeName - Pipe directory name under .pd/
+ * @returns Parsed Pipe object
+ */
+async function readGeneratedPipe(
+  projectRoot: string,
+  pipeName: string,
+): Promise<Pipe> {
+  const path = std.join(projectRoot, ".pd", pipeName, "index.json");
+  const content = await Deno.readTextFile(path);
+  return JSON.parse(content) as Pipe;
+}
 
-## Fetch Data
+Deno.test("pdBuild: resolveDependencies persists pipe + local file deps into index.json", async () => {
+  const projectRoot = await createFixtureProject();
 
-\`\`\`ts
-import AuthPipe from "AuthModule";
-import { helper } from "./utils/helpers.ts";
-import lodash from "npm:lodash";
-import { z } from "jsr:@std/assert";
-import data from "../shared/data.json" with { type: "json" };
-const result = await AuthPipe.process(input);
-input.data = helper(result);
-\`\`\`
-`);
+  try {
+    // Build from an explicit cwd override. This is the same code path used by
+    // dashboard/server builds that target a project different from Deno.cwd().
+    await pdBuild({ cwd: projectRoot } as BuildInput);
 
-  // Classify imports using the same logic as resolveDependencies
-  const importSpecifierRegex = /from\s+["']([^"']+)["']/;
-  const detectImports = /import.*from.*/gm;
+    const mainPipe = await readGeneratedPipe(projectRoot, "main");
 
-  // Simulated import map with known pipe names
-  const knownPipeNames = new Set(["AuthModule", "FetchData", "OtherPipe"]);
+    // Ensure inter-pipe import classification is persisted.
+    assertEquals(mainPipe.dependencies?.pipes, ["authModule"]);
 
-  const depPipes = new Set<string>();
-  const depLocalFiles = new Set<string>();
-
-  for (const step of pipe.steps) {
-    const matches = step.code.matchAll(detectImports);
-    for (const match of matches) {
-      const specifierMatch = match[0].match(importSpecifierRegex);
-      if (!specifierMatch) continue;
-      const specifier = specifierMatch[1];
-
-      if (knownPipeNames.has(specifier)) {
-        depPipes.add(specifier);
-      } else if (specifier.startsWith("./") || specifier.startsWith("../")) {
-        depLocalFiles.add(specifier);
-      }
-    }
+    // Ensure relative local file imports are persisted for file watchers.
+    assertEquals(mainPipe.dependencies?.localFiles, ["./helpers.ts"]);
+  } finally {
+    // Always clean up temp fixtures, even when assertions fail.
+    // Ref: https://docs.deno.com/api/deno/~/Deno.remove
+    await Deno.remove(projectRoot, { recursive: true });
   }
-
-  // Should detect AuthModule as a pipe dependency
-  assertEquals(depPipes.has("AuthModule"), true);
-  // Should NOT include FetchData or OtherPipe (not imported in this code)
-  assertEquals(depPipes.has("FetchData"), false);
-  assertEquals(depPipes.has("OtherPipe"), false);
-
-  // Should detect local file imports
-  assertEquals(depLocalFiles.has("./utils/helpers.ts"), true);
-  assertEquals(depLocalFiles.has("../shared/data.json"), true);
-
-  // Should NOT include external packages
-  assertEquals(depPipes.size, 1);
-  assertEquals(depLocalFiles.size, 2);
 });
 
-Deno.test("resolveDependencies: multiple steps accumulate dependencies", async () => {
-  const pipe = await parsePipe(`# Multi Dep
+Deno.test("pdBuild: defaultTemplateFiles honors input.cwd and writes import map for target project", async () => {
+  const projectRoot = await createFixtureProject();
 
-## Step One
+  try {
+    await pdBuild({ cwd: projectRoot } as BuildInput);
 
-\`\`\`ts
-import Auth from "AuthModule";
-input.auth = await Auth.process(input);
-\`\`\`
+    const denoJsonPath = std.join(projectRoot, ".pd", "deno.json");
+    assert(await std.exists(denoJsonPath));
 
-## Step Two
+    const denoConfig = JSON.parse(
+      await Deno.readTextFile(denoJsonPath),
+    ) as {
+      imports: Record<string, string>;
+    };
 
-\`\`\`ts
-import { config } from "./config.ts";
-import Fetch from "FetchPipe";
-input.data = await Fetch.process({ ...input, config });
-\`\`\`
-`);
+    // These entries prove the import map was generated from the fixture's
+    // .pd directory, not from the command process cwd.
+    assertEquals(denoConfig.imports.authModule, "./authModule/index.ts");
+    assertEquals(denoConfig.imports.main, "./main/index.ts");
 
-  const importSpecifierRegex = /from\s+["']([^"']+)["']/;
-  const detectImports = /import.*from.*/gm;
-  const knownPipeNames = new Set(["AuthModule", "FetchPipe"]);
-
-  const depPipes = new Set<string>();
-  const depLocalFiles = new Set<string>();
-
-  for (const step of pipe.steps) {
-    const matches = step.code.matchAll(detectImports);
-    for (const match of matches) {
-      const specifierMatch = match[0].match(importSpecifierRegex);
-      if (!specifierMatch) continue;
-      const specifier = specifierMatch[1];
-
-      if (knownPipeNames.has(specifier)) {
-        depPipes.add(specifier);
-      } else if (specifier.startsWith("./") || specifier.startsWith("../")) {
-        depLocalFiles.add(specifier);
-      }
-    }
+    // Guard against the previous bug: when defaultTemplateFiles walked the
+    // command cwd's .pd folder, unrelated keys like "LLM" leaked in here.
+    assertEquals("LLM" in denoConfig.imports, false);
+  } finally {
+    await Deno.remove(projectRoot, { recursive: true });
   }
-
-  // Should accumulate pipe deps from both steps
-  assertEquals(depPipes.has("AuthModule"), true);
-  assertEquals(depPipes.has("FetchPipe"), true);
-  assertEquals(depPipes.size, 2);
-
-  // Should accumulate local file deps
-  assertEquals(depLocalFiles.has("./config.ts"), true);
-  assertEquals(depLocalFiles.size, 1);
-});
-
-Deno.test("resolveDependencies: pipe with no imports has empty dependencies", async () => {
-  const pipe = await parsePipe(`# No Deps
-
-## Simple Step
-
-\`\`\`ts
-input.result = 42;
-\`\`\`
-`);
-
-  // No imports at all — both arrays should be empty
-  const detectImports = /import.*from.*/gm;
-  let hasImports = false;
-  for (const step of pipe.steps) {
-    if (detectImports.test(step.code)) hasImports = true;
-    detectImports.lastIndex = 0;
-  }
-
-  assertEquals(hasImports, false);
 });

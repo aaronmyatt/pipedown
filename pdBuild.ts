@@ -130,6 +130,15 @@ async function parseMdFiles(input: BuildInput) {
       },
     });
 
+    // Propagate any errors collected by mdToPipe (e.g. malformed JSON config
+    // blocks caught in mergeMetaConfig) back to the top-level build input so
+    // they are reported and the build exits non-zero.
+    // Ref: mergeMetaConfig in mdToPipe.ts
+    if (output.errors && output.errors.length > 0) {
+      input.errors = input.errors || [];
+      input.errors.push(...output.errors);
+    }
+
     if (
       output.pipe &&
       output.pipe.steps.filter((step: Step) => !step.internal).length > 0
@@ -467,7 +476,14 @@ async function rebuildRuntimeSourceMaps(input: BuildInput) {
 }
 
 const writeDefaultGeneratedTemplates = async (input: BuildInput) => {
-  await defaultTemplateFiles(input);
+  // pd.process() stage functions in this codebase primarily rely on mutating
+  // the flowing input object. defaultTemplateFiles() internally runs pd.process
+  // and returns a derived object, so we merge that result back into the current
+  // pipeline input to ensure downstream stages (resolveDependencies) can read
+  // the populated importMap.
+  const output = await defaultTemplateFiles(input);
+  Object.assign(input, output);
+  return input;
 };
 
 const writeUserTemplates = async (input: BuildInput) => {
@@ -486,7 +502,11 @@ const writeUserTemplates = async (input: BuildInput) => {
 };
 
 const maybeExportPipe = async (input: BuildInput) => {
-  await exportPipe(input);
+  // exportPipe() returns a processed object that may include warnings/errors.
+  // Merge that state back into the current input so the caller can inspect it.
+  const output = await exportPipe(input);
+  Object.assign(input, output);
+  return input;
 };
 
 // ── Dependency Resolution ──
