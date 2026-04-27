@@ -225,7 +225,18 @@ ${input.functions?.join("\n")}
 const funcSequence = [
 ${funcSequenceItems}
 ]
-const pipe = Pipe(funcSequence, rawPipe);
+${
+        hasSchemaVar
+          ? `// funcSequence interleaves _pd_initSchema and _pd_validateSchema_* functions
+// with user steps, so funcSequence indices don't align 1:1 with rawPipe.steps[].
+// Build _pd_runtimePipe with null placeholders so pdPipe's funcWrapper resolves
+// each step's conditional config (- if:, - not:, etc.) at the correct index.
+// Layout: [null, step0, null, step1, null, ...] mirrors
+//         [_pd_initSchema, Step0, _pd_validateSchema_0_Step0, Step1, ...]
+const _pd_runtimePipe = { ...rawPipe, steps: [null, ...rawPipe.steps.flatMap(s => [s, null])] };
+const pipe = Pipe(funcSequence, _pd_runtimePipe);`
+          : `const pipe = Pipe(funcSequence, rawPipe);`
+      }
 const process = (input={}) => pipe.process(input);
 pipe.json = rawPipe;
 export default pipe;
