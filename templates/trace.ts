@@ -282,6 +282,6 @@ for (const err of errors) {
 if (flags.json || flags.j) {
   console.log(JSON.stringify(output));
 } else {
-  console.log(output);
 }
+
 Deno.exit(errors.length > 0 ? 1 : 0);
