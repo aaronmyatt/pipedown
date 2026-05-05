@@ -20,6 +20,32 @@ function renderDeltaTags(delta) {
   return tags;
 }
 
+// Render the trace's accumulated errors as a prominent block at the top
+// of the detail view. The full stack is preserved in a <pre> so that
+// source-mapped markdown lines (including those inside imported
+// sub-pipes) are visible without needing to dig into the Raw JSON tab.
+function renderErrors(trace) {
+  if (!trace.errors || trace.errors.length === 0) return null;
+  return m(
+    "section.trace-errors",
+    [
+      m(
+        "h3",
+        trace.errors.length + " error" + (trace.errors.length === 1 ? "" : "s"),
+      ),
+      trace.errors.map(function (err, i) {
+        return m("article.trace-error", { key: i }, [
+          m("div.trace-error-summary", [
+            err.func ? m("code.trace-error-func", err.func) : null,
+            m("span.trace-error-msg", err.message || "(no message)"),
+          ]),
+          err.stack ? m("pre.trace-error-stack", err.stack) : null,
+        ]);
+      }),
+    ],
+  );
+}
+
 function renderSteps(trace) {
   return m(
     "ul.step-list",
@@ -128,6 +154,7 @@ PD.components.Detail = {
           }, label);
         }),
       ]),
+      renderErrors(t),
       PD.state.detailTab === "steps" ? renderSteps(t) : null,
       PD.state.detailTab === "input" ? pd.jsonTree(t.input, "tab-input") : null,
       PD.state.detailTab === "output"

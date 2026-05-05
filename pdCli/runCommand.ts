@@ -83,7 +83,7 @@ export async function runCommand(input: CliInput) {
     success: true,
   });
 
-  await pdRun({ scriptName, testInput, entryPoint });
+  const status = await pdRun({ scriptName, testInput, entryPoint });
 
   // Notify pd-desktop that the pipe run finished. The dashboard server
   // path handles this via the spawnAndStream onComplete callback, but
@@ -93,8 +93,14 @@ export async function runCommand(input: CliInput) {
     title: "Pipe Run Complete",
     message: scriptName,
     pipe: scriptName,
-    success: true,
+    success: status?.success ?? true,
   });
+
+  // Propagate the child's exit code so a pipe that accumulated runtime
+  // errors (and exited 1 from cli.ts/trace.ts) doesn't silently surface
+  // as a successful `pd run`. CI checks and shell scripts that rely on
+  // the exit status now see the real failure.
+  if (status && !status.success) Deno.exit(status.code);
 
   return input;
 }

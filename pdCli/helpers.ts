@@ -54,7 +54,10 @@ export async function pdRun(options: PdRunOptions) {
     stderr: "inherit",
     stdin: "inherit",
   });
-  await command.output();
+  // Return the child status so callers can propagate non-zero exits
+  // (e.g. when the pipe accumulated runtime errors). Without this, a
+  // failing pipe silently surfaced as exit 0, masking sub-pipe throws.
+  return await command.output();
 }
 
 export function pdRunWith(

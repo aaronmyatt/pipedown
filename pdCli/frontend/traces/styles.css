@@ -140,6 +140,48 @@
   font-size: var(--font-size-0);
   font-weight: var(--font-weight-6);
 }
+.trace-errors {
+  margin: var(--size-4) 0;
+  padding: var(--size-3);
+  background: var(--red-1);
+  border-left: var(--border-size-3) solid var(--red-7);
+  border-radius: var(--radius-2);
+}
+.trace-errors h3 {
+  margin: 0 0 var(--size-2) 0;
+  color: var(--red-9);
+  font-size: var(--font-size-2);
+}
+.trace-error {
+  margin-block: var(--size-2);
+}
+.trace-error-summary {
+  display: flex;
+  gap: var(--size-2);
+  align-items: baseline;
+  flex-wrap: wrap;
+  margin-block-end: var(--size-1);
+}
+.trace-error-func {
+  background: var(--surface-2);
+  padding: 0 var(--size-1);
+  border-radius: var(--radius-2);
+  font-size: var(--font-size-0);
+}
+.trace-error-msg {
+  color: var(--red-9);
+  font-weight: var(--font-weight-6);
+}
+.trace-error-stack {
+  margin: 0;
+  padding: var(--size-2);
+  background: var(--surface-1);
+  border-radius: var(--radius-2);
+  font-size: var(--font-size-0);
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
 .step-list {
   list-style: none;
   padding: 0;
