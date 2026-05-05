@@ -2,7 +2,7 @@ import { pd } from "../deps.ts";
 import { pdBuild } from "../pdBuild.ts";
 import { defaultTemplateFiles } from "../defaultTemplateFiles.ts";
 import { cliHelpTemplate } from "../stringTemplates.ts";
-import { reportErrors } from "./reportErrors.ts";
+import { reportParseDiagnostics } from "./lintCheck.ts";
 import type { BuildInput, CliInput } from "../pipedown.d.ts";
 
 const helpText = cliHelpTemplate({
@@ -34,13 +34,12 @@ export async function buildCommand(input: CliInput) {
 
     // Fail the build with a non-zero exit code if any errors were collected
     // during parsing (e.g. malformed JSON config blocks in markdown files).
-    // This ensures `pd build` exits 1 in CI pipelines and shell scripts that
-    // check the exit status, rather than silently succeeding.
-    // Ref: reportErrors.ts — formats and prints PDError entries to stderr
-    if (merged.errors && merged.errors.length > 0) {
-      reportErrors(merged);
-      Deno.exit(1);
-    }
+    // Warnings (typo'd directives, duplicate zod blocks) are printed but
+    // not fatal — they should nudge, not block. CI can opt into stricter
+    // behaviour via `pd lint --warnings-as-errors`.
+    // Ref: lintCheck.ts — formats parse-time PDError entries to stderr
+    const { errorCount } = reportParseDiagnostics(merged);
+    if (errorCount > 0) Deno.exit(1);
 
     return merged;
   }

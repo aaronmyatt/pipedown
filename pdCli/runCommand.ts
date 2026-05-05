@@ -4,6 +4,7 @@ import { pd } from "../deps.ts";
 import { pdBuild } from "../pdBuild.ts";
 import { cliHelpTemplate } from "../stringTemplates.ts";
 import { interactiveRun } from "./interactiveRun.ts";
+import { reportParseDiagnostics } from "./lintCheck.ts";
 // Sends IPC events to pd-desktop via Unix socket for native notifications.
 // Fire-and-forget — silently no-ops when the desktop app isn't running.
 // Ref: ./notifyTauri.ts for protocol details
@@ -29,6 +30,7 @@ const helpText = cliHelpTemplate({
     -d, --debug   Display debug information.
     -i, --interactive  Enter interactive mode (workflow entry point).
     --no-trace    Disable tracing (enabled by default). Also configurable via deno.json { "pipedown": { "trace": false } } or config.json { "trace": false }.
+    --skip-lint   Run even if pre-flight lint reports errors. Use with care.
     --input       Initial input for the pipedown file. Needs to be a JSON string.`,
   ],
 });
@@ -53,6 +55,21 @@ export async function runCommand(input: CliInput) {
   const traceEnabled = !noTraceFlag && configTrace !== false;
   const entryPoint = traceEnabled ? "trace.ts" : "cli.ts";
   await pdBuild(input);
+
+  // Block the run if `pdBuild` collected parse errors that affect the
+  // requested pipe. All diagnostics are printed (so unrelated broken
+  // pipes are still visible), but only errors in the requested file
+  // gate the run — otherwise `pd run mypipe.md` would refuse to run
+  // because some other pipe in the project is broken.
+  // Warnings are printed but not fatal. `--skip-lint` is the explicit
+  // override for partial-build debug or migration scenarios.
+  // Ref: lintCheck.ts — reportParseDiagnostics()
+  if (!pd.$p.get(input, "/flags/skip-lint")) {
+    const { relevantErrorCount } = reportParseDiagnostics(input, {
+      scopeToFile: scriptName,
+    });
+    if (relevantErrorCount > 0) Deno.exit(1);
+  }
 
   // Notify pd-desktop that a pipe run is starting — fires a native
   // macOS notification so the user knows work has begun.

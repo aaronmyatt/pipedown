@@ -100,3 +100,58 @@ export function printLintResult(result: LintResult): void {
     console.error(std.colors.red(formatLintEntry(e)));
   }
 }
+
+/**
+ * Report parse-time diagnostics already accumulated on `input.errors`
+ * (typically populated by `pdBuild` via `mdToPipe`). Mirrors the lint
+ * formatter for entries with structured location info, falls back to
+ * stack/message for legacy errors without it.
+ *
+ * `scopeToFile` narrows the *gate decision* (relevantErrorCount) to
+ * diagnostics whose `filePath` matches the requested pipe. All
+ * diagnostics are still printed so the user knows about other broken
+ * pipes in the project — they just don't block this run.
+ *
+ * Returns a summary so the caller can decide whether to exit non-zero.
+ * Warnings alone shouldn't fail a build/run, but real errors should.
+ */
+export function reportParseDiagnostics(
+  input: CliInput,
+  opts: { scopeToFile?: string } = {},
+): { errorCount: number; warningCount: number; relevantErrorCount: number } {
+  const all = input.errors || [];
+  const errors = all.filter((e) => e.severity !== "warning");
+  const warnings = all.filter((e) => e.severity === "warning");
+
+  for (const w of warnings) {
+    console.error(std.colors.yellow(formatLintEntry(w)));
+  }
+  for (const e of errors) {
+    // Structured parse error → lint format. Legacy/runtime error → stack.
+    if (e.line !== undefined || e.filePath) {
+      console.error(std.colors.red(formatLintEntry(e)));
+    } else {
+      console.error(e.stack || e.message || String(e));
+    }
+  }
+
+  // When a scope is given, only count errors whose filePath ends in
+  // exactly that file. Use a leading "/" guard so scope "foo.md"
+  // doesn't accidentally match "/path/to/superfoo.md".
+  const scope = opts.scopeToFile;
+  const isRelevant = (e: PDError) =>
+    !scope ||
+    !e.filePath ||
+    e.filePath === scope ||
+    e.filePath.endsWith("/" + scope);
+
+  const relevantErrorCount = scope
+    ? errors.filter(isRelevant).length
+    : errors.length;
+
+  return {
+    errorCount: errors.length,
+    warningCount: warnings.length,
+    relevantErrorCount,
+  };
+}

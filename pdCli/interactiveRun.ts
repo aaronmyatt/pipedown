@@ -21,6 +21,7 @@ import {
   readTrace,
   recentTracesForAliases,
 } from "./traceDashboard.ts";
+import { reportParseDiagnostics } from "./lintCheck.ts";
 
 // ── Terminal helpers ──────────────────────────────────────────────────────────
 
@@ -314,9 +315,26 @@ async function buildAndRunOnce(
 ) {
   // Build only the requested markdown file so the interactive loop stays fast
   // and unrelated pipes are not rebuilt on every save.
-  await pdBuild(Object.assign({}, input, {
+  const buildInput = Object.assign({}, input, {
     match: escapeRegExp(target.path),
-  }));
+  });
+  await pdBuild(buildInput);
+
+  // Surface parse-time diagnostics from the build. Warnings are printed
+  // but allowed; errors abort this iteration so the user can fix the
+  // pipe before re-triggering. The thrown error is caught upstream by
+  // the interactive loop so the session stays alive.
+  // Ref: lintCheck.ts — reportParseDiagnostics()
+  if (!pd.$p.get(input, "/flags/skip-lint")) {
+    const { errorCount } = reportParseDiagnostics(buildInput);
+    if (errorCount > 0) {
+      throw new Error(
+        `pre-flight lint found ${errorCount} error${
+          errorCount === 1 ? "" : "s"
+        } — fix the pipe and rerun`,
+      );
+    }
+  }
 
   notifyTauri({
     type: "run_start",
