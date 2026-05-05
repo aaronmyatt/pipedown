@@ -660,6 +660,101 @@ input.x = 1;
   );
 
   await t.step(
+    "unclosed fence before next H2 is reported as error pointing at the open line",
+    async () => {
+      const result = await parse(`# Test
+
+## Step One
+\`\`\`ts
+input.x = 1;
+
+## Step Two
+\`\`\`ts
+input.y = 2;
+\`\`\`
+`);
+      const errors = (result.errors || []).filter((e) =>
+        e.severity !== "warning"
+      );
+      const fenceErr = errors.find((e) =>
+        e.func === "validateMarkdownStructure"
+      );
+      assertExists(fenceErr);
+      // The fence opens on line 4; the rule should point at that line
+      // so the user lands on the offending opening when they jump to the
+      // diagnostic.
+      assertEquals(fenceErr!.line, 4);
+      assertEquals(fenceErr!.message.includes("not closed"), true);
+    },
+  );
+
+  await t.step(
+    "fence never closed before EOF is reported",
+    async () => {
+      const result = await parse(`# Test
+
+## Step
+\`\`\`ts
+input.x = 1;
+`);
+      const errors = (result.errors || []).filter((e) =>
+        e.severity !== "warning"
+      );
+      const fenceErr = errors.find((e) =>
+        e.func === "validateMarkdownStructure"
+      );
+      assertExists(fenceErr);
+      assertEquals(fenceErr!.line, 4);
+      assertEquals(fenceErr!.message.includes("never closed"), true);
+    },
+  );
+
+  await t.step(
+    "well-formed fences and headings produce no fence errors",
+    async () => {
+      const result = await parse(`# Test
+
+## Step One
+\`\`\`ts
+input.x = 1;
+\`\`\`
+
+## Step Two
+\`\`\`ts
+input.y = 2;
+\`\`\`
+`);
+      const errors = (result.errors || []).filter((e) =>
+        e.func === "validateMarkdownStructure"
+      );
+      assertEquals(errors.length, 0);
+    },
+  );
+
+  await t.step(
+    "list-nested fences are tracked correctly (no false positives)",
+    async () => {
+      const result = await parse(`# Test
+
+## Conditional Step
+- check: /flag
+- \`\`\`ts
+  input.x = 1;
+  \`\`\`
+
+## Next Step
+\`\`\`ts
+input.y = 2;
+\`\`\`
+`);
+      const errors = (result.errors || []).filter((e) =>
+        e.func === "validateMarkdownStructure"
+      );
+      assertEquals(errors.length, 0);
+    },
+  );
+
+  await t.step(
     "canonical directives still work and emit no warnings",
     async () => {
       const result = await parse(`# Test

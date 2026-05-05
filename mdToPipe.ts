@@ -52,6 +52,74 @@ const parseMarkdown = (input: mdToPipeInput) => {
   input.pipe.rawSource = input.markdown;
 };
 
+// Walk the raw markdown line-by-line tracking fence open/close state.
+// Each `## ` (or `# `) line that appears WHILE a fence is open is a
+// strong signal that the previous fence was never closed — markdown-it
+// will silently treat the heading and everything after as code-block
+// content, swallowing subsequent steps. Pipedown-specific because the
+// authoring contract is "every step heading owns one closed fence".
+//
+// Recovery strategy: emit the error, pretend the fence closed at this
+// point so any subsequent fences in the file are still validated and
+// the user gets one error per missing close (not a cascade).
+//
+// Limitation: nested fences inside a code-string would confuse this
+// scanner, but Pipedown step bodies are real TypeScript, so that's
+// not a realistic source of false positives.
+const validateMarkdownStructure = (input: mdToPipeInput) => {
+  const filePath = input.pipe.mdPath || "<unknown>";
+  const lines = (input.markdown || "").split("\n");
+  let fenceOpen = false;
+  let fenceOpenLine = 0; // 1-indexed source line of the unclosed fence
+
+  const pushErr = (line: number, message: string) => {
+    const pdErr = Object.assign(new Error(message), {
+      func: "validateMarkdownStructure",
+      severity: "error" as const,
+      filePath,
+      line,
+      column: 1,
+    }) as PDError;
+    input.errors = input.errors || [];
+    input.errors.push(pdErr);
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const lineNum = i + 1;
+    const line = lines[i];
+
+    // Leading whitespace allowed; an optional list marker (`-`, `*`, `+`)
+    // covers Pipedown's conditional pattern where the opening fence
+    // appears as a list item: `- ```ts`. The closing fence in that
+    // pattern is just indented whitespace + backticks.
+    if (/^\s*(?:[-*+]\s+)?```/.test(line)) {
+      if (fenceOpen) {
+        fenceOpen = false;
+      } else {
+        fenceOpen = true;
+        fenceOpenLine = lineNum;
+      }
+      continue;
+    }
+
+    // Top-level H1 / H2 inside an open fence → previous fence wasn't closed.
+    if (/^#{1,2}\s/.test(line) && fenceOpen) {
+      pushErr(
+        fenceOpenLine,
+        `code fence opened at line ${fenceOpenLine} was not closed before the next heading at line ${lineNum} — subsequent steps will be swallowed by markdown-it`,
+      );
+      fenceOpen = false; // recover so further checks make sense
+    }
+  }
+
+  if (fenceOpen) {
+    pushErr(
+      fenceOpenLine,
+      `code fence opened at line ${fenceOpenLine} was never closed`,
+    );
+  }
+};
+
 const findRanges = async (input: mdToPipeInput) => {
   const output = await rangeFinder(input);
   input.ranges = output.ranges;
@@ -517,6 +585,7 @@ export const mdToPipe = async (
 ) => {
   const funcs = [
     parseMarkdown,
+    validateMarkdownStructure,
     findRanges,
     findPipeName,
     findPipeDescription,
