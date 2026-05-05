@@ -38,6 +38,17 @@ export type Tokens = Token[];
 /** An error captured during pipeline execution. */
 export type PDError = {
   func: string;
+  /**
+   * "error" fails the build/lint; "warning" is reported but doesn't fail.
+   * Defaults to "error" when absent so existing call sites stay strict.
+   */
+  severity?: "error" | "warning";
+  /** Source file the diagnostic refers to (e.g. the markdown path). */
+  filePath?: string;
+  /** 1-indexed line number in `filePath` for editor problem matchers. */
+  line?: number;
+  /** 1-indexed column number in `filePath`. */
+  column?: number;
 } & Error;
 
 /** The data object that flows through all pipeline steps. */

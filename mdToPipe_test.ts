@@ -550,4 +550,137 @@ input.x = 1;
 `);
     assertEquals(result.pipe.steps[0].name, "Deep Step");
   });
+
+  // --- Lint diagnostics ---
+
+  await t.step(
+    "emits a warning for typo'd directive ('chek:' → 'check:')",
+    async () => {
+      const result = await parse(`# Test
+
+## Conditional Step
+- chek: /flag
+- \`\`\`ts
+  input.x = 1;
+  \`\`\`
+`);
+      const warnings = (result.errors || []).filter((e) =>
+        e.severity === "warning"
+      );
+      const typoWarn = warnings.find((w) => w.message.includes("chek"));
+      assertExists(typoWarn);
+      assertEquals(typoWarn!.message.includes('"check"'), true);
+      // Line of `- chek: /flag` in the source
+      assertExists(typoWarn!.line);
+    },
+  );
+
+  await t.step("does not warn on plain prose list items", async () => {
+    const result = await parse(`# Test
+
+## Conditional Step
+- This is a perfectly normal sentence: with a colon in it
+- Another note: about something
+- \`\`\`ts
+  input.x = 1;
+  \`\`\`
+`);
+    const warnings = (result.errors || []).filter((e) =>
+      e.severity === "warning"
+    );
+    assertEquals(warnings.length, 0);
+  });
+
+  await t.step("emits a warning for unknown HTTP method", async () => {
+    const result = await parse(`# Test
+
+## Conditional Step
+- method: WHATEVER
+- \`\`\`ts
+  input.x = 1;
+  \`\`\`
+`);
+    const warnings = (result.errors || []).filter((e) =>
+      e.severity === "warning"
+    );
+    const methodWarn = warnings.find((w) => w.message.includes("WHATEVER"));
+    assertExists(methodWarn);
+    assertExists(methodWarn!.line);
+  });
+
+  await t.step(
+    "emits a warning per extra zod block when multiple are present",
+    async () => {
+      const result = await parse(`# Test
+
+\`\`\`zod
+export const schema = z.object({ x: z.number() });
+\`\`\`
+
+\`\`\`zod
+export const other = z.object({ y: z.string() });
+\`\`\`
+
+## Step
+
+\`\`\`ts
+input.x = 1;
+\`\`\`
+`);
+      const warnings = (result.errors || []).filter((e) =>
+        e.severity === "warning"
+      );
+      const zodWarn = warnings.find((w) => w.message.includes("zod"));
+      assertExists(zodWarn);
+      assertExists(zodWarn!.line);
+    },
+  );
+
+  await t.step(
+    "malformed JSON config block emits an error with line + filePath",
+    async () => {
+      const result = await parse(`# Test
+
+\`\`\`json
+{ "inputs": [ { broken
+\`\`\`
+
+## Step
+
+\`\`\`ts
+input.x = 1;
+\`\`\`
+`);
+      const errors = (result.errors || []).filter((e) =>
+        e.severity !== "warning"
+      );
+      assertEquals(errors.length >= 1, true);
+      assertExists(errors[0].line);
+    },
+  );
+
+  await t.step(
+    "canonical directives still work and emit no warnings",
+    async () => {
+      const result = await parse(`# Test
+
+## Conditional Step
+- check: /flag
+- not: /error
+- method: POST
+- route: /api/login
+- \`\`\`ts
+  input.x = 1;
+  \`\`\`
+`);
+      const warnings = (result.errors || []).filter((e) =>
+        e.severity === "warning"
+      );
+      assertEquals(warnings.length, 0);
+      const step = result.pipe.steps[0];
+      assertEquals(step.config?.checks?.includes("/flag"), true);
+      assertEquals(step.config?.not?.includes("/error"), true);
+      assertEquals(step.config?.methods?.includes("POST"), true);
+    },
+  );
 });

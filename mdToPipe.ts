@@ -95,9 +95,25 @@ const findSchema = (input: mdToPipeInput) => {
   }
 
   if (input.ranges.schemaBlocks.length > 1) {
-    console.warn(
-      "Warning: multiple zod blocks found — only the first is used as the pipe schema.",
-    );
+    const filePath = input.pipe.mdPath || "<unknown>";
+    for (const extraRange of input.ranges.schemaBlocks.slice(1)) {
+      const extraToken = input.tokens.at(extraRange[0]);
+      const line = extraToken?.map ? extraToken.map[0] + 1 : undefined;
+      const pdErr = Object.assign(
+        new Error(
+          "multiple zod blocks found — only the first is used as the pipe schema",
+        ),
+        {
+          func: "findSchema",
+          severity: "warning" as const,
+          filePath,
+          line,
+          column: 1,
+        },
+      ) as PDError;
+      input.errors = input.errors || [];
+      input.errors.push(pdErr);
+    }
   }
 };
 
@@ -242,6 +258,11 @@ const mergeMetaConfig = (input: mdToPipeInput) => {
         // Ref: pipedown.d.ts — PDError type definition
         const pdErr = Object.assign(new Error(message), {
           func: "mergeMetaConfig",
+          severity: "error" as const,
+          filePath,
+          // token.map is [startLine, endLine] zero-indexed; lint format is 1-indexed
+          line: token.map ? token.map[0] + 1 : undefined,
+          column: 1,
         }) as PDError;
         input.errors = input.errors || [];
         input.errors.push(pdErr);
@@ -263,12 +284,84 @@ const mergeMetaConfig = (input: mdToPipeInput) => {
   input.pipe.originalConfig = buildConfigBlock(input.pipe.config);
 };
 
+// Canonical DSL directive keys recognised in `- key: value` list items.
+// Kept in module scope so lint/typo detection can reference the same set
+// the parser uses.
+const CANONICAL_DIRECTIVES = [
+  "check",
+  "when",
+  "if",
+  "flags",
+  "or",
+  "and",
+  "not",
+  "route",
+  "stop",
+  "only",
+  "mock",
+  "method",
+  "type",
+];
+
+// HTTP method whitelist used to flag typos in `- method: <value>` directives.
+// Mirrors the methods supported by Deno's std/http.
+const HTTP_METHODS = new Set([
+  "GET",
+  "POST",
+  "PUT",
+  "DELETE",
+  "PATCH",
+  "HEAD",
+  "OPTIONS",
+  "CONNECT",
+  "TRACE",
+]);
+
+// Levenshtein distance with an early-bail cap. Used purely to suggest
+// likely-intended directive names for typos like "chek" → "check".
+// Ref: https://en.wikipedia.org/wiki/Levenshtein_distance
+function editDistance(a: string, b: string): number {
+  const m = a.length;
+  const n = b.length;
+  if (Math.abs(m - n) > 2) return 3;
+  const dp: number[][] = Array.from(
+    { length: m + 1 },
+    () => new Array(n + 1).fill(0),
+  );
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      dp[i][j] = Math.min(
+        dp[i - 1][j] + 1,
+        dp[i][j - 1] + 1,
+        dp[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1),
+      );
+    }
+  }
+  return dp[m][n];
+}
+
+function suggestDirective(unknown: string): string | null {
+  const lower = unknown.toLowerCase();
+  for (const key of CANONICAL_DIRECTIVES) {
+    if (lower === key) return null;
+    if (editDistance(lower, key) <= 2) return key;
+  }
+  return null;
+}
+
 const setupChecks = (input: mdToPipeInput) => {
   const inRange = (ranges: Array<number[]>, index: number) => {
     return ranges.find(([start, stop]: number[]) => {
       return start < index && stop > index;
     });
   };
+
+  const filePath = input.pipe.mdPath || "<unknown>";
+  // Matches anything shaped like `<key>: <value>` so we can lint typo'd
+  // directives. Anchored at start so prose containing colons doesn't false-trip.
+  const directiveLikeRegex = /^([a-zA-Z][a-zA-Z0-9_-]*)\s*:\s*(.*)$/;
 
   input.pipe.steps = input.pipe.steps.map((step: Step) => {
     step.inList = !!inRange(input.ranges.lists, step.range[0]);
@@ -286,22 +379,28 @@ const setupChecks = (input: mdToPipeInput) => {
         );
 
         if (listRange) {
-          // Collect list item text content
-          const listItems: string[] = [];
+          // Collect list item text content alongside the source line of each
+          // `list_item_open` token, so lint warnings can point at the exact
+          // line of the offending directive.
+          type ListItemEntry = { text: string; line?: number };
+          const listItems: ListItemEntry[] = [];
 
           for (let i = listRange[0]; i < step.range[0]; i++) {
             const token = input.tokens[i];
             if (token.type === "list_item_open") {
-              listItems.push("");
+              listItems.push({
+                text: "",
+                line: token.map ? token.map[0] + 1 : undefined,
+              });
             } else if (token.type === "inline" || token.type === "text") {
               if (listItems.length > 0) {
-                listItems[listItems.length - 1] += token.content || "";
+                listItems[listItems.length - 1].text += token.content || "";
               }
             }
           }
 
           listItems
-            .map((text: string) => text.trim())
+            .map((entry) => entry.text.trim())
             .map((text: string) => checkRegex.exec(text))
             .filter((match) => match)
             .map((match) => (match?.groups || { type: "", pointer: "" }))
@@ -344,11 +443,69 @@ const setupChecks = (input: mdToPipeInput) => {
 
           // Also handle bare `- mock` (no colon)
           listItems
-            .map((text: string) => text.trim())
+            .map((entry) => entry.text.trim())
             .filter((text: string) => text === "mock")
             .forEach(() => {
               step.mock = true;
             });
+
+          // Lint pass: flag typo'd directives ("chek: /flag") and unknown
+          // HTTP methods ("method: WHATEVER"). False-positives on prose
+          // are avoided by only suggesting when the unknown key is within
+          // edit distance 2 of a canonical directive.
+          for (const entry of listItems) {
+            const trimmed = entry.text.trim();
+            if (trimmed === "" || trimmed === "mock") continue;
+            const directiveMatch = directiveLikeRegex.exec(trimmed);
+            if (!directiveMatch) continue;
+            const key = directiveMatch[1];
+            const value = directiveMatch[2];
+            const lowerKey = key.toLowerCase();
+
+            if (CANONICAL_DIRECTIVES.includes(lowerKey)) {
+              if (lowerKey === "method") {
+                const method = value.trim().split(/\s+/)[0]?.toUpperCase() ||
+                  "";
+                if (method && !HTTP_METHODS.has(method)) {
+                  const pdErr = Object.assign(
+                    new Error(
+                      `unknown HTTP method "${value.trim()}" — expected one of ${
+                        [...HTTP_METHODS].join(", ")
+                      }`,
+                    ),
+                    {
+                      func: "setupChecks",
+                      severity: "warning" as const,
+                      filePath,
+                      line: entry.line,
+                      column: 1,
+                    },
+                  ) as PDError;
+                  input.errors = input.errors || [];
+                  input.errors.push(pdErr);
+                }
+              }
+              continue;
+            }
+
+            const suggestion = suggestDirective(key);
+            if (suggestion) {
+              const pdErr = Object.assign(
+                new Error(
+                  `unknown directive "${key}" (did you mean "${suggestion}"?)`,
+                ),
+                {
+                  func: "setupChecks",
+                  severity: "warning" as const,
+                  filePath,
+                  line: entry.line,
+                  column: 1,
+                },
+              ) as PDError;
+              input.errors = input.errors || [];
+              input.errors.push(pdErr);
+            }
+          }
         }
       }
       return step;

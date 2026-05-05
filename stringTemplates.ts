@@ -397,6 +397,7 @@ export const helpText = cliHelpTemplate({
 
   Build & Generate:
     build                                   Parse all .md files in cwd and generate executable .ts in .pd/
+    lint [pipe]                             Statically check pipelines for malformed config, typo'd directives, etc.
     clean                                   Delete the .pd/ directory and all generated artifacts
 
   Run:

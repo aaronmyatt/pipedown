@@ -60,6 +60,7 @@ import { watchCommand } from "./watchCommand.ts";
 import { packCommand } from "./packCommand.ts";
 import { installCommand } from "./installCommand.ts";
 import { extractCommand } from "./extractCommand.ts";
+import { lintCommand } from "./lintCommand.ts";
 
 async function pdInit(input: CliInput) {
   try {
@@ -229,6 +230,7 @@ const funcs = [
   checkMinFlags(["list"], listCommand),
   checkMinFlags(["clean"], cleanCommand),
   checkMinFlags(["build"], buildCommand),
+  checkMinFlags(["lint"], lintCommand),
   checkMinFlags(["serve", "*", "*"], serveCommand),
   checkMinFlags(["repl"], replCommand),
   checkMinFlags(["interactive", "*"], interactiveCommand),
@@ -281,6 +283,8 @@ const flags: Args = std.parseArgs(Deno.args, {
     "no-trace",
     "interactive",
     "i",
+    "warnings-as-errors",
+    "skip-lint",
   ],
   string: [
     "out",
