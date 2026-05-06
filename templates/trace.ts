@@ -236,7 +236,6 @@ async function writeTrace(
 
   const filePath = `${traceDir}/${fileTimestamp}.json`;
   await Deno.writeTextFile(filePath, JSON.stringify(trace, null, 2));
-  console.log(`Trace written to: ${filePath}`);
 }
 
 // --- Main execution ---
@@ -262,6 +261,10 @@ await writeTrace(
   projectConfig,
   sanitizeOpts,
 );
+
+if(input.debug) {
+  console.log(`Trace written with ${traceLog.length} steps and duration ${pipelineDuration}ms`);
+}
 
 // Surface accumulated errors prominently to stderr and exit non-zero.
 // Without this, errors get buried inside Deno's truncated console.log

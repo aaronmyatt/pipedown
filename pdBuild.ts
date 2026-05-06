@@ -493,8 +493,14 @@ const writeUserTemplates = async (input: BuildInput) => {
         [] as string[]
     ) {
       const pipePath = std.join(pipe.dir, utils.fileName(path) + ".ts");
-      // Skip if file already exists (allows user overrides in .pd/<pipe>/)
-      if (await std.exists(pipePath)) continue;
+      // Always overwrite template files from the canonical source on every
+      // build. This ensures template fixes (e.g. removing unconditional
+      // console.log(output) from cli.ts/trace.ts) propagate to existing
+      // .pd/<pipe>/ directories, even if the file was written by an older
+      // build. User overrides are still respected: if the user places a
+      // custom template in .pd/<pipe>/ that is NOT listed in
+      // config.templates, it won't be touched.
+      // Ref: commit b36abcc — templates/cli.ts and templates/trace.ts fix
       await Deno.copyFile(path, pipePath);
     }
   }

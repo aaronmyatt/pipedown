@@ -156,7 +156,6 @@ async function _writeTrace(pipeName, steps, originalInput, finalOutput, duration
   };
   const filePath = traceDir + "/" + ts.replace(/[:.]/g, "-") + ".json";
   await Deno.writeTextFile(filePath, JSON.stringify(trace, null, 2));
-  console.log("Trace written to: " + filePath);
 }
 
 // ── run(pipe, input) ──

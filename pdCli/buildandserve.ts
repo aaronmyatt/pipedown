@@ -262,12 +262,14 @@ async function ensureTemplate(
   templateName: string,
 ): Promise<string> {
   const dest = std.join(pipeDir, templateName);
-  if (!await std.exists(dest)) {
-    // Ref: templates/ in the pipedown source tree — these are the canonical
-    // versions that `pd init` scaffolds into user projects.
-    const source = new URL(`../templates/${templateName}`, import.meta.url);
-    await Deno.copyFile(source, dest);
-  }
+  // Always overwrite the template from the canonical source on every access.
+  // This ensures that fixes to templates (e.g. removing unconditional
+  // console.log(output) from cli.ts/trace.ts) propagate to existing
+  // .pd/<pipe>/ directories, even if the file was written by an older
+  // build or server session.
+  // Ref: commit b36abcc — templates/cli.ts and templates/trace.ts fix
+  const source = new URL(`../templates/${templateName}`, import.meta.url);
+  await Deno.copyFile(source, dest);
   return dest;
 }
 
