@@ -313,8 +313,11 @@ Deno.test("mdToPipe: malformed JSON config block populates errors", async (t) =>
   // @param markdown - Raw markdown string to parse.
   // @param mdPath   - Fake file path used in error messages (for assertion).
   // @return The full mdToPipe output object (pipe + errors).
-  async function parseWith(markdown: string, mdPath: string) {
-    return await mdToPipe(
+  async function parseWith(
+    markdown: string,
+    mdPath: string,
+  ): Promise<{ pipe: Pipe } & Input> {
+    const result = await mdToPipe(
       {
         markdown,
         pipe: {
@@ -336,6 +339,7 @@ Deno.test("mdToPipe: malformed JSON config block populates errors", async (t) =>
         },
       } as Parameters<typeof mdToPipe>[0],
     );
+    return result as { pipe: Pipe } & Input;
   }
 
   await t.step(
