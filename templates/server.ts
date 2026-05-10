@@ -88,13 +88,15 @@ async function parseRequestBody(request: Request): Promise<unknown> {
 async function maybeServeStatic(request: Request): Promise<Response | null> {
   if (!staticDir) return null;
   try {
-    // Dynamic import so the dependency is only loaded when static serving is
-    // configured. serveDir returns a 404 Response (not an exception) for
-    // missing files, so we check the status to decide whether to fall through.
-    // Ref: https://jsr.io/@std/http/doc/file-server/~/serveDir
+    // Dynamic import so the dependency is only 
+    // loaded when static serving is enabled
     const { serveDir } = await import("jsr:@std/http/file-server");
+
+    // swallow 4xx/5xx responses (file not found, method not allowed, etc.)
+    // so we can fall through to the pipe — only return
+    // successful/redirect responses.
     const response = await serveDir(request, { fsRoot: staticDir, quiet: true });
-    if (response.status !== 404) return response;
+    if (response.status < 400) return response;
   } catch {
     // Static serving failed — fall through to pipe processing
   }
